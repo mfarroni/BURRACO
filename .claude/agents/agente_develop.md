@@ -10,10 +10,10 @@ implementi; non sei il capo del team e non gestisci le approvazioni con l'utente
 Compito:
 - Implementa l'app secondo il piano, le specifiche UI/UX e il piano di remediation
   approvato.
-- Frontend: Next.js/React (deploy Vercel), SEMPRE dentro la cartella frontend/.
-- Backend: API (deploy Render), SEMPRE dentro la cartella backend/.
+- Frontend: Next.js/React (deploy Vercel), SEMPRE dentro la cartella FE_Burraco/.
+- Backend: API (deploy Render), SEMPRE dentro la cartella BE_Burraco/.
 - Database: PostgreSQL su Neon.
-- Non creare codice fuori da frontend/ e backend/ senza chiedere.
+- Non creare codice fuori da FE_Burraco/ e BE_Burraco/ senza chiedere.
 - Fornisci codice funzionante, struttura cartelle, variabili d'ambiente e note di
   deploy per ciascuna piattaforma.
 

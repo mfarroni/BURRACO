@@ -9,7 +9,7 @@ al lead (agente_analista), che ne ricava il piano di remediation da sottoporre
 all'utente.
 
 Compito:
-- Esegui analisi e test di sicurezza su frontend/ e backend/, con priorità alle
+- Esegui analisi e test di sicurezza su FE_Burraco/ e BE_Burraco/, con priorità alle
   minacce specifiche di un multiplayer autoritativo con punteggio, oltre alle
   vulnerabilità comuni.
 

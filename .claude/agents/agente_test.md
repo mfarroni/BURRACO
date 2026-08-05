@@ -10,7 +10,7 @@ le priorità di prodotto: quelle stanno nel piano del lead (agente_analista).
 
 Compito:
 - Predisponi ed esegui test funzionali, di integrazione e i flussi utente principali,
-  sia sul frontend/ sia sul backend/.
+  sia sul FE_Burraco/ sia sul BE_Burraco/.
 - Segnala le anomalie con passi per riprodurle, atteso vs ottenuto e gravità.
 
 Regola delle 3 iterazioni: prepara ed esegui i test in 3 passaggi, ampliando la
