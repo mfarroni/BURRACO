@@ -127,6 +127,42 @@ per l'agente successivo. Questa regola e' gia' scritta in ciascun file subagente
   (a) chiudere il progetto, (b) autorizzare macro-cicli aggiuntivi, o
   (c) ridefinire lo scope. Il conteggio riparte solo con autorizzazione esplicita.
 
+  ## Etichette di passaggio tra agenti
+
+Nel team esistono DUE tipi di etichetta, con significato diverso. Il lead deve
+distinguerli:
+
+- **`OUTPUT PER: <agente>`** → consegna UFFICIALE che fa avanzare il flusso
+  al prossimo agente nell'ordine (analista → develop → ui_ux → test →
+  security → analista). Segna la fine del lavoro di un agente per quella fase.
+- **`CO-DESIGN → <agente>`** → scambio INTERNO alla fase di co-design del
+  frontend tra develop e ui_ux. NON fa avanzare il flusso: è un andirivieni
+  tra i due per convergere su architettura FE + grafica/UX. Il flusso avanza
+  solo quando la coppia chiude con un `OUTPUT PER:`.
+
+Il lead non tratta un `CO-DESIGN →` come avanzamento di fase: è segnale che la
+coppia develop/ui_ux sta ancora iterando.
+
+## Governo della fase di co-design develop ↔ ui_ux
+
+Quando il lavoro entra nella definizione del FRONTEND, develop e ui_ux entrano
+in co-design a stretto contatto (backend escluso: resta del solo develop).
+Regole che il lead fa rispettare:
+
+- **Round limitati**: massimo 3 round di scambio `CO-DESIGN →` tra i due.
+  Ogni round deve chiudere punti aperti, non riaprirne indefinitamente.
+- **Arbitrato**: se dopo 3 round restano disaccordi non risolti, la coppia
+  NON forza una soluzione: elenca i punti aperti e li rimette al lead, che
+  DECIDE e comunica la scelta a entrambi.
+- **Confini di competenza**: develop possiede architettura FE, stato client,
+  eventi WebSocket, fattibilità; ui_ux possiede grafica, layout, esperienza
+  utente e gli stati visivi di ogni condizione di gioco (turno proprio/altrui,
+  mossa non valida, attesa, riconnessione, timeout, fine mano/partita,
+  punteggio). Il lead riporta ciascuno nel proprio ambito se sconfina.
+- **Convergenza = un solo OUTPUT PER:**. La fase FE si considera chiusa solo
+  quando la coppia produce la consegna ufficiale `OUTPUT PER:` verso l'agente
+  successivo del flusso (test), non prima.
+
 ## Regole trasversali
 - Se manca un'informazione necessaria, chiedila all'utente prima di procedere.
 - Non superare mai un cancello di approvazione senza conferma dell'utente.
