@@ -10,6 +10,59 @@ agente_develop, agente_ui_ux, agente_test, agente_security.
 Li richiami con lo strumento Task nell'ordine indicato. Ogni subagente lavora in
 autonomia e ti restituisce solo il proprio output finale.
 
+## Stack e architettura (vincolo di progetto)
+
+### Stack fisso (non modificabile senza richiesta esplicita dell'utente)
+- Linguaggio: **TypeScript full-stack** (frontend e backend).
+- Frontend: Next.js/React, deploy su **Vercel**.
+- Backend: Node.js + TypeScript, deploy su **Render**.
+- Database: **PostgreSQL su Neon**.
+
+### Modello di gioco
+- Burraco **multiplayer real-time via WebSocket**: più giocatori connessi
+  contemporaneamente alla stessa partita.
+
+### Decisioni architetturali vincolanti
+1. **Backend stateful, non serverless.** Il server di gioco su Render è un
+   web service persistente (always-on) che mantiene connessioni WebSocket
+   aperte. Vercel NON ospita il layer WebSocket: le sue funzioni serverless
+   non tengono connessioni persistenti. Il tier gratuito di Render va in
+   sleep e chiude le connessioni: incompatibile con partite live (da valutare
+   in fase di deploy, ma la logica non deve dipendere dallo sleep).
+2. **Server autoritativo.** Il client invia solo l'INTENZIONE di mossa
+   (es. "pesco dal pozzetto", "scarto il 7 di cuori", "chiudo"). Il server
+   valida contro le regole del Burraco, aggiorna lo stato e ridistribuisce
+   il nuovo stato a tutti i client della room. Il client non è mai fonte di
+   verità su validità delle mosse né sul punteggio.
+3. **Motore di regole condiviso.** Le regole del Burraco (mazzo, pozzetti,
+   pinelle, tris/scale, chiusura, punteggio) sono modellate in TypeScript in
+   un package/modulo condiviso tra frontend e backend. Lato client serve solo
+   per feedback ottimistico e disabilitare mosse palesemente illegali; la
+   validazione autoritativa resta sul server.
+4. **Stato in memoria + checkpoint su DB.** Ogni partita è una "room": lo
+   stato autoritativo (GameState) vive in RAM per reattività; su Neon si
+   scrivono checkpoint (fine turno / fine mano / fine partita) ed eventi utili
+   per ripresa e audit.
+5. **Riconnessione e timeout.** Serve una strategia esplicita: un giocatore
+   che perde la linea deve poter rientrare nella propria room e ricevere lo
+   stato corrente; i giocatori inattivi hanno un timeout definito.
+6. **v1 single-instance (dichiarato).** La versione 1 gira su UNA sola
+   istanza Render: lo stato in memoria è sufficiente. Nessun agente deve
+   introdurre assunzioni di scaling multi-istanza (es. Redis pub/sub, sticky
+   sessions) senza richiesta esplicita. Il percorso di scaling futuro va
+   annotato ma NON implementato in v1.
+
+### Decisioni da prendere e motivare in fase di PIANO (compito dell'analista)
+Queste due scelte sono delegate all'analista, che deve selezionare l'opzione
+più ottimale e MOTIVARLA nel piano prima di avviare il flusso:
+- **ORM/query builder verso Neon**: Drizzle (leggero, type-safe, SQL-first)
+  vs Prisma (più "batteries included"). Valutare pooling connessioni con Neon.
+- **Libreria WebSocket**: `ws` (minimale, controllo totale, gestione manuale
+  di room/riconnessione/heartbeat) vs Socket.IO (riconnessione automatica,
+  room integrate, adapter Redis pronto per scaling futuro).
+Una volta decise, l'analista le comunica al develop come vincoli risolti
+nell'OUTPUT PER: agente_develop.
+
 ## Stack tecnologico fisso (non modificabile senza richiesta esplicita)
 - Frontend: Next.js/React, deploy su Vercel
 - Backend: API su Render
