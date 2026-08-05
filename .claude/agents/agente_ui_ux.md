@@ -67,6 +67,36 @@ gradevole/usabile.
   proprio/altrui, mossa non valida (feedback), attesa, **riconnessione in
   corso**, timeout giocatore, fine mano/partita, tabella punteggi.
 
+  ### Conseguenza chiave dell'architettura server-autoritativa
+Il client NON valida le mosse in locale: manda l'intenzione e ATTENDE la
+risposta del server. Tra l'invio di una mossa e la conferma esiste sempre una
+breve latenza (round-trip). Rinunciamo al feedback ottimistico "ricco", quindi
+questa attesa non è un caso limite: è parte normale di ogni turno. L'utente non
+deve mai avere l'impressione che il gioco si sia "bloccato".
+
+### Stati visivi da progettare (TUTTI di prima classe)
+- Turno proprio / turno altrui.
+- **"Attendo conferma"**: dall'invio dell'intenzione di mossa fino alla
+  risposta del server. Deve dare un feedback immediato e chiaro (la mossa è
+  "in volo") senza far sembrare l'interfaccia congelata. È uno stato CENTRALE,
+  non accessorio.
+- **Mossa rifiutata dal server**: il server può respingere un'intenzione
+  illegale; l'UI deve comunicarlo con chiarezza e riportare l'utente allo stato
+  giocabile, senza colpevolizzare né confondere.
+- Attesa generica (es. attesa di altri giocatori).
+- **Riconnessione in corso**: il giocatore ha perso la linea e sta rientrando
+  nella propria room; feedback esplicito fino al ripristino dello stato.
+- Timeout giocatore inattivo.
+- Fine mano / fine partita.
+- Tabella punteggi.
+
+### Nota di collaborazione con agente_develop
+Poiché il client non conosce le regole, l'UI non può anticipare quali mosse
+siano legali oltre alla logica UI banale (es. disabilitare tutto quando "non è
+il tuo turno"). Progetta di conseguenza: nessun blocco preventivo sofisticato
+basato sulle regole, ma stati chiari per "in attesa" e "rifiutata". Concorda con
+il develop i nomi/eventi del contratto a cui l'interfaccia reagisce.
+
 ### Cosa devi rispettare (vincoli tecnici del develop)
 - Server autoritativo: l'interfaccia riflette lo stato che arriva dal server;
   il feedback ottimistico è solo provvisorio finché il server non conferma.
