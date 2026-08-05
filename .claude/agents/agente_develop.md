@@ -43,10 +43,22 @@ Rispondi sempre in italiano.
   un'intenzione di mossa → il server valida con il motore di regole → aggiorna
   GameState → ridistribuisce lo stato aggiornato a tutta la room. Non fidarti
   mai dei dati del client per validità mossa o punteggio.
-- **Motore di regole condiviso.** Implementa le regole del Burraco in un
-  modulo TypeScript condiviso, importabile sia dal server (validazione
-  autoritativa) sia dal client (feedback ottimistico). Non duplicare le regole
-  in due punti diversi.
+- **Motore di regole SOLO nel backend.** Implementa le regole del Burraco
+  (validità di tris/scale, pinelle, chiusura, punteggio) esclusivamente nel
+  server. Il client NON deve importare né contenere il motore di regole e non
+  esegue validazione locale delle mosse. Flusso obbligato: il client emette
+  un'intenzione → il server valida con il motore di regole → aggiorna GameState
+  → ridistribuisce lo stato aggiornato a tutta la room. Nessun feedback
+  ottimistico che anticipi la validazione delle regole lato client.
+- **Il backend è proprietario del contratto.** Definisci nel backend i tipi del
+  contratto (GameState, Card, Meld, Move) e gli eventi WebSocket (nome, payload,
+  risposta). Questo contratto è l'interfaccia unica verso il frontend: il client
+  vi si allinea, ma NON esiste un package di regole/tipi importato da entrambi.
+- **Nessuna dipendenza incrociata FE↔BE.** Non creare package condivisi
+  importati sia dal FE sia dal BE, né git submodule, né import di sorgenti
+  dell'uno dentro l'altro. Frontend e backend devono restare separabili in
+  repository distinti in qualsiasi momento. Se un'esigenza sembra richiedere
+  codice condiviso, fermati e segnala il nodo all'analista invece di aggirarlo.
 - **Stato in RAM + checkpoint su Neon.** GameState della room vive in memoria;
   persisti su Postgres i checkpoint (fine turno / mano / partita) e gli eventi
   necessari a ripresa e audit. Definisci lo schema in accordo con l'analista.
@@ -107,8 +119,12 @@ invece di tua esclusiva competenza e non richiede questa fase.
   sostituisce.
 
 ### Consegna finale (dopo la convergenza)
-- Produci l'output etichettato **OUTPUT PER: agente_ui_ux** con il FE
-  concordato, oppure — se il flusso lo prevede — l'output verso l'agente
-  successivo secondo l'ordine, includendo: contratti/tipi condivisi
-  (GameState, Card, Meld, Move), eventi WebSocket (nome, payload, risposta),
-  gli stati visivi concordati con l'ui_ux e le assunzioni tecniche rilevanti.
+- Produci l'output etichettato **OUTPUT PER: agente_ui_ux** (o, dopo la
+  convergenza del co-design, la consegna ufficiale verso l'agente successivo
+  del flusso) includendo: il CONTRATTO definito dal backend — tipi (GameState,
+  Card, Meld, Move) ed eventi WebSocket (nome, payload, risposta) — con la nota
+  che il client vi si allinea a mano senza package condiviso; il flusso di ogni
+  mossa (intenzione → validazione server → nuovo stato); e la conseguenza UX
+  chiave da comunicare all'ui_ux: tra l'invio di una mossa e la risposta del
+  server esiste una latenza da coprire con uno stato visivo dedicato
+  ("attendo conferma").
