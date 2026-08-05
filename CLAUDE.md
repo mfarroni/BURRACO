@@ -26,6 +26,18 @@ Regole per gli agenti:
 - L'agente_develop non crea codice fuori da queste due cartelle senza chiedere.
 - Le modifiche che toccano sia FE sia BE vanno coordinate e descritte insieme.
 
+## Skill del progetto
+Nel repository sono presenti delle skill in .claude/skills/ che gli agenti devono
+consultare e rispettare.
+
+- skill-burraco (.claude/skills/skill_burraco/SKILL.md): FONTE DI VERITA' delle regole
+  di gioco del Burraco (varianti, punteggi, pozzetto, chiusura, jolly e pinella).
+  OBBLIGATORIA per qualsiasi lavoro su logica di gioco, punteggi, stati di partita o
+  condizioni di vittoria. Nessun agente inventa regole di gioco: se una regola non e'
+  coperta dalla skill, l'agente chiede all'utente invece di improvvisare.
+  La prima versione da costruire e' la modalita' 2 giocatori (uno contro uno); le altre
+  modalita' sono documentate nella skill e verranno implementate nei macro-cicli successivi.
+
 ## Ordine del flusso (un macro-ciclo completo)
 1. Agente_analista (tu, il lead)  -> PIANO + confronto + approvazione utente
 2. agente_develop
