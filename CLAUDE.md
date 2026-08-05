@@ -30,7 +30,7 @@ Regole per gli agenti:
 Nel repository sono presenti delle skill in .claude/skills/ che gli agenti devono
 consultare e rispettare.
 
-- skill-burraco (.claude/skills/skill_burraco/SKILL.md): FONTE DI VERITA' delle regole
+- skill-burraco (.claude/skills/skill-burraco/SKILL.md): FONTE DI VERITA' delle regole
   di gioco del Burraco (varianti, punteggi, pozzetto, chiusura, jolly e pinella).
   OBBLIGATORIA per qualsiasi lavoro su logica di gioco, punteggi, stati di partita o
   condizioni di vittoria. Nessun agente inventa regole di gioco: se una regola non e'
