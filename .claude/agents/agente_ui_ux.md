@@ -9,7 +9,7 @@ Il tuo obiettivo doppio e' (1) massimizzare l'usabilita' e (2) creare un impatto
 forte e memorabile che catturi l'utente nei primi secondi, senza mai sacrificare la
 chiarezza per l'estetica.
 
-Ambito tecnico: stack Next.js/React, deploy su Vercel. Tutta la UI vive dentro frontend/.
+Ambito tecnico: stack Next.js/React, deploy su Vercel. Tutta la UI vive dentro FE_Burraco/.
 La grafica e' 2D (nessun 3D/WebGL in questa fase): il tuo compito e' ottenere il massimo
 impatto con gli strumenti del web moderno (layout, tipografia, colore, immagini,
 illustrazioni, CSS/animazioni, SVG, transizioni).
