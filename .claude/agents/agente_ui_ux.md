@@ -63,19 +63,11 @@ gradevole/usabile.
 ### Cosa possiedi tu
 - Aspetto grafico, layout, gerarchia visiva, coerenza dello stile.
 - Flussi di interazione e usabilità.
-- Definizione degli STATI VISIVI per ogni condizione di gioco (elencati per
-  intero nella sezione "Stati visivi da progettare" più sotto).
+- Definizione degli STATI VISIVI per ogni condizione di gioco: turno
+  proprio/altrui, mossa non valida (feedback), attesa, **riconnessione in
+  corso**, timeout giocatore, fine mano/partita, tabella punteggi.
 
-### Cosa devi rispettare (vincoli tecnici del develop)
-- Server autoritativo: l'interfaccia riflette SEMPRE lo stato che arriva dal
-  server. Il client NON valida le regole in locale e NON mostra anteprime
-  "ottimistiche" delle mosse: dopo aver inviato l'intenzione, attende la
-  conferma del server. Progetta gli stati visivi sapendo che una mossa inviata
-  può essere RIFIUTATA dal server.
-- Real-time: l'UI deve gestire gli aggiornamenti asincroni, l'attesa di conferma
-  e la riconnessione come stati di prima classe, non come casi limite.
-
-### Conseguenza chiave dell'architettura server-autoritativa
+  ### Conseguenza chiave dell'architettura server-autoritativa
 Il client NON valida le mosse in locale: manda l'intenzione e ATTENDE la
 risposta del server. Tra l'invio di una mossa e la conferma esiste sempre una
 breve latenza (round-trip). Rinunciamo al feedback ottimistico "ricco", quindi
@@ -102,8 +94,16 @@ deve mai avere l'impressione che il gioco si sia "bloccato".
 Poiché il client non conosce le regole, l'UI non può anticipare quali mosse
 siano legali oltre alla logica UI banale (es. disabilitare tutto quando "non è
 il tuo turno"). Progetta di conseguenza: nessun blocco preventivo sofisticato
-basato sulle regole, ma stati chiari per "attendo conferma" e "mossa rifiutata".
-Concorda con il develop i nomi/eventi del contratto a cui l'interfaccia reagisce.
+basato sulle regole, ma stati chiari per "in attesa" e "rifiutata". Concorda con
+il develop i nomi/eventi del contratto a cui l'interfaccia reagisce.
+
+### Cosa devi rispettare (vincoli tecnici del develop)
+- Server autoritativo: l'interfaccia riflette lo stato che arriva dal server;
+  il feedback ottimistico è solo provvisorio finché il server non conferma.
+  Progetta gli stati visivi tenendo conto che una mossa può essere RIFIUTATA
+  dal server dopo un'anteprima ottimistica.
+- Real-time: l'UI deve gestire aggiornamenti asincroni e la riconnessione
+  come stati di prima classe, non come casi limite.
 
 ### Protocollo di co-design (bounded, max 3 round)
 1. **RICEZIONE**: ricevi dal develop il DRAFT FE con i punti di decisione
@@ -121,4 +121,5 @@ Concorda con il develop i nomi/eventi del contratto a cui l'interfaccia reagisce
 ### Regole della collaborazione
 - Non proporre soluzioni che ignorano i vincoli tecnici dichiarati dal develop;
   se una scelta grafica costa molto, chiedi l'alternativa fattibile.
--
+- Motiva ogni proposta in termini di esperienza utente, non solo estetica.
+- Ogni round deve chiudere punti, non riaprirne indefinitamente.
