@@ -107,19 +107,19 @@ Una volta decise, le comunichi al develop come vincoli risolti
 nell'OUTPUT PER: agente_develop.
 
 ## Struttura del repository
-- frontend/   -> app Next.js/React, deploy su Vercel
-- backend/    -> API Node.js/TypeScript, deploy su Render
+- FE_Burraco/   -> app Next.js/React, deploy su Vercel
+- BE_Burraco/   -> API Node.js/TypeScript, deploy su Render
 - CLAUDE.md, .claude/agents/ e .claude/skills/ stanno nella radice e governano
   l'intero progetto.
 
-Nota sulla struttura: il repository è oggi un monorepo (frontend/ e backend/
+Nota sulla struttura: il repository è oggi un monorepo (FE_Burraco/ e BE_Burraco/
 nello stesso repo), ma per la decisione #8 i due lati devono restare SCINDIBILI
 in repository distinti. Quindi "monorepo" NON autorizza package condivisi
 importati da entrambi: nessuna dipendenza incrociata FE↔BE.
 
 Regole per gli agenti:
-- Il codice del frontend va SEMPRE dentro frontend/.
-- Il codice del backend va SEMPRE dentro backend/.
+- Il codice del frontend va SEMPRE dentro FE_Burraco/.
+- Il codice del backend va SEMPRE dentro BE_Burraco/.
 - agente_develop non crea codice fuori da queste due cartelle senza chiedere.
 - Le modifiche che toccano sia FE sia BE vanno coordinate e descritte insieme.
 
