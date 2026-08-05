@@ -34,11 +34,21 @@ autonomia e ti restituisce solo il proprio output finale.
    valida contro le regole del Burraco, aggiorna lo stato e ridistribuisce
    il nuovo stato a tutti i client della room. Il client non è mai fonte di
    verità su validità delle mosse né sul punteggio.
-3. **Motore di regole condiviso.** Le regole del Burraco (mazzo, pozzetti,
-   pinelle, tris/scale, chiusura, punteggio) sono modellate in TypeScript in
-   un package/modulo condiviso tra frontend e backend. Lato client serve solo
-   per feedback ottimistico e disabilitare mosse palesemente illegali; la
-   validazione autoritativa resta sul server.
+3. **Motore di regole server-only (client muto sulle regole).** Le regole del
+   Burraco (mazzo, pozzetti, pinelle, tris/scale, chiusura, punteggio) sono
+   implementate ESCLUSIVAMENTE nel backend, che è l'unica fonte di verità. Il
+   client NON contiene né importa il motore di regole e non esegue validazione
+   locale delle mosse: invia l'intenzione, attende la risposta del server e
+   riflette lo stato ricevuto. Nessun package di regole condiviso tra FE e BE.
+   Rinunciamo di proposito al feedback ottimistico "ricco": accettabile perché
+   il Burraco è a turni, non un gioco d'azione reattivo.
+
+3-bis. **Contratto dei tipi definito dal backend.** I tipi del contratto
+   (GameState, Card, Meld, Move e i payload/risposte degli eventi WebSocket)
+   sono di proprietà del backend, che ne è l'autorità. Il frontend ne tiene una
+   copia ALLINEATA al contratto pubblicato dal server, non un package importato
+   in comune. In v1, con i due lati ancora affiancati, la copia si mantiene a
+   mano; in seguito il server potrà esporre il contratto in forma versionata.
 4. **Stato in memoria + checkpoint su DB.** Ogni partita è una "room": lo
    stato autoritativo (GameState) vive in RAM per reattività; su Neon si
    scrivono checkpoint (fine turno / fine mano / fine partita) ed eventi utili
@@ -51,6 +61,16 @@ autonomia e ti restituisce solo il proprio output finale.
    introdurre assunzioni di scaling multi-istanza (es. Redis pub/sub, sticky
    sessions) senza richiesta esplicita. Il percorso di scaling futuro va
    annotato ma NON implementato in v1.
+
+ 7. **Separabilità FE/BE come requisito (non opzionale).** Frontend e backend
+   devono restare due unità indipendenti, scindibili in QUALSIASI momento in
+   repository distinti. È vietato introdurre dipendenze incrociate dirette tra
+   i due (package condivisi importati da entrambi, git submodule, import di
+   codice sorgente dell'uno dentro l'altro). La comunicazione FE↔BE avviene
+   solo tramite il contratto (eventi WebSocket + tipi) definito dal backend.
+   Su Render e Vercel la Root Directory è già pinnata sulle rispettive
+   sottocartelle: gli script build/start di ciascun lato vivono nel package.json
+   della propria sottocartella.
 
 ### Decisioni da prendere e motivare in fase di PIANO (compito dell'analista)
 Queste due scelte sono delegate all'analista, che deve selezionare l'opzione
