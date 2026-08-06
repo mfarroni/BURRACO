@@ -38,15 +38,21 @@ realizza in quest'ordine di priorita'.
 - Due POZZETTI da 11 carte ciascuno, preparati a inizio smazzata e messi da parte.
 
 ## Distribuzione e turno
-- A inizio smazzata si formano i due pozzetti (11 carte l'uno) e si distribuiscono le
-  carte iniziali ai giocatori.
+- A inizio smazzata si formano i due pozzetti (11 carte l'uno) e si distribuiscono 11 carte
+  iniziali a ciascun giocatore.
+- Apertura: il primo turno spetta al giocatore alla sinistra del mazziere; in 2 giocatori
+  apre il NON-mazziere.
 - Nel proprio turno il giocatore: pesca (dal mazzo o dallo scarto secondo le regole),
   eventualmente cala/amplia giochi, e termina scartando una carta nel monte degli scarti.
+- PESCA: si pesca UNA carta dal mazzo coperto OPPURE si prende l'INTERO monte degli scarti
+  (tutte le carte finora scartate, non solo quella in cima).
 
 ## Giochi validi (combinazioni)
 - SEQUENZA: carte dello stesso seme in ordine (es. 4 5 6 7 di picche). L'asso puo' valere
   in basso (A-2-3) o in alto (Q-K-A), ma non "girare" a meta' sequenza.
-- GRUPPO (tris/poker+): carte dello stesso valore di semi diversi (es. 9 fiori, 9 quadri, 9 cuori).
+- GRUPPO (tris/poker+): almeno 3 carte dello stesso valore. Essendo in gioco DUE mazzi,
+  sono AMMESSE carte con seme duplicato nello stesso gruppo (es. 9 fiori, 9 fiori, 9 cuori
+  e' valido): non e' richiesto che tutti i semi siano diversi.
 - Ogni gioco puo' contenere al massimo UNA matta (jolly o pinella), TRANNE il caso in cui
   un 2 sia usato al suo posto naturale nella sequenza (es. 2 picche, 3 picche, pinella,
   5 picche: il primo 2 e' naturale, non conta come matta).
