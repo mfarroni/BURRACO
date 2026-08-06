@@ -9,6 +9,14 @@ import * as schema from "./schema.js";
  *
  * Se DATABASE_URL non è impostata, il client è null e la persistenza diventa
  * un no-op: il gioco resta pienamente funzionante (stato in RAM).
+ *
+ * SEC-06: TLS VERIFICATO. Non si usa MAI `rejectUnauthorized:false`. Neon
+ * presenta un certificato firmato da una CA pubblica (ISRG/Let's Encrypt),
+ * verificabile contro il trust store di sistema di Node. Per la massima garanzia
+ * la connection string dovrebbe includere `sslmode=verify-full` (impostata nelle
+ * env di Render). NOTA: in questo ambiente DATABASE_URL è assente → il percorso
+ * resta no-op e la verifica TLS reale verso Neon NON è eseguibile qui; questa è
+ * config di produzione.
  */
 
 let db: NodePgDatabase<typeof schema> | null = null;
@@ -17,7 +25,8 @@ let pool: pg.Pool | null = null;
 if (env.databaseUrl) {
   pool = new pg.Pool({
     connectionString: env.databaseUrl,
-    ssl: { rejectUnauthorized: false },
+    // Verifica del certificato del server abilitata (nessun downgrade TLS).
+    ssl: { rejectUnauthorized: true },
     max: 5,
   });
   pool.on("error", (err) => {

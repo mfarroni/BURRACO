@@ -25,6 +25,8 @@ import type { CelebrationInfo } from "@/components/StateBanners";
  */
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8080";
+/** true in build/runtime di produzione (Vercel). */
+const IS_PROD = process.env.NODE_ENV === "production";
 const RECONNECT_DELAY_MS = 1500;
 const HEARTBEAT_MS = 25_000;
 /** Durata di vita dello stato effimero di celebrazione (poi si auto-svuota). */
@@ -45,6 +47,8 @@ export interface HandEndedInfo {
 export interface GameEndedInfo {
   winnerSeat: Seat | null;
   finalScores: [number, number];
+  /** "forfeit" se la partita è finita per abbandono dell'avversario. */
+  reason?: "forfeit";
 }
 
 export interface GameSocketApi {
@@ -232,7 +236,7 @@ export function useGameSocket(): GameSocketApi {
           clearInFlight();
           break;
         case "game_ended":
-          setGameEnded({ winnerSeat: msg.winnerSeat, finalScores: msg.finalScores });
+          setGameEnded({ winnerSeat: msg.winnerSeat, finalScores: msg.finalScores, reason: msg.reason });
           clearInFlight();
           break;
         case "opponent_disconnected":
@@ -256,6 +260,18 @@ export function useGameSocket(): GameSocketApi {
   const connect = useCallback(() => {
     const room = roomRef.current;
     if (!room) return;
+
+    // SEC-09: in produzione è ammesso SOLO wss:// (niente fallback ws:// fuori da
+    // localhost). Se la configurazione è insicura, non si tenta la connessione.
+    if (IS_PROD && !WS_URL.startsWith("wss://")) {
+      wantConnectedRef.current = false;
+      setErrorMessage(
+        "Configurazione non sicura: NEXT_PUBLIC_WS_URL deve usare wss:// in produzione.",
+      );
+      setConnPhase("closed");
+      return;
+    }
+
     setConnPhase((prev) => (prev === "closed" || prev === "reconnecting" ? "reconnecting" : "connecting"));
 
     const ws = new WebSocket(WS_URL);

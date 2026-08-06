@@ -109,8 +109,10 @@ export interface GameStatePublic {
   whoseTurn: Seat;
   /**
    * Deadline ASSOLUTA del turno in epoch millis, da cui il client deriva un
-   * countdown puramente VISIVO. `null` quando il timeout non è enforced (v1):
-   * in tal caso il FE non mostra alcun countdown.
+   * countdown puramente VISIVO. È popolata durante un turno attivo (il server
+   * enforce il timeout: allo scadere esegue d'ufficio un turno minimo legale).
+   * `null` solo quando non c'è un turno attivo (mano/partita conclusa) o quando
+   * il timeout è disattivato via config (turnTimeoutMs <= 0).
    */
   turnEndsAt: number | null;
   /** Fase corrente del turno. */
@@ -208,7 +210,12 @@ export type ServerMessage =
       scores: HandScoreDetail[];
       cumulative: [number, number];
     }
-  | { type: "game_ended"; winnerSeat: Seat | null; finalScores: [number, number] }
+  /**
+   * Fine partita. `reason` è OPZIONALE: assente = fine normale (obiettivo
+   * raggiunto); "forfeit" = l'avversario si è disconnesso oltre la finestra di
+   * grazia e ha abbandonato (in 2 giocatori l'altro è dichiarato vincitore).
+   */
+  | { type: "game_ended"; winnerSeat: Seat | null; finalScores: [number, number]; reason?: "forfeit" }
   | { type: "opponent_disconnected"; seat: Seat }
   | { type: "opponent_reconnected"; seat: Seat }
   | { type: "error"; message: string };

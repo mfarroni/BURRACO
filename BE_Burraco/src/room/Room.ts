@@ -48,6 +48,16 @@ export class Room {
   private engine: GameEngine | null = null;
   private handId: string | null = null;
   private eventSeq = 0;
+  /** Timer di enforcement del timeout turno (SEC-05). Uno per volta. */
+  private turnTimer: NodeJS.Timeout | null = null;
+  /** true dopo la conclusione/abbandono: la room è pronta per la GC. */
+  private disposed = false;
+  /**
+   * Hook di garbage-collection (SEC-05): impostato dal RoomManager alla
+   * creazione. Invocato quando la room si conclude (partita finita / forfeit /
+   * abbandono totale) per rimuoverla dalla mappa in-RAM. Evita accumulo illimitato.
+   */
+  onDispose: (() => void) | null = null;
 
   constructor(code: string, config: GameConfig) {
     this.code = code;
@@ -82,20 +92,44 @@ export class Room {
    * assegna un nuovo seat, se disponibile.
    */
   join(ws: WebSocket, token: string | undefined, displayName: string): void {
+    if (this.disposed) {
+      send(ws, { type: "error", message: "La partita è conclusa." });
+      return;
+    }
+
     // Riconnessione per token.
     if (token) {
       const existing = this.players.find((p) => p.token === token);
       if (existing) {
+        // SEC-04: takeover di sessione ATTIVA vietato. Si rebinda SOLO se lo
+        // slot è disconnesso; se il socket è ancora vivo, si rifiuta il secondo
+        // ingresso e NON si tocca la connessione legittima.
+        if (existing.status === "connected" && existing.ws && existing.ws.readyState === WebSocket.OPEN) {
+          send(ws, { type: "error", message: "Sessione già attiva su un'altra connessione." });
+          try {
+            ws.close(1008, "Sessione già attiva.");
+          } catch {
+            /* socket già in chiusura */
+          }
+          return;
+        }
+
+        // Riconnessione legittima (slot disconnesso): rebind + rotazione token.
         if (existing.graceTimer) {
           clearTimeout(existing.graceTimer);
           existing.graceTimer = null;
         }
         existing.ws = ws;
         existing.status = "connected";
+        // SEC-10: ruota il token a ogni riconnessione riuscita → il precedente
+        // diventa inutilizzabile (non corrisponde più ad alcuno slot).
+        const rotated = randomUUID();
+        existing.token = rotated;
+        existing.tokenHash = sha256(rotated);
         send(ws, {
           type: "room_joined",
           yourSeat: existing.seat,
-          yourToken: existing.token,
+          yourToken: rotated,
           players: this.publicPlayers(),
           config: this.config,
           resumed: true, // riconnessione a sessione esistente
@@ -104,6 +138,8 @@ export class Room {
         this.sendStateTo(existing);
         return;
       }
+      // Token non riconosciuto (es. vecchio token ruotato): si prosegue come
+      // nuovo ingresso; se la room è piena verrà rifiutato sotto.
     }
 
     if (this.isFull()) {
@@ -133,12 +169,23 @@ export class Room {
       resumed: false, // primo ingresso
     });
 
-    // Quando entrambi i seat sono occupati, avvia la partita.
+    // A7: nessun room_joined ridondante. Il giocatore appena entrato ha già il
+    // suo. Quando la room si completa, aggiorniamo il roster del PRIMO giocatore
+    // (una sola volta) e avviamo la partita. In attesa dell'avversario, invece,
+    // non c'è nessun altro da aggiornare: niente broadcast superfluo.
     if (this.players.length === 2 && !this.engine) {
+      const first = this.players.find((p) => p.seat !== seat);
+      if (first) {
+        send(first.ws, {
+          type: "room_joined",
+          yourSeat: first.seat,
+          yourToken: first.token, // token invariato: non è una riconnessione
+          players: this.publicPlayers(),
+          config: this.config,
+          resumed: false,
+        });
+      }
       this.startMatch();
-    } else {
-      // In attesa dell'avversario: aggiorna comunque il primo giocatore.
-      this.broadcastPlayers();
     }
   }
 
@@ -155,7 +202,8 @@ export class Room {
     );
     void persistence.startHand(this.matchId, this.handId, this.engine.handNumber, this.engine.dealerSeat);
 
-    this.broadcastPlayers();
+    // A7: il roster è già stato inviato in `join`. Qui basta lo stato iniziale
+    // (che riarma anche il turn timer) e l'evento di turno.
     this.broadcastState();
     this.emitTurnChanged();
   }
@@ -177,7 +225,6 @@ export class Room {
     const seat = slot.seat;
     // Correlation id opzionale delle sole azioni: opaco, non influenza le regole.
     const clientMoveId = (msg as { clientMoveId?: string }).clientMoveId;
-    this.logEvent(msg.type, seat, msg);
 
     let result: MoveResult;
     switch (msg.type) {
@@ -211,6 +258,9 @@ export class Room {
       return;
     }
 
+    // SEC-01: si logga SOLO dopo la validazione → nessuna scrittura DB per
+    // azioni rifiutate o malformate (che non arrivano nemmeno qui).
+    this.logEvent(msg.type, seat, msg);
     this.applyEffects(result.effects);
     this.broadcastState();
     // ACK per-attore TARGETIZZATO: separato dal broadcast `state`, mai redatto,
@@ -244,6 +294,8 @@ export class Room {
           finalScores: eff.finalScores,
         });
         void persistence.endMatch(this.matchId, eff.winnerSeat);
+        // SEC-05: partita conclusa → GC della room (rimozione dalla mappa RAM).
+        this.dispose();
       } else if (eff.kind === "pozzetto_taken") {
         // Evento CELEBRATIVO effimero: broadcast, non persistito, non replayato.
         this.broadcast({ type: "pozzetto_taken", seat: eff.seat });
@@ -277,12 +329,40 @@ export class Room {
     slot.status = "disconnected";
     this.notifyOpponent(slot.seat, { type: "opponent_disconnected", seat: slot.seat });
 
-    // Hook riconnessione (v1 forma minima): la room resta viva entro la grazia.
-    // TODO(ciclo 2): allo scadere, gestire abbandono/forfeit. Per ora no-op.
+    // SEC-05: alla SCADENZA della grazia, il disconnesso abbandona.
+    if (slot.graceTimer) clearTimeout(slot.graceTimer);
     slot.graceTimer = setTimeout(() => {
       slot.graceTimer = null;
-      // Punto di aggancio per l'enforcement del timeout/abbandono (rimandato).
+      if (this.disposed) return;
+      // Riconnesso nel frattempo? Nessun forfeit.
+      if (slot.status === "connected") return;
+      // Entrambi disconnessi → room abbandonata: GC senza vincitore.
+      if (this.isEmpty()) {
+        this.dispose();
+        return;
+      }
+      // Avversario ancora presente → FORFEIT del disconnesso.
+      this.forfeit(slot.seat);
     }, this.reconnectGraceMs());
+    slot.graceTimer.unref?.();
+  }
+
+  /**
+   * SEC-05: forfeit del giocatore disconnesso. In 2 giocatori l'avversario
+   * connesso è dichiarato vincitore con motivazione di abbandono. Poi GC.
+   */
+  private forfeit(disconnectedSeat: Seat): void {
+    if (this.disposed) return;
+    const opp = this.players.find((p) => p.seat !== disconnectedSeat);
+    if (this.engine && this.engine.status === "playing" && opp && opp.status === "connected") {
+      this.engine.status = "game_ended";
+      this.engine.winnerSeat = opp.seat;
+      this.engine.turnEndsAt = null;
+      const finalScores: [number, number] = [this.engine.cumulative[0], this.engine.cumulative[1]];
+      this.broadcast({ type: "game_ended", winnerSeat: opp.seat, finalScores, reason: "forfeit" });
+      void persistence.endMatch(this.matchId, opp.seat);
+    }
+    this.dispose();
   }
 
   private reconnectGraceMs(): number {
@@ -293,30 +373,124 @@ export class Room {
     return this.players.every((p) => p.ws === null);
   }
 
+  /**
+   * SEC-05: conclusione definitiva della room. Ferma tutti i timer (turn timer e
+   * grazie), marca la room come smaltibile e notifica il RoomManager per la
+   * rimozione dalla mappa in-RAM. Idempotente.
+   */
+  private dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.clearTurnTimer();
+    for (const p of this.players) {
+      if (p.graceTimer) {
+        clearTimeout(p.graceTimer);
+        p.graceTimer = null;
+      }
+    }
+    this.onDispose?.();
+  }
+
+  isDisposed(): boolean {
+    return this.disposed;
+  }
+
+  /* ─────────────────────────── enforcement timeout turno ─────────────────── */
+
+  /**
+   * SEC-05: (ri)programma il timer di scadenza del turno in base alla deadline
+   * autoritativa del motore (engine.turnEndsAt). Idempotente: azzera il timer
+   * precedente e ne arma uno nuovo. Nessun timer se non c'è un turno attivo.
+   */
+  private scheduleTurnTimer(): void {
+    this.clearTurnTimer();
+    const e = this.engine;
+    if (this.disposed || !e || e.status !== "playing") return;
+    const deadline = e.turnEndsAt;
+    if (deadline == null) return;
+    const activeSeat = e.currentSeat;
+    const ms = Math.max(0, deadline - Date.now());
+    this.turnTimer = setTimeout(() => {
+      this.turnTimer = null;
+      this.autoPlayTurn(activeSeat);
+    }, ms);
+    this.turnTimer.unref?.();
+  }
+
+  private clearTurnTimer(): void {
+    if (this.turnTimer) {
+      clearTimeout(this.turnTimer);
+      this.turnTimer = null;
+    }
+  }
+
+  /**
+   * SEC-05: allo scadere del turno, il server esegue d'ufficio un TURNO MINIMO
+   * LEGALE per il giocatore attivo (la partita PROSEGUE):
+   *  - se deve ancora pescare, pesca dal mazzo (o dallo scarto se il mazzo è vuoto);
+   *  - poi scarta una carta deterministica (preferendo una NON matta, per non
+   *    violare la regola dell'ultimo scarto), provando in ordine finché una è legale;
+   *  - il motore fa avanzare il turno. Nessuna calata automatica.
+   * Riusa i metodi validati del motore: nessuna scorciatoia sulle regole.
+   */
+  private autoPlayTurn(activeSeat: Seat): void {
+    const e = this.engine;
+    if (this.disposed || !e || e.status !== "playing" || e.currentSeat !== activeSeat) return;
+
+    const effects: GameEffect[] = [];
+
+    // 1) Pesca, se dovuta.
+    if (e.phase === "must_draw") {
+      let r = e.draw(activeSeat, "deck");
+      if (!r.ok) r = e.draw(activeSeat, "discard"); // mazzo vuoto → dallo scarto
+      if (r.ok) effects.push(...r.effects);
+    }
+
+    // 2) Scarta una carta deterministica, se siamo ancora nel turno.
+    if (e.status === "playing" && e.currentSeat === activeSeat && e.phase === "may_meld") {
+      const hand = e.handOf(activeSeat);
+      // Ordine di preferenza: dall'ultima alla prima, prima le NON matte.
+      const reversed = [...hand].reverse();
+      const candidates = [
+        ...reversed.filter((c) => !c.isWild),
+        ...reversed.filter((c) => c.isWild),
+      ];
+      for (const c of candidates) {
+        const r = e.discardCard(activeSeat, c.id);
+        if (r.ok) {
+          effects.push(...r.effects);
+          break;
+        }
+      }
+    }
+
+    if (effects.length > 0) {
+      this.applyEffects(effects);
+      this.broadcastState(); // riarma il timer per il nuovo turno (se la partita prosegue)
+      return;
+    }
+
+    // Nessuna mossa automatica legale possibile: stallo raro (il giocatore ha
+    // melato fino a lasciarsi in mano solo una matta non scartabile e senza
+    // possibilità di chiusura). Non riarmare un timer a 0ms (eviterebbe un loop):
+    // si ritrasmette lo stato e il turno resta fermo. Se il giocatore è
+    // disconnesso, sarà la grace-window a risolvere con il forfeit.
+    this.clearTurnTimer();
+    for (const p of this.players) this.sendStateTo(p);
+  }
+
   /* ─────────────────────────── broadcast/redaction ─────────────────────── */
 
   private broadcast(msg: ServerMessage): void {
     for (const p of this.players) send(p.ws, msg);
   }
 
-  private broadcastPlayers(): void {
-    const players = this.publicPlayers();
-    for (const p of this.players) {
-      send(p.ws, {
-        type: "room_joined",
-        yourSeat: p.seat,
-        yourToken: p.token,
-        players,
-        config: this.config,
-        resumed: false, // aggiornamento roster, non una riconnessione
-      });
-    }
-  }
-
   /** Invia a OGNI giocatore lo stato redatto dal suo punto di vista. */
   broadcastState(): void {
     if (!this.engine) return;
     for (const p of this.players) this.sendStateTo(p);
+    // Ogni cambio di stato può cambiare il turno attivo: riarma l'enforcement.
+    this.scheduleTurnTimer();
   }
 
   private sendStateTo(slot: PlayerSlot): void {
