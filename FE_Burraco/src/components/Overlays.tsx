@@ -15,6 +15,7 @@ const REJECT_TEXT: Record<string, string> = {
   WRONG_PHASE: "Azione non consentita in questa fase.",
   CARD_NOT_IN_HAND: "Carta non presente in mano.",
   EMPTY_DISCARD: "Il monte scarti è vuoto.",
+  DECK_EMPTY: "Il mazzo è esaurito: pesca dal monte scarti.",
   INVALID_MELD: "Le carte non formano un gioco valido.",
   MELD_NOT_FOUND: "Gioco inesistente.",
   NOT_MELD_OWNER: "Puoi agire solo sui tuoi giochi.",

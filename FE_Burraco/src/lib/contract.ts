@@ -86,6 +86,7 @@ export type RejectCode =
   | "WRONG_PHASE"
   | "CARD_NOT_IN_HAND"
   | "EMPTY_DISCARD"
+  | "DECK_EMPTY"
   | "INVALID_MELD"
   | "MELD_NOT_FOUND"
   | "NOT_MELD_OWNER"

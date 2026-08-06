@@ -23,6 +23,7 @@ export interface RejectResult {
     | "WRONG_PHASE"
     | "CARD_NOT_IN_HAND"
     | "EMPTY_DISCARD"
+    | "DECK_EMPTY"
     | "INVALID_MELD"
     | "MELD_NOT_FOUND"
     | "NOT_MELD_OWNER"
@@ -115,13 +116,20 @@ export class GameEngine {
     if (g) return g;
 
     if (source === "deck") {
-      // A4: l'esaurimento del mazzo termina la smazzata (gestito a inizio turno,
-      // ma difesa in profondità anche qui).
-      if (this.drawPile.length === 0) return this.endHand(null);
+      if (this.drawPile.length === 0) {
+        // A4 (rivista): il mazzo esaurito NON termina da solo la smazzata.
+        // La mano finisce solo se ANCHE il monte scarti è vuoto; altrimenti il
+        // giocatore deve pescare dallo scarto.
+        if (this.discard.length === 0) return this.endHand(null);
+        return reject("DECK_EMPTY", "Il mazzo di pesca è esaurito: pesca dal monte scarti.");
+      }
       this.seats[seat].hand.push(this.drawPile.shift()!);
     } else {
-      if (this.discard.length === 0)
+      if (this.discard.length === 0) {
+        // Se anche il mazzo è vuoto -> entrambe le fonti esaurite: fine smazzata.
+        if (this.drawPile.length === 0) return this.endHand(null);
         return reject("EMPTY_DISCARD", "Il monte scarti è vuoto.");
+      }
       // A3: si prende l'INTERO monte scarti (inclusa la carta in cima).
       this.seats[seat].hand.push(...this.discard);
       this.discard = [];
@@ -323,10 +331,9 @@ export class GameEngine {
   private endTurn(): OkResult {
     this.currentSeat = (1 - this.currentSeat) as Seat;
     this.phase = "must_draw";
-    // A4: se il mazzo è esaurito il nuovo giocatore non può pescare -> fine mano.
-    if (this.drawPile.length === 0) {
-      return this.endHand(null);
-    }
+    // Nota (A4 rivista): l'esaurimento del mazzo NON termina qui la smazzata. Il
+    // nuovo giocatore può pescare dallo scarto; la fine per esaurimento è decisa
+    // in draw() quando mazzo E monte scarti sono entrambi vuoti.
     return {
       ok: true,
       effects: [{ kind: "turn_changed", seat: this.currentSeat, phase: this.phase }],
@@ -348,17 +355,26 @@ export class GameEngine {
       { kind: "hand_ended", closerSeat, scores, cumulative: [...this.cumulative] as [number, number] },
     ];
 
-    // Fine partita se qualcuno raggiunge/supera l'obiettivo con vantaggio netto.
+    // Fine partita al raggiungimento dell'obiettivo.
     const [a, b] = this.cumulative;
     const reached = a >= this.config.punteggioObiettivo || b >= this.config.punteggioObiettivo;
-    if (reached && a !== b) {
+    let winner: Seat | null = null;
+    if (reached) {
+      if (a !== b) {
+        // Vince chi ha il cumulato più alto.
+        winner = a > b ? 0 : 1;
+      } else if (closerSeat !== null) {
+        // Q4: parità esatta all'obiettivo -> vince chi ha CHIUSO la smazzata.
+        winner = closerSeat;
+      }
+      // Parità esatta SENZA closer (smazzata finita per esaurimento): nessun
+      // vincitore -> si gioca un'altra smazzata (winner resta null).
+    }
+
+    if (reached && winner !== null) {
       this.status = "game_ended";
-      this.winnerSeat = a > b ? 0 : 1;
-      effects.push({
-        kind: "game_ended",
-        winnerSeat: this.winnerSeat,
-        finalScores: [a, b],
-      });
+      this.winnerSeat = winner;
+      effects.push({ kind: "game_ended", winnerSeat: winner, finalScores: [a, b] });
     } else {
       // Nuova smazzata: il mazziere alterna (A6).
       this.status = "hand_ended";
