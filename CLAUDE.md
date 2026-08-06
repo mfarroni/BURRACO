@@ -157,9 +157,10 @@ La stessa regola vale per TE sul PIANO (vedi "Il tuo ruolo di analista-lead").
 
 ## Cancelli di approvazione (li gestisci TU, non i subagenti)
 - APERTURA DI OGNI MACRO-CICLO: dichiara quale macro-ciclo si apre ("Macro-ciclo N di 3")
-  e cosa verra' affrontato. Presenta il PIANO, apri la fase di confronto (workflow, casi
-  limite, eccezioni) e attendi l'approvazione ESPLICITA dell'utente prima di avviare i
-  subagenti.
+  e cosa verra' affrontato. PRIMA di presentare il PIANO esegui il Controllo di igiene
+  dei rami git (vedi sezione "Igiene dei rami git"): non aprire il ciclo su una base con
+  rami sporchi. Poi presenta il PIANO, apri la fase di confronto (workflow, casi limite,
+  eccezioni) e attendi l'approvazione ESPLICITA dell'utente prima di avviare i subagenti.
 - CHIUSURA DI OGNI MACRO-CICLO: quando il flusso e' completato e sei tornato a te,
   chiedi all'utente: "Vuoi vedere il prodotto finale e chiudere qui il ciclo, oppure
   procedere con un nuovo macro-ciclo?". Prosegui solo secondo la risposta.
@@ -185,6 +186,38 @@ La stessa regola vale per TE sul PIANO (vedi "Il tuo ruolo di analista-lead").
   l'elenco dei problemi residui e chiedi esplicitamente all'utente se
   (a) chiudere il progetto, (b) autorizzare macro-cicli aggiuntivi, o
   (c) ridefinire lo scope. Il conteggio riparte solo con autorizzazione esplicita.
+
+## Igiene dei rami git (verifica a ogni macro-ciclo)
+
+Regola di fondo: **un ramo per macro-ciclo, poi si chiude.** Ogni macro-ciclo lavora su
+un ramo `claude/...` dedicato, creato a partire da un `main` aggiornato; a fine ciclo il
+lavoro viene fuso in `main` e quel ramo viene CANCELLATO. Nessun ramo va riusato tra un
+macro-ciclo e l'altro: il riuso di un ramo longevo e' la causa principale dei conflitti
+di merge.
+
+Divisione dei compiti (vincolo operativo): Claude Code crea da se' il ramo di lavoro
+`claude/...`. Il MERGE in `main` e la CANCELLAZIONE dei rami avvengono a mano
+sull'interfaccia web di GitHub, a cura dell'utente (la sua rete blocca il push diretto).
+Tu (lead) non dai per scontato di poter mergiare o cancellare: VERIFICHI lo stato dei
+rami e lo RIPORTI all'utente.
+
+Controllo di igiene all'APERTURA del macro-ciclo (precondizione, prima del PIANO):
+1. Verifica che `main` sia l'unica fonte di verita' e sia aggiornato.
+2. Verifica che NON esistano rami SPORCHI, cioe' rami `claude/...` residui da cicli
+   precedenti.
+3. Classifica ogni ramo residuo confrontandolo con `main`:
+   - solo INDIETRO rispetto a `main` (0 commit avanti) -> il suo lavoro e' gia' in
+     `main`: e' sicuro, va soltanto cancellato.
+   - AVANTI o DIVERGENTE (ha commit non ancora in `main`) -> contiene lavoro NON fuso:
+     e' un ramo sporco pericoloso.
+4. Se emerge un ramo sporco, FERMATI: non superare il cancello di apertura. Riporta
+   all'utente cosa contiene il ramo e chiedi come procedere (fondere, scartare o
+   cancellare) finche' la base non torna pulita.
+5. Solo con `main` pulito e aggiornato, richiedi/apri un ramo NUOVO dedicato a questo
+   macro-ciclo e prosegui con la presentazione del PIANO.
+
+Alla CHIUSURA del macro-ciclo, dopo che l'utente ha fuso il ramo in `main`, ricordagli
+di CANCELLARE il ramo appena usato, cosi' il prossimo ciclo riparte da un ramo fresco.
 
 ## Etichette di passaggio tra agenti
 
