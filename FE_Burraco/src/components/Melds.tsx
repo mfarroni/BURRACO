@@ -10,16 +10,9 @@ import { CardView } from "./CardView";
  * Distinzioni visive di dominio (dati dal server, non calcolati qui):
  *  - burraco PULITO vs SPORCO (Meld.isBurraco + Meld.clean): badge d'oro pieno
  *    vs brunito, con icona ✦/✧ e testo — leggibile anche senza colore.
- *  - carte che fungono da MATTA: evidenziate via Meld.wildIndices (campo del
- *    contratto confermato ma non ancora nella copia FE: letto in modo difensivo,
- *    nessuna evidenza se assente).
+ *  - carte che fungono da MATTA: evidenziate via Meld.wildIndices (campo reale
+ *    del contratto; nessuna evidenza se l'array è assente/vuoto).
  */
-
-/** Lettura difensiva di wildIndices finché il contratto FE non lo espone. */
-function wildSet(m: Meld): Set<number> {
-  const idx = (m as { wildIndices?: number[] }).wildIndices;
-  return new Set(idx ?? []);
-}
 
 interface Props {
   melds: Meld[];
@@ -33,7 +26,7 @@ export function Melds({ melds, yourSeat, selectedMeldId, onSelectMeld }: Props) 
   const theirs = melds.filter((m) => m.ownerSeat !== yourSeat);
 
   const renderMeld = (m: Meld, ownMelds: boolean) => {
-    const wilds = wildSet(m);
+    const wilds = new Set(m.wildIndices ?? []);
     return (
       <div
         key={m.id}

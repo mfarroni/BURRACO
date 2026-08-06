@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Card } from "@/lib/contract";
 import { useGameSocket } from "@/lib/useGameSocket";
 import { CardView } from "@/components/CardView";
@@ -18,7 +18,6 @@ import {
   Countdown,
   OpponentStatus,
   TurnBanner,
-  type CelebrationInfo,
 } from "@/components/StateBanners";
 
 export default function Page() {
@@ -41,32 +40,8 @@ export default function Page() {
   }, [g.state]);
 
   /* ── Celebrazioni effimere ──────────────────────────────────────────
-   * Il contratto confermato prevede eventi `pozzetto_taken` e `burraco_made`.
-   * Finché l'hook non li espone, rileviamo in modo GRAFICO (placeholder) i
-   * burrachi NUOVI comparsi tra due stati — mai al primo stato, così un rejoin
-   * non ri-celebra. Da sostituire con gli eventi reali del server (vedi
-   * CO-DESIGN → develop). */
-  const [celebration, setCelebration] = useState<CelebrationInfo | null>(null);
-  const knownBurracos = useRef<Set<string> | null>(null);
-  const celebId = useRef(0);
-  useEffect(() => {
-    if (!g.state) return;
-    const current = new Set(g.state.tableMelds.filter((m) => m.isBurraco).map((m) => m.id));
-    if (knownBurracos.current === null) {
-      knownBurracos.current = current; // primo stato: nessuna celebrazione
-      return;
-    }
-    for (const m of g.state.tableMelds) {
-      if (m.isBurraco && !knownBurracos.current.has(m.id)) {
-        setCelebration({
-          kind: m.clean ? "burraco-clean" : "burraco-dirty",
-          byYou: m.ownerSeat === g.yourSeat,
-          id: ++celebId.current,
-        });
-      }
-    }
-    knownBurracos.current = current;
-  }, [g.state, g.yourSeat]);
+   * Alimentate dagli eventi reali del server `pozzetto_taken` / `burraco_made`,
+   * esposti dall'hook come `g.celebration` (già nella forma CelebrationInfo). */
 
   const toggleCard = (card: Card) => {
     setSelectedCards((prev) =>
@@ -140,7 +115,7 @@ export default function Page() {
         <p className="muted" style={{ textAlign: "center" }}>
           Condividi il codice con l'altro giocatore: la partita inizia appena si siede.
         </p>
-        <ConnectionBanner connPhase={g.connPhase} resumed={readResumed(g)} />
+        <ConnectionBanner connPhase={g.connPhase} resumed={g.resumed} />
       </div>
     );
   }
@@ -156,19 +131,15 @@ export default function Page() {
   const phaseHint =
     s.phase === "must_draw" ? "Pesca dal mazzo o dallo scarto." : "Cala i tuoi giochi, poi scarta per concludere.";
 
-  // Campo del contratto confermato ma non ancora nella copia FE: lettura difensiva.
-  const turnEndsAt = (s as { turnEndsAt?: number | null }).turnEndsAt ?? null;
-
-  // Bridge "pending per-carta": finché non arriva il clientMoveId, se una sola
-  // carta è selezionata mentre una mossa è in volo, la evidenziamo come tale.
-  const pendingCardId = g.pending && selectedCards.length === 1 ? selectedCards[0] : null;
+  // Deadline del turno per il countdown VISIVO (v1: sempre null → nessun countdown).
+  const turnEndsAt = s.turnEndsAt;
 
   return (
     <div className="game">
-      <Celebration info={celebration} />
+      <Celebration info={g.celebration} />
       <RejectionToast rejection={g.rejection} onDismiss={g.dismissRejection} />
       {/* Fallback globale quando il pending non è agganciato a una carta. */}
-      {g.pending && !pendingCardId && <PendingBadge pending />}
+      {g.pending && !g.inFlightCardId && <PendingBadge pending />}
       <HandEndedOverlay info={g.handEnded} players={g.players} yourSeat={g.yourSeat} />
       <GameEndedOverlay info={g.gameEnded} players={g.players} yourSeat={g.yourSeat} config={g.config} />
 
@@ -200,7 +171,7 @@ export default function Page() {
       </div>
 
       {/* Riconnessione propria + "stato ripristinato". */}
-      <ConnectionBanner connPhase={g.connPhase} resumed={readResumed(g)} />
+      <ConnectionBanner connPhase={g.connPhase} resumed={g.resumed} />
 
       {/* Turno + fase, in evidenza. */}
       <TurnBanner isMyTurn={isMyTurn} phaseHint={phaseHint} opponentName={opponentName} />
@@ -267,7 +238,7 @@ export default function Page() {
                 key={c.id}
                 card={c}
                 selected={selectedCards.includes(c.id)}
-                pending={pendingCardId === c.id}
+                pending={g.inFlightCardId === c.id}
                 onClick={isMyTurn && !g.pending ? toggleCard : undefined}
               />
             ))
@@ -292,12 +263,4 @@ export default function Page() {
       />
     </div>
   );
-}
-
-/**
- * Lettura difensiva del flag `resumed` (da room_joined.resumed) finché l'hook
- * non lo espone: campo del contratto confermato, wiring lato develop.
- */
-function readResumed(g: ReturnType<typeof useGameSocket>): boolean | undefined {
-  return (g as unknown as { resumed?: boolean }).resumed;
 }
