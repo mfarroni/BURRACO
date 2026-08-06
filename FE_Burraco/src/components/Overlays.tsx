@@ -2,38 +2,29 @@
 
 import type { GameConfig, HandScoreDetail, PlayerPublic, Seat } from "@/lib/contract";
 import type { GameEndedInfo, HandEndedInfo, RejectionInfo } from "@/lib/useGameSocket";
+import { REJECT_TITLE, rejectText } from "@/lib/rejectMessages";
 
 /**
- * Overlay e banner degli stati di gioco. Sono volutamente essenziali: gli stati
- * visivi definitivi (turno, attesa, riconnessione, timeout, fine mano/partita)
- * sono un PUNTO DI CO-DESIGN con agente_ui_ux.
+ * Overlay e feedback degli stati di gioco, in stile "Circolo Notturno".
+ * Il testo dei rifiuti viene dalla mappa `rejectMessages` (proprietà FE): il
+ * `reason` grezzo del server NON è mai mostrato.
  */
 
-/** Testi UX associati ai codici di rifiuto (mappatura lato client, non regole). */
-const REJECT_TEXT: Record<string, string> = {
-  NOT_YOUR_TURN: "Non è il tuo turno.",
-  WRONG_PHASE: "Azione non consentita in questa fase.",
-  CARD_NOT_IN_HAND: "Carta non presente in mano.",
-  EMPTY_DISCARD: "Il monte scarti è vuoto.",
-  DECK_EMPTY: "Il mazzo è esaurito: pesca dal monte scarti.",
-  INVALID_MELD: "Le carte non formano un gioco valido.",
-  MELD_NOT_FOUND: "Gioco inesistente.",
-  NOT_MELD_OWNER: "Puoi agire solo sui tuoi giochi.",
-  MELD_LIMIT_REACHED: "Hai raggiunto il limite di calate prima del pozzetto.",
-  MUST_KEEP_CARD_TO_DISCARD: "Devi tenere una carta per lo scarto finale.",
-  CANNOT_CLOSE_NO_BURRACO: "Non puoi chiudere senza un burraco.",
-  ILLEGAL_LAST_DISCARD: "L'ultima carta non può essere una matta.",
-  NO_PINELLA_TO_SUBSTITUTE: "Nessuna pinella da sostituire con quella carta.",
-  GAME_NOT_ACTIVE: "La partita non è attiva.",
-  MALFORMED: "Messaggio non valido.",
-};
-
-export function RejectionToast({ rejection, onDismiss }: { rejection: RejectionInfo | null; onDismiss: () => void }) {
+export function RejectionToast({
+  rejection,
+  onDismiss,
+}: {
+  rejection: RejectionInfo | null;
+  onDismiss: () => void;
+}) {
   if (!rejection) return null;
   return (
-    <div className="toast toast-error" role="alert">
-      <strong>Mossa rifiutata:</strong> {REJECT_TEXT[rejection.code] ?? rejection.reason}
-      <button type="button" className="toast-close" onClick={onDismiss}>
+    <div className="toast" role="alert">
+      <span className="toast-icon" aria-hidden="true">⚠</span>
+      <span className="toast-body">
+        <strong>{REJECT_TITLE}.</strong> {rejectText(rejection.code)}
+      </span>
+      <button type="button" className="toast-close" onClick={onDismiss} aria-label="Chiudi avviso">
         ×
       </button>
     </div>
@@ -43,8 +34,9 @@ export function RejectionToast({ rejection, onDismiss }: { rejection: RejectionI
 export function PendingBadge({ pending }: { pending: boolean }) {
   if (!pending) return null;
   return (
-    <div className="pending-badge" aria-live="polite">
-      Attendo conferma dal server…
+    <div className="pending-badge" role="status" aria-live="polite">
+      <span className="spinner" aria-hidden="true" />
+      Mossa in volo, attendo conferma…
     </div>
   );
 }
@@ -54,6 +46,10 @@ function seatName(seat: Seat | null, players: PlayerPublic[], yourSeat: Seat | n
   if (seat === yourSeat) return "Tu";
   const p = players.find((pl) => pl.seat === seat);
   return p?.displayName ?? `Giocatore ${seat + 1}`;
+}
+
+function deltaClass(v: number): string {
+  return v > 0 ? "delta-pos" : v < 0 ? "delta-neg" : "";
 }
 
 export function HandEndedOverlay({
@@ -70,9 +66,11 @@ export function HandEndedOverlay({
     <div className="overlay">
       <div className="overlay-card">
         <h2>Fine smazzata</h2>
-        <p>
-          Chiusura:{" "}
-          <strong>{info.closerSeat === null ? "nessuno (mazzo esaurito)" : seatName(info.closerSeat, players, yourSeat)}</strong>
+        <p className="verdict">
+          Chiusura di{" "}
+          <strong>
+            {info.closerSeat === null ? "nessuno — mazzo esaurito" : seatName(info.closerSeat, players, yourSeat)}
+          </strong>
         </p>
         <table className="score-table">
           <thead>
@@ -82,29 +80,31 @@ export function HandEndedOverlay({
               <th>Bonus</th>
               <th>Mano</th>
               <th>Pozzetto</th>
-              <th>Δ</th>
+              <th>Δ smazzata</th>
             </tr>
           </thead>
           <tbody>
             {info.scores.map((s: HandScoreDetail) => (
               <tr key={s.seat}>
                 <td>{seatName(s.seat, players, yourSeat)}</td>
-                <td>{s.ptsMelds}</td>
-                <td>{s.ptsBonus}</td>
-                <td>{s.ptsPenaltyHand}</td>
-                <td>{s.ptsPozzetto}</td>
-                <td>
-                  <strong>{s.totalDelta}</strong>
+                <td className="num">{s.ptsMelds}</td>
+                <td className="num">{s.ptsBonus}</td>
+                <td className={`num ${deltaClass(s.ptsPenaltyHand)}`}>{s.ptsPenaltyHand}</td>
+                <td className={`num ${deltaClass(s.ptsPozzetto)}`}>{s.ptsPozzetto}</td>
+                <td className={`num ${deltaClass(s.totalDelta)}`}>
+                  <strong>{s.totalDelta > 0 ? `+${s.totalDelta}` : s.totalDelta}</strong>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
         <p className="cumulative">
-          Totale: {seatName(0, players, yourSeat)} <strong>{info.cumulative[0]}</strong> —{" "}
-          {seatName(1, players, yourSeat)} <strong>{info.cumulative[1]}</strong>
+          Totale partita — {seatName(0, players, yourSeat)}: <strong className="num">{info.cumulative[0]}</strong> ·{" "}
+          {seatName(1, players, yourSeat)}: <strong className="num">{info.cumulative[1]}</strong>
         </p>
-        <p className="muted">La prossima smazzata inizia automaticamente…</p>
+        <p className="muted" style={{ textAlign: "center" }}>
+          La prossima smazzata inizia automaticamente…
+        </p>
       </div>
     </div>
   );
@@ -126,14 +126,15 @@ export function GameEndedOverlay({
   return (
     <div className="overlay">
       <div className="overlay-card">
-        <h2>{won ? "Hai vinto! 🎉" : "Partita conclusa"}</h2>
-        <p>
+        <h2>{won ? "Hai vinto la partita" : "Partita conclusa"}</h2>
+        <p className="verdict">
+          {won ? "♛ " : ""}
           Vincitore: <strong>{seatName(info.winnerSeat, players, yourSeat)}</strong>
         </p>
-        <p>
-          Punteggio finale (obiettivo {config?.punteggioObiettivo ?? "—"}):{" "}
-          {seatName(0, players, yourSeat)} <strong>{info.finalScores[0]}</strong> —{" "}
-          {seatName(1, players, yourSeat)} <strong>{info.finalScores[1]}</strong>
+        <p className="cumulative">
+          Punteggio finale (obiettivo {config?.punteggioObiettivo ?? "—"}) — {seatName(0, players, yourSeat)}:{" "}
+          <strong className="num">{info.finalScores[0]}</strong> · {seatName(1, players, yourSeat)}:{" "}
+          <strong className="num">{info.finalScores[1]}</strong>
         </p>
       </div>
     </div>

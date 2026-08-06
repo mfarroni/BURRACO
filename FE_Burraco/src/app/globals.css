@@ -1,154 +1,1148 @@
-/*
- * Stile ESSENZIALE e neutro. Volutamente sobrio: la direzione artistica e gli
- * stati visivi definitivi sono competenza di agente_ui_ux. Qui puntiamo solo
- * alla leggibilità e a esporre "hook" di stile via className/data-attribute.
- */
+/* =====================================================================
+ * BURRACO — DESIGN SYSTEM "CIRCOLO NOTTURNO"
+ * Direzione artistica: club di carte elegante e notturno.
+ * Feltro verde profondo, cornici in legno/ottone, carte avorio ad alto
+ * contrasto con indici classici, oro usato con parsimonia.
+ *
+ * Questo file è la FONTE UNICA dei token visivi: colori (con ruoli
+ * semantici), tipografia, spaziature, raggi, ombre, z-index e le durate/
+ * easing delle animazioni. Ogni componente/stato attinge da qui, mai da
+ * valori sparsi (requisito D del brief).
+ *
+ * Accessibilità: contrasti verificati AA sui testi (valori annotati),
+ * focus sempre visibile, rispetto di prefers-reduced-motion.
+ * ===================================================================== */
 
-* { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
 :root {
-  --bg: #12212b;
-  --panel: #1b2f3c;
-  --panel-2: #24404f;
-  --text: #e8eef2;
-  --muted: #9fb3c0;
-  --accent: #3da35d;
-  --accent-2: #2c7be5;
-  --danger: #e05260;
-  --warn: #e0a52c;
-  --border: #34505f;
+  /* ---------------------------------------------------------------
+   * COLORE — Feltro (superfici del tavolo)
+   * Base NOTTURNA: il tavolo è la superficie dominante.
+   * --------------------------------------------------------------- */
+  --felt-900: #0e2a22; /* fondo tavolo, il più profondo */
+  --felt-800: #123a2c; /* pannelli su feltro */
+  --felt-700: #174a38; /* pannelli sollevati */
+  --felt-600: #1e5a44; /* highlight feltro (hover leggero) */
+
+  /* Legno — cornici, bordi strutturali, separatori */
+  --wood-900: #241608;
+  --wood-800: #3b2617;
+  --wood-700: #573619;
+  --wood-600: #6d4a25;
+
+  /* Ottone / Oro — accenti PREZIOSI, usati con parsimonia
+   * (bordi di pregio, indicatore di turno, titoli chiave) */
+  --brass-600: #a9853a;
+  --brass-500: #c8a24a; /* oro primario — testo/bordo su feltro: ~6.2:1 AA */
+  --brass-400: #d9ba6a;
+  --brass-300: #e7d097; /* oro chiaro — focus ring, glow */
+
+  /* Avorio — facce delle carte */
+  --ivory-50: #f7f3e7; /* faccia carta */
+  --ivory-100: #efe9d6;
+  --ivory-200: #e3dcc4; /* bordo interno carta */
+
+  /* Inchiostro — testo scuro (su avorio) */
+  --ink-900: #1a1712; /* nero caldo — su avorio ~15:1 AAA */
+  --ink-700: #4a4237;
+
+  /* Semi delle carte */
+  --card-red: #b01b2e;  /* cuori/quadri su avorio: ~6.0:1 AA */
+  --card-black: var(--ink-900);
+
+  /* Testo su feltro */
+  --text-strong: #f3eedf; /* su --felt-900: ~13:1 AAA */
+  --text: #e6e2d3;        /* su --felt-900: ~11:1 AAA */
+  --text-muted: #b9c6bc;  /* su --felt-900: ~8.4:1 AAA */
+  --text-faint: #8ea295;  /* etichette secondarie: ~5:1 AA */
+
+  /* Colori semantici (ruoli, non decorazione) */
+  --success-500: #3ea46b; /* turno proprio / esito positivo */
+  --success-300: #7fd6a4; /* testo positivo su superfici scure */
+  --danger-500: #e0574b;  /* mossa rifiutata / errore (fill) */
+  --danger-300: #f0a79b;  /* testo rosso su scuro: ~6.7:1 AA */
+  --warn-500: #e0a93a;    /* turno in scadenza / riconnessione (fill) */
+  --warn-300: #f0d08a;    /* testo ambra su scuro */
+  --info-500: #6fa8c7;
+  --info-300: #a9d0e4;
+
+  /* Superfici astratte (mappate al mood notturno) */
+  --surface: #123227;        /* pannelli/toast: feltro leggermente più chiaro */
+  --surface-raised: #17402f; /* card sollevate, overlay */
+  --surface-sunken: #0b241d; /* pozzi/monte, incassi */
+  --border: #2c5445;         /* bordo tenue su feltro */
+  --border-strong: var(--brass-600);
+  --scrim: rgba(6, 18, 14, 0.72); /* velo overlay */
+
+  /* Focus ring — visibile sia su feltro sia su avorio */
+  --focus: var(--brass-300);
+
+  /* ---------------------------------------------------------------
+   * TIPOGRAFIA
+   * Titoli serif (carattere da club) + UI sans + cifre tabellari.
+   * Stack robusti senza asset esterni (performance): sostituibili con
+   * un display serif su licenza via next/font in seguito.
+   * --------------------------------------------------------------- */
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+    "Times New Roman", serif;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+
+  /* Scala tipografica (modular ~1.25) */
+  --fs-display: 2rem;
+  --fs-h1: 1.5rem;
+  --fs-h2: 1.25rem;
+  --fs-body: 1rem;
+  --fs-sm: 0.875rem;
+  --fs-xs: 0.75rem;
+  --lh-tight: 1.15;
+  --lh-body: 1.5;
+
+  /* ---------------------------------------------------------------
+   * SPAZIATURA — griglia base 4px (ariosa: il concept respira)
+   * --------------------------------------------------------------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  /* RAGGI */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-card: 9px;
+  --r-pill: 999px;
+
+  /* OMBRE */
+  --sh-card: 0 2px 4px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.25) inset;
+  --sh-lift: 0 10px 22px rgba(0, 0, 0, 0.5);
+  --sh-panel: 0 6px 18px rgba(0, 0, 0, 0.35);
+  --sh-inset: inset 0 2px 8px rgba(0, 0, 0, 0.45);
+  --glow-turn: 0 0 0 2px var(--brass-300), 0 0 18px rgba(231, 208, 151, 0.35);
+  --glow-danger: 0 0 0 2px var(--danger-500), 0 0 16px rgba(224, 87, 75, 0.3);
+
+  /* Z-INDEX del tavolo (scala esplicita) */
+  --z-table: 0;
+  --z-cards: 10;
+  --z-badges: 20;
+  --z-banner: 40;
+  --z-toast: 60;
+  --z-overlay: 80;
+  --z-celebration: 90;
+
+  /* MOVIMENTO — durate/easing con SCOPO */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms; /* micro: sollevamento carta */
+  --dur-base: 200ms; /* toast, transizioni UI */
+  --dur-deal: 300ms; /* distribuzione/gioco carta */
+  --dur-slow: 1200ms; /* celebrazioni */
+}
+
+/* ===================================================================
+ * BASE
+ * =================================================================== */
+html,
+body {
+  margin: 0;
+  min-height: 100%;
 }
 
 body {
-  margin: 0;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  background: var(--bg);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
   color: var(--text);
+  /* Feltro notturno: radiale calda al centro (luce del tavolo) su fondo profondo,
+     con trama sottile a righe per dare "panno" senza immagini. */
+  background-color: var(--felt-900);
+  background-image:
+    radial-gradient(120% 90% at 50% 8%, rgba(46, 110, 86, 0.35) 0%, rgba(14, 42, 34, 0) 60%),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.012) 0 2px, rgba(0, 0, 0, 0.012) 2px 4px);
+  background-attachment: fixed;
 }
 
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-serif);
+  color: var(--text-strong);
+  line-height: var(--lh-tight);
+  margin: 0 0 var(--sp-3);
+  letter-spacing: 0.01em;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+.faint {
+  color: var(--text-faint);
+}
+
+/* Cifre tabellari ovunque servano allineamento (punteggi, contatori). */
+.num,
+.score-table td,
+.pile .num,
+.chip .val {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* Focus visibile e coerente su TUTTO ciò che è interattivo. */
+:where(button, a, input, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* ===================================================================
+ * BOTTONI
+ * =================================================================== */
 button {
   font: inherit;
   cursor: pointer;
+  color: var(--text-strong);
+  background: linear-gradient(180deg, var(--felt-700), var(--felt-800));
   border: 1px solid var(--border);
-  background: var(--panel-2);
-  color: var(--text);
-  padding: 8px 12px;
-  border-radius: 6px;
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-sm);
+  transition: background var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-base);
 }
-button:disabled { opacity: 0.4; cursor: not-allowed; }
-button:not(:disabled):hover { background: var(--accent-2); }
+button:not(:disabled):hover {
+  background: linear-gradient(180deg, var(--felt-600), var(--felt-700));
+  border-color: var(--brass-600);
+}
+button:not(:disabled):active {
+  transform: translateY(1px);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
-.muted { color: var(--muted); }
+/* Bottone primario "d'oro" — l'azione più importante del momento. */
+.btn-primary {
+  background: linear-gradient(180deg, var(--brass-400), var(--brass-600));
+  color: var(--ink-900);
+  border-color: var(--brass-300);
+  font-weight: 600;
+}
+.btn-primary:not(:disabled):hover {
+  background: linear-gradient(180deg, var(--brass-300), var(--brass-500));
+}
+.btn-discard {
+  background: linear-gradient(180deg, var(--warn-500), #b6842a);
+  color: var(--ink-900);
+  border-color: var(--warn-300);
+  font-weight: 600;
+}
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+}
 
-/* ── Lobby ───────────────────────────────────────────────────────── */
+/* ===================================================================
+ * LOBBY / SCHERMATA D'INGRESSO — la prima impressione
+ * Ordine dello sguardo: titolo serif dorato → sottotitolo → campi → CTA.
+ * =================================================================== */
 .lobby {
-  max-width: 420px;
-  margin: 10vh auto;
-  padding: 24px;
-  background: var(--panel);
+  max-width: 440px;
+  margin: 8vh auto;
+  padding: var(--sp-6) var(--sp-5) var(--sp-5);
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-top: 3px solid var(--brass-500);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-panel);
 }
-.lobby h1 { margin-top: 0; }
-.lobby label { display: block; margin: 12px 0 4px; }
+.lobby .brand {
+  text-align: center;
+  margin-bottom: var(--sp-5);
+}
+.lobby .brand .suits {
+  font-size: 1.4rem;
+  letter-spacing: 0.4em;
+  color: var(--brass-400);
+  margin-bottom: var(--sp-2);
+}
+.lobby h1 {
+  font-size: var(--fs-display);
+  margin: 0;
+  color: var(--brass-300);
+}
+.lobby .brand .tagline {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  margin-top: var(--sp-2);
+}
+.lobby label {
+  display: block;
+  margin: var(--sp-4) 0 var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
 .lobby input {
   width: 100%;
-  padding: 10px;
-  border-radius: 6px;
+  padding: var(--sp-3);
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
-  background: var(--panel-2);
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+  font-size: var(--fs-body);
+}
+.lobby input::placeholder {
+  color: var(--text-faint);
+}
+.lobby .cta {
+  margin-top: var(--sp-5);
+  width: 100%;
+  padding: var(--sp-3);
+  font-size: var(--fs-body);
+}
+
+/* ===================================================================
+ * LAYOUT PARTITA
+ * =================================================================== */
+.game {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: var(--sp-4) var(--sp-4) 96px; /* spazio per action-bar sticky */
+  position: relative;
+  z-index: var(--z-table);
+}
+
+/* ── Header / Scoreboard ─────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brass-600);
+  box-shadow: var(--sh-panel);
+}
+.status-line {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Scoreboard "targa d'ottone" con cifre tabellari. */
+.scoreboard {
+  display: flex;
+  gap: var(--sp-4);
+  align-items: center;
+}
+.scoreboard .chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+}
+.scoreboard .chip .lbl {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.scoreboard .chip .val {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  color: var(--brass-300);
+  font-weight: 600;
+}
+.scoreboard .chip.you .val {
+  color: var(--text-strong);
+}
+.scoreboard .vs {
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+}
+
+/* ── Badge di stato (turno, connessione…) ────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  color: var(--text);
+  z-index: var(--z-badges);
+}
+.badge .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex: none;
+}
+.badge[data-turn="mine"] {
+  background: linear-gradient(180deg, var(--success-500), #2c7d51);
+  border-color: var(--success-300);
+  color: #06251a;
+  font-weight: 600;
+}
+.badge[data-turn="mine"] .dot {
+  background: #06251a;
+}
+.badge[data-turn="theirs"] {
+  color: var(--text-muted);
+}
+.badge[data-conn="connected"] .dot {
+  background: var(--success-300);
+}
+.badge[data-conn="disconnected"] {
+  border-color: var(--danger-500);
+  color: var(--danger-300);
+}
+.badge[data-conn="disconnected"] .dot {
+  background: var(--danger-500);
+}
+.badge[data-conn="reconnecting"] {
+  border-color: var(--warn-500);
+  color: var(--warn-300);
+}
+.badge[data-conn="reconnecting"] .dot {
+  background: var(--warn-500);
+  animation: pulse-dot 1s var(--ease-in-out) infinite;
+}
+
+/* ── Countdown del turno (derivato da turnEndsAt) ─────────────────── */
+.countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
   color: var(--text);
 }
-.lobby button { margin-top: 18px; width: 100%; background: var(--accent); }
+.countdown[data-level="urgent"] {
+  border-color: var(--warn-500);
+  color: var(--warn-300);
+  animation: pulse-soft 1s var(--ease-in-out) infinite;
+}
+.countdown[data-level="expired"] {
+  border-color: var(--danger-500);
+  color: var(--danger-300);
+}
+.countdown .ring {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+}
+.countdown[data-level="urgent"] .ring {
+  animation: spin 1s linear infinite;
+}
 
-/* ── Layout partita ──────────────────────────────────────────────── */
-.game { max-width: 1000px; margin: 0 auto; padding: 16px; }
-.topbar {
-  display: flex; justify-content: space-between; align-items: center;
-  gap: 12px; flex-wrap: wrap;
-  background: var(--panel); padding: 10px 14px; border-radius: 8px;
+/* ===================================================================
+ * TAVOLO CENTRALE — mazzo, monte scarti, pozzetti, contatori
+ * =================================================================== */
+.tableau {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--sp-4);
+  margin: var(--sp-4) 0;
+  padding: var(--sp-4);
+  background: radial-gradient(120% 120% at 50% 0%, var(--felt-700), var(--felt-900));
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-inset);
+}
+.pile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  text-align: center;
+}
+.pile .lbl {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.pile .num {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  color: var(--text-strong);
+}
+.pile[data-actionable="true"] .slot {
+  cursor: pointer;
+}
+.pile[data-actionable="true"] .slot:hover {
+  transform: translateY(-3px);
+}
+
+/* "Slot" del tavolo — la sagoma dove poggia una carta/mazzo. */
+.slot {
+  width: 60px;
+  height: 84px;
+  border-radius: var(--r-card);
+  display: grid;
+  place-items: center;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.slot.empty {
+  border: 1.5px dashed var(--border);
+  color: var(--text-faint);
+  background: var(--surface-sunken);
+}
+/* Mazzo di pesca: pila di dorsi da club. */
+.slot.deck {
+  background:
+    repeating-linear-gradient(135deg, var(--brass-600) 0 3px, transparent 3px 8px),
+    linear-gradient(180deg, #7c1f2b, #5c141d);
+  border: 2px solid var(--brass-500);
+  box-shadow: 2px 2px 0 #4a1017, 4px 4px 0 #3a0d13, var(--sh-card);
+  color: var(--brass-300);
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+}
+/* Dorso impilato nel tavolo (mano avversario). */
+.slot.facedown {
+  background:
+    repeating-linear-gradient(135deg, rgba(200, 162, 74, 0.5) 0 3px, transparent 3px 8px),
+    linear-gradient(180deg, #7c1f2b, #5c141d);
+  border: 2px solid var(--brass-500);
+  box-shadow: 2px 2px 0 #4a1017, var(--sh-card);
+}
+.pozzetti {
+  display: flex;
+  gap: 4px;
+}
+.pozzetto-mini {
+  width: 26px;
+  height: 38px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #7c1f2b, #5c141d);
+  border: 1px solid var(--brass-600);
+}
+.pozzetto-mini[data-taken="true"] {
+  background: var(--surface-sunken);
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+/* ===================================================================
+ * CARTA — componente firma. Leggibilità = requisito non negoziabile.
+ * Faccia avorio, indici classici agli angoli, pip centrale.
+ * =================================================================== */
+.card {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 56px;
+  height: 80px;
+  padding: 4px 5px;
+  background: linear-gradient(180deg, var(--ivory-50), var(--ivory-100));
+  color: var(--card-black);
+  border: 1px solid var(--ivory-200);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-card);
+  font-weight: 700;
+  line-height: 1;
+  z-index: var(--z-cards);
+  transition: transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out), outline-color var(--dur-base);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+.card[data-small="true"] {
+  width: 44px;
+  height: 62px;
+  padding: 3px 4px;
+}
+.card[data-color="red"] {
+  color: var(--card-red);
+}
+
+/* Indici angolari (rank sopra il seme), classici. */
+.card .index {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.9rem;
+  width: 1.2em;
+}
+.card[data-small="true"] .index {
+  font-size: 0.72rem;
+}
+.card .index .r {
+  font-weight: 800;
+}
+.card .index .s {
+  font-size: 0.85em;
+}
+.card .index.br {
+  align-self: flex-end;
+  transform: rotate(180deg);
+}
+/* Pip centrale grande — riconoscibilità immediata del seme. */
+.card .pip {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  opacity: 0.9;
+  pointer-events: none;
+}
+.card[data-small="true"] .pip {
+  font-size: 1.15rem;
+}
+
+/* Stato selezionata — si solleva verso il giocatore. */
+.card[data-selected="true"] {
+  transform: translateY(-12px);
+  box-shadow: var(--sh-lift);
+  outline-color: var(--brass-400);
+}
+.card.clickable:hover {
+  transform: translateY(-6px);
+}
+
+/* Carta "in volo" / attendo conferma (pending per-carta). */
+.card[data-pending="true"] {
+  animation: card-pending 1s var(--ease-in-out) infinite;
+}
+.card[data-pending="true"]::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--brass-600);
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+}
+
+/* MATTE: jolly e pinella hanno IDENTITÀ visiva distinta.
+ * (wildKind = identità della carta; il RUOLO in un gioco è a parte.) */
+.card[data-wildkind="joker"] {
+  background: linear-gradient(180deg, #efe9d6, #e3dcc4);
+}
+.card[data-wildkind="joker"] .jolly {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  color: #7a3fb0; /* jolly = viola regale */
+}
+.card[data-wildkind="joker"] .index .r {
+  color: #7a3fb0;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+}
+/* pinella = il 2: indici del "2" SEMPRE leggibili (non coperti). L'identità di
+   matta è marcata da una cornice interna d'ottone + una gemma d'ottone in
+   alto a destra, lontano dagli indici. */
+.card[data-wildkind="pinella"] {
+  box-shadow: var(--sh-card), inset 0 0 0 2px var(--brass-400);
+}
+.card[data-wildkind="pinella"]::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--brass-300), var(--brass-600));
+  border: 1px solid var(--brass-500);
+}
+.card[data-small="true"][data-wildkind="pinella"]::before {
+  width: 7px;
+  height: 7px;
+}
+
+/* Evidenza: questa carta funge da MATTA in un gioco (da wildIndices). */
+.card[data-wildrole="true"] {
+  outline-color: var(--brass-300);
+  box-shadow: var(--sh-card), 0 0 10px rgba(231, 208, 151, 0.55);
+}
+
+/* Dorso carta (avversario / faccia coperta). */
+.card.back {
+  background:
+    repeating-linear-gradient(135deg, rgba(200, 162, 74, 0.5) 0 3px, transparent 3px 8px),
+    linear-gradient(180deg, #7c1f2b, #5c141d);
+  border: 2px solid var(--brass-500);
+  color: transparent;
+}
+.card.back .pip,
+.card.back .index {
+  display: none;
+}
+
+/* La mano del giocatore — leggermente sovrapposta, a ventaglio piatto. */
+.hand-zone h4 {
+  margin: var(--sp-4) 0 var(--sp-2);
+  font-size: var(--fs-h2);
+  color: var(--text-strong);
+}
+.hand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  min-height: 96px;
+}
+
+/* ===================================================================
+ * GIOCHI CALATI (MELDS) — con badge burraco pulito/sporco
+ * =================================================================== */
+.melds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+  margin: var(--sp-4) 0;
+}
+@media (max-width: 640px) {
+  .melds {
+    grid-template-columns: 1fr;
+  }
+}
+.meld-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+}
+.meld-group h4 {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+}
+.meld-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.meld {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+  transition: box-shadow var(--dur-base), border-color var(--dur-base);
+}
+.meld[data-selectable="true"] {
+  cursor: pointer;
+}
+.meld[data-selectable="true"]:hover {
+  border-color: var(--brass-600);
+}
+.meld[data-selected="true"] {
+  border-color: var(--brass-400);
+  box-shadow: var(--glow-turn);
+}
+.meld-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.meld-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-1);
+}
+.meld-tags {
+  margin-top: var(--sp-2);
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.tag {
+  font-size: var(--fs-xs);
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
   border: 1px solid var(--border);
 }
-.status-line { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.badge { padding: 3px 8px; border-radius: 12px; font-size: 0.85rem; background: var(--panel-2); }
-.badge[data-turn="true"] { background: var(--accent); }
-.badge[data-conn="disconnected"] { background: var(--danger); }
-.badge[data-conn="reconnecting"] { background: var(--warn); color: #222; }
-
-.counts { display: flex; gap: 16px; flex-wrap: wrap; margin: 14px 0; }
-.count-box {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px 14px; text-align: center; min-width: 90px;
+.tag-burraco {
+  font-weight: 700;
+  border: none;
 }
-.count-box .num { font-size: 1.4rem; font-weight: 700; }
-.count-box .lbl { font-size: 0.8rem; color: var(--muted); }
-
-/* ── Carte ───────────────────────────────────────────────────────── */
-.card {
-  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
-  width: 46px; height: 64px; margin: 2px;
-  background: #f7f7f2; color: #111; border: 1px solid #b9b9ad; border-radius: 6px;
-  font-weight: 700; padding: 0;
+/* Burraco PULITO = oro pieno; SPORCO = oro brunito con bordo (distinguibili
+   anche senza colore grazie all'icona ✦/✧ e al testo). */
+.tag-burraco[data-clean="true"] {
+  background: linear-gradient(180deg, var(--brass-400), var(--brass-600));
+  color: var(--ink-900);
 }
-.card[data-small="true"] { width: 38px; height: 54px; font-size: 0.85rem; }
-.card[data-color="red"] { color: #c02636; }
-.card[data-wild="true"] { outline: 2px solid var(--accent-2); }
-.card[data-selected="true"] { transform: translateY(-8px); box-shadow: 0 4px 10px rgba(0,0,0,0.5); border-color: var(--accent); }
-.card:not(:disabled):hover { background: #fff; }
-.card-joker { font-size: 1.4rem; color: #7a3fb0; }
-.card-suit { font-size: 1rem; }
-
-.hand { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 8px; }
-
-/* ── Giochi ──────────────────────────────────────────────────────── */
-.melds { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 14px 0; }
-.meld-group { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
-.meld-group h4 { margin: 0 0 8px; }
-.meld-list { display: flex; flex-direction: column; gap: 8px; }
-.meld {
-  background: var(--panel-2); border: 1px solid var(--border);
-  border-radius: 6px; padding: 6px;
+.tag-burraco[data-clean="false"] {
+  background: var(--surface-sunken);
+  color: var(--brass-300);
+  border: 1px solid var(--brass-500);
 }
-.meld[data-selectable="true"] { cursor: pointer; }
-.meld[data-selected="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
-.meld-cards { display: flex; flex-wrap: wrap; }
-.meld-tags { margin-top: 4px; display: flex; gap: 6px; }
-.tag { font-size: 0.72rem; padding: 2px 6px; border-radius: 10px; background: #33506080; color: var(--muted); }
-.tag-burraco { background: var(--accent); color: #fff; }
 
-/* ── Barra azioni ────────────────────────────────────────────────── */
+/* ===================================================================
+ * BARRA AZIONI (sticky) — l'azione del momento risalta in oro.
+ * =================================================================== */
 .action-bar {
-  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px; margin-top: 12px;
-  position: sticky; bottom: 0;
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  align-items: center;
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--brass-600);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  padding: var(--sp-3);
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-badges);
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.35);
 }
-.action-bar .sep { width: 1px; height: 28px; background: var(--border); }
-.btn-discard { background: var(--warn); color: #222; }
+.action-bar .sep {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+}
+.action-bar .hint {
+  margin-left: auto;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+/* Quando NON è il tuo turno la barra è visibilmente "a riposo". */
+.action-bar[data-my-turn="false"] {
+  opacity: 0.75;
+  filter: saturate(0.7);
+}
 
-/* ── Toast / badge / overlay ─────────────────────────────────────── */
+/* ===================================================================
+ * BANNER DI STATO (in linea, sopra il tavolo)
+ * Superfici scure con accento colorato: nessun testo colore-su-colore.
+ * =================================================================== */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--brass-500);
+  margin: var(--sp-3) 0;
+  z-index: var(--z-banner);
+}
+.banner .banner-icon {
+  font-size: 1.2rem;
+  flex: none;
+}
+.banner .banner-body {
+  display: flex;
+  flex-direction: column;
+}
+.banner .banner-title {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.banner .banner-sub {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.banner[data-tone="warn"] {
+  border-left-color: var(--warn-500);
+}
+.banner[data-tone="warn"] .banner-title {
+  color: var(--warn-300);
+}
+.banner[data-tone="danger"] {
+  border-left-color: var(--danger-500);
+}
+.banner[data-tone="danger"] .banner-title {
+  color: var(--danger-300);
+}
+.banner[data-tone="info"] {
+  border-left-color: var(--info-500);
+}
+.banner[data-tone="success"] {
+  border-left-color: var(--success-500);
+}
+.banner[data-tone="success"] .banner-title {
+  color: var(--success-300);
+}
+.banner .spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+  color: var(--warn-300);
+}
+
+/* ===================================================================
+ * TOAST — mossa rifiutata (effimero, sopra tutto)
+ * =================================================================== */
 .toast {
-  position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-  padding: 12px 16px; border-radius: 8px; z-index: 50; max-width: 90%;
+  position: fixed;
+  top: var(--sp-4);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--danger-500);
+  box-shadow: var(--sh-lift), var(--glow-danger);
+  z-index: var(--z-toast);
+  max-width: min(92vw, 480px);
+  animation: toast-in var(--dur-base) var(--ease-out);
 }
-.toast-error { background: var(--danger); color: #fff; }
-.toast-close { background: transparent; border: none; color: inherit; margin-left: 12px; font-size: 1.1rem; }
+.toast .toast-icon {
+  color: var(--danger-300);
+  font-size: 1.2rem;
+  flex: none;
+}
+.toast .toast-body {
+  color: var(--text-strong);
+}
+.toast .toast-body strong {
+  color: var(--danger-300);
+}
+.toast .toast-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  padding: 0 var(--sp-1);
+  margin-left: var(--sp-2);
+}
 
+/* Pillola "mossa in volo" globale (fallback quando il pending non è
+   agganciato a una carta specifica). */
 .pending-badge {
-  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-  background: var(--warn); color: #222; padding: 8px 14px; border-radius: 16px; z-index: 40;
+  position: fixed;
+  bottom: 88px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--brass-600);
+  color: var(--text-strong);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-pill);
+  z-index: var(--z-banner);
+  box-shadow: var(--sh-panel);
+}
+.pending-badge .spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--brass-400);
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
 }
 
+/* ===================================================================
+ * OVERLAY (fine mano / fine partita) + CELEBRAZIONI
+ * =================================================================== */
 .overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-  display: flex; align-items: center; justify-content: center; z-index: 60;
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-overlay);
+  padding: var(--sp-4);
+  animation: fade-in var(--dur-base) var(--ease-out);
 }
 .overlay-card {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 10px; padding: 24px; max-width: 560px; width: 92%;
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--brass-500);
+  border-radius: var(--r-lg);
+  padding: var(--sp-6) var(--sp-5);
+  max-width: 600px;
+  width: 100%;
+  box-shadow: var(--sh-lift);
 }
-.score-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-.score-table th, .score-table td { border: 1px solid var(--border); padding: 6px 8px; text-align: center; }
-.cumulative { margin-top: 10px; }
+.overlay-card h2 {
+  font-size: var(--fs-display);
+  color: var(--brass-300);
+  text-align: center;
+}
+.overlay-card .verdict {
+  text-align: center;
+  font-family: var(--font-serif);
+  font-size: var(--fs-h1);
+  margin-bottom: var(--sp-4);
+}
+.score-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--sp-4) 0;
+  font-size: var(--fs-sm);
+}
+.score-table th,
+.score-table td {
+  border: 1px solid var(--border);
+  padding: var(--sp-2);
+  text-align: center;
+}
+.score-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  background: var(--surface-sunken);
+}
+.score-table td.delta-pos {
+  color: var(--success-300);
+}
+.score-table td.delta-neg {
+  color: var(--danger-300);
+}
+.cumulative {
+  margin-top: var(--sp-3);
+  text-align: center;
+  color: var(--text);
+}
 
-h2, h4 { color: var(--text); }
+/* Celebrazione effimera (pozzetto / burraco). Non blocca il gioco. */
+.celebration {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: var(--z-celebration);
+}
+.celebration .banner-celebrate {
+  padding: var(--sp-4) var(--sp-6);
+  border-radius: var(--r-lg);
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  border: 2px solid var(--brass-400);
+  box-shadow: var(--sh-lift), 0 0 40px rgba(231, 208, 151, 0.35);
+  text-align: center;
+  animation: celebrate-pop var(--dur-slow) var(--ease-out);
+}
+.celebration .banner-celebrate .title {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h1);
+  color: var(--brass-300);
+}
+.celebration .banner-celebrate .sub {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+/* Burraco PULITO = celebrazione più intensa (scintille dorate). */
+.celebration[data-kind="burraco-clean"] .banner-celebrate {
+  border-color: var(--brass-300);
+  box-shadow: var(--sh-lift), 0 0 64px rgba(231, 208, 151, 0.6);
+}
+
+/* ===================================================================
+ * ANIMAZIONI
+ * =================================================================== */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes pulse-soft {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(224, 169, 58, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(224, 169, 58, 0.25); }
+}
+@keyframes card-pending {
+  0%, 100% { transform: translateY(-2px); opacity: 0.85; }
+  50% { transform: translateY(-6px); opacity: 1; }
+}
+@keyframes toast-in {
+  from { transform: translate(-50%, -12px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes celebrate-pop {
+  0% { transform: scale(0.85); opacity: 0; }
+  15% { transform: scale(1.04); opacity: 1; }
+  80% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+/* Distribuzione carte: entrano dal mazzo. Applicata via classe .deal. */
+@keyframes deal-in {
+  from { transform: translateY(-40px) scale(0.9); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+.deal {
+  animation: deal-in var(--dur-deal) var(--ease-out) both;
+}
+
+/* ===================================================================
+ * ACCESSIBILITÀ — riduzione del movimento
+ * Le celebrazioni e i loop restano come feedback STATICO (bordo/testo).
+ * =================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .card[data-selected="true"],
+  .card.clickable:hover {
+    transform: none;
+    outline-color: var(--brass-400);
+  }
+  /* Il pending resta comunicato dallo spinner statico + testo. */
+  .countdown[data-level="urgent"] {
+    box-shadow: 0 0 0 2px var(--warn-500);
+  }
+}
+
+/* Utility screen-reader-only per etichette non visive. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

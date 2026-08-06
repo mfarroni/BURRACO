@@ -3,9 +3,12 @@
 import type { GameStatePublic, Seat } from "@/lib/contract";
 
 /**
- * Barra delle azioni. L'UNICA logica ammessa qui è banale abilitazione dei
+ * Barra delle azioni. L'UNICA logica ammessa qui è la banale abilitazione dei
  * pulsanti in base a turno/fase (NON è validazione di regole: quella è del
  * server). Ogni azione invia un'intenzione e attiva lo stato "attendo conferma".
+ *
+ * Gerarchia visiva: l'azione più probabile del momento è in ORO (.btn-primary)
+ * — pescare in must_draw, scartare in may_meld — per guidare l'occhio.
  */
 interface Props {
   state: GameStatePublic;
@@ -28,9 +31,22 @@ export function ActionBar(p: Props) {
   const locked = !isMyTurn || p.pending || p.state.status !== "playing";
   const nSel = p.selectedCards.length;
 
+  const hint = !isMyTurn
+    ? "In attesa dell'avversario"
+    : p.pending
+      ? "Attendo la conferma del server…"
+      : mustDraw
+        ? "Pesca per iniziare il turno"
+        : "Cala i tuoi giochi, poi scarta per concludere";
+
   return (
     <div className="action-bar" data-my-turn={isMyTurn ? "true" : "false"}>
-      <button type="button" disabled={locked || !mustDraw} onClick={p.onDrawDeck}>
+      <button
+        type="button"
+        className={mustDraw ? "btn-primary" : ""}
+        disabled={locked || !mustDraw}
+        onClick={p.onDrawDeck}
+      >
         Pesca dal mazzo
       </button>
       <button
@@ -41,17 +57,17 @@ export function ActionBar(p: Props) {
         Pesca dallo scarto ({p.state.discardCount})
       </button>
 
-      <span className="sep" />
+      <span className="sep" aria-hidden="true" />
 
       <button type="button" disabled={locked || !mayMeld || nSel < 3} onClick={p.onMeldNew}>
-        Cala nuovo gioco
+        Cala gioco
       </button>
       <button
         type="button"
         disabled={locked || !mayMeld || !p.selectedMeldId || nSel < 1}
         onClick={p.onMeldExtend}
       >
-        Amplia gioco
+        Amplia
       </button>
       <button
         type="button"
@@ -62,12 +78,16 @@ export function ActionBar(p: Props) {
       </button>
       <button
         type="button"
-        className="btn-discard"
+        className={mayMeld ? "btn-discard" : ""}
         disabled={locked || !mayMeld || nSel !== 1}
         onClick={p.onDiscard}
       >
         Scarta
       </button>
+
+      <span className="hint" aria-live="polite">
+        {hint}
+      </span>
     </div>
   );
 }

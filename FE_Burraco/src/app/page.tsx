@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Card } from "@/lib/contract";
 import { useGameSocket } from "@/lib/useGameSocket";
 import { CardView } from "@/components/CardView";
@@ -12,6 +12,14 @@ import {
   PendingBadge,
   RejectionToast,
 } from "@/components/Overlays";
+import {
+  Celebration,
+  ConnectionBanner,
+  Countdown,
+  OpponentStatus,
+  TurnBanner,
+  type CelebrationInfo,
+} from "@/components/StateBanners";
 
 export default function Page() {
   const g = useGameSocket();
@@ -32,6 +40,34 @@ export default function Page() {
     setSelectedMeldId(null);
   }, [g.state]);
 
+  /* ── Celebrazioni effimere ──────────────────────────────────────────
+   * Il contratto confermato prevede eventi `pozzetto_taken` e `burraco_made`.
+   * Finché l'hook non li espone, rileviamo in modo GRAFICO (placeholder) i
+   * burrachi NUOVI comparsi tra due stati — mai al primo stato, così un rejoin
+   * non ri-celebra. Da sostituire con gli eventi reali del server (vedi
+   * CO-DESIGN → develop). */
+  const [celebration, setCelebration] = useState<CelebrationInfo | null>(null);
+  const knownBurracos = useRef<Set<string> | null>(null);
+  const celebId = useRef(0);
+  useEffect(() => {
+    if (!g.state) return;
+    const current = new Set(g.state.tableMelds.filter((m) => m.isBurraco).map((m) => m.id));
+    if (knownBurracos.current === null) {
+      knownBurracos.current = current; // primo stato: nessuna celebrazione
+      return;
+    }
+    for (const m of g.state.tableMelds) {
+      if (m.isBurraco && !knownBurracos.current.has(m.id)) {
+        setCelebration({
+          kind: m.clean ? "burraco-clean" : "burraco-dirty",
+          byYou: m.ownerSeat === g.yourSeat,
+          id: ++celebId.current,
+        });
+      }
+    }
+    knownBurracos.current = current;
+  }, [g.state, g.yourSeat]);
+
   const toggleCard = (card: Card) => {
     setSelectedCards((prev) =>
       prev.includes(card.id) ? prev.filter((id) => id !== card.id) : [...prev, card.id],
@@ -41,19 +77,23 @@ export default function Page() {
     setSelectedMeldId((prev) => (prev === meldId ? null : meldId));
   };
 
-  /* ── Lobby ───────────────────────────────────────────────────────── */
+  /* ── Lobby / schermata d'ingresso ──────────────────────────────────── */
   if (!g.joined) {
     return (
       <div className="lobby">
-        <h1>Burraco 1v1</h1>
-        <p className="muted">Crea o entra in una partita inserendo lo stesso codice room.</p>
-        <label htmlFor="room">Codice room</label>
+        <div className="brand">
+          <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
+          <h1>Burraco</h1>
+          <p className="tagline">Il tavolo del circolo, uno contro uno.</p>
+        </div>
+        <label htmlFor="room">Codice tavolo</label>
         <input
           id="room"
           value={roomCode}
           onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
           placeholder="es. TAVOLO1"
           maxLength={12}
+          autoComplete="off"
         />
         <label htmlFor="name">Il tuo nome</label>
         <input
@@ -62,99 +102,152 @@ export default function Page() {
           onChange={(e) => setDisplayName(e.target.value)}
           placeholder="es. Marco"
           maxLength={40}
+          autoComplete="off"
         />
         <button
           type="button"
-          disabled={!roomCode.trim()}
+          className="cta btn-primary"
+          disabled={!roomCode.trim() || g.connPhase === "connecting" || g.connPhase === "reconnecting"}
           onClick={() => g.join(roomCode, displayName)}
         >
-          Entra
+          {g.connPhase === "connecting" || g.connPhase === "reconnecting" ? "Connessione…" : "Siediti al tavolo"}
         </button>
-        {g.connPhase === "reconnecting" && <p className="muted">Connessione in corso…</p>}
-        {g.errorMessage && <p style={{ color: "var(--danger)" }}>{g.errorMessage}</p>}
+        {(g.connPhase === "connecting" || g.connPhase === "reconnecting") && (
+          <p className="muted" role="status" style={{ marginTop: "var(--sp-3)" }}>
+            Apertura del tavolo in corso…
+          </p>
+        )}
+        {g.errorMessage && (
+          <p role="alert" style={{ color: "var(--danger-300)", marginTop: "var(--sp-3)" }}>
+            {g.errorMessage}
+          </p>
+        )}
       </div>
     );
   }
 
-  /* ── In attesa dell'avversario ───────────────────────────────────── */
+  /* ── In attesa dell'avversario (nessuno stato di gioco ancora) ─────── */
   if (!g.state) {
     return (
       <div className="lobby">
-        <h1>In attesa dell'avversario…</h1>
-        <p>
-          Codice room: <strong>{roomCode.toUpperCase()}</strong>
+        <div className="brand">
+          <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
+          <h1>In attesa dell'avversario</h1>
+          <p className="tagline">
+            Codice tavolo: <strong>{roomCode.toUpperCase() || "—"}</strong>
+          </p>
+        </div>
+        <p className="muted" style={{ textAlign: "center" }}>
+          Condividi il codice con l'altro giocatore: la partita inizia appena si siede.
         </p>
-        <p className="muted">Condividilo con l'altro giocatore per iniziare.</p>
-        {g.connPhase === "reconnecting" && <p className="badge" data-conn="reconnecting">Riconnessione…</p>}
+        <ConnectionBanner connPhase={g.connPhase} resumed={readResumed(g)} />
       </div>
     );
   }
 
-  /* ── Partita ─────────────────────────────────────────────────────── */
+  /* ── Partita ───────────────────────────────────────────────────────── */
   const s = g.state;
+  const you = g.yourSeat ?? 0;
+  const oppSeat = (1 - you) as 0 | 1;
   const isMyTurn = s.whoseTurn === g.yourSeat;
   const opponent = g.players.find((p) => p.seat !== g.yourSeat);
-  const phaseLabel = s.phase === "must_draw" ? "Devi pescare" : "Cala o scarta";
+  const opponentName = opponent?.displayName ?? "Avversario";
+  const opponentConnected = opponent?.connectionStatus !== "disconnected";
+  const phaseHint =
+    s.phase === "must_draw" ? "Pesca dal mazzo o dallo scarto." : "Cala i tuoi giochi, poi scarta per concludere.";
+
+  // Campo del contratto confermato ma non ancora nella copia FE: lettura difensiva.
+  const turnEndsAt = (s as { turnEndsAt?: number | null }).turnEndsAt ?? null;
+
+  // Bridge "pending per-carta": finché non arriva il clientMoveId, se una sola
+  // carta è selezionata mentre una mossa è in volo, la evidenziamo come tale.
+  const pendingCardId = g.pending && selectedCards.length === 1 ? selectedCards[0] : null;
 
   return (
     <div className="game">
+      <Celebration info={celebration} />
       <RejectionToast rejection={g.rejection} onDismiss={g.dismissRejection} />
-      <PendingBadge pending={g.pending} />
+      {/* Fallback globale quando il pending non è agganciato a una carta. */}
+      {g.pending && !pendingCardId && <PendingBadge pending />}
       <HandEndedOverlay info={g.handEnded} players={g.players} yourSeat={g.yourSeat} />
       <GameEndedOverlay info={g.gameEnded} players={g.players} yourSeat={g.yourSeat} config={g.config} />
 
+      {/* ── Header / Scoreboard ───────────────────────────────────────── */}
       <div className="topbar">
         <div className="status-line">
-          <span className="badge" data-turn={isMyTurn ? "true" : "false"}>
-            {isMyTurn ? `Tocca a te — ${phaseLabel}` : "Turno avversario"}
+          <span className="badge" data-turn={isMyTurn ? "mine" : "theirs"}>
+            <span className="dot" aria-hidden="true" />
+            {isMyTurn ? "Tocca a te" : `Turno di ${opponentName}`}
           </span>
-          <span className="badge">
-            Avversario: {opponent?.displayName ?? "—"}
-          </span>
-          <span className="badge" data-conn={opponent?.connectionStatus === "disconnected" ? "disconnected" : undefined}>
-            {opponent?.connectionStatus === "disconnected" ? "Avversario disconnesso" : "Avversario connesso"}
-          </span>
-          {g.connPhase === "reconnecting" && (
-            <span className="badge" data-conn="reconnecting">Riconnessione in corso…</span>
-          )}
+          {isMyTurn && turnEndsAt !== null && <Countdown turnEndsAt={turnEndsAt} />}
+          <OpponentStatus name={opponentName} handCount={s.opponentHandCount} connected={opponentConnected} />
         </div>
-        <div className="status-line">
-          <span className="badge">Punti — Tu: {s.scores[g.yourSeat ?? 0]}</span>
-          <span className="badge">
-            Avversario: {s.scores[(1 - (g.yourSeat ?? 0)) as 0 | 1]}
-          </span>
-          <span className="badge">Obiettivo: {g.config?.punteggioObiettivo}</span>
+        <div className="scoreboard">
+          <div className="chip you">
+            <span className="lbl">Tu</span>
+            <span className="val">{s.scores[you]}</span>
+          </div>
+          <span className="vs" aria-hidden="true">/</span>
+          <div className="chip">
+            <span className="lbl">{opponentName}</span>
+            <span className="val">{s.scores[oppSeat]}</span>
+          </div>
+          <div className="chip">
+            <span className="lbl">Obiettivo</span>
+            <span className="val">{g.config?.punteggioObiettivo ?? "—"}</span>
+          </div>
         </div>
       </div>
 
-      <div className="counts">
-        <div className="count-box">
+      {/* Riconnessione propria + "stato ripristinato". */}
+      <ConnectionBanner connPhase={g.connPhase} resumed={readResumed(g)} />
+
+      {/* Turno + fase, in evidenza. */}
+      <TurnBanner isMyTurn={isMyTurn} phaseHint={phaseHint} opponentName={opponentName} />
+
+      {/* ── Tavolo centrale ───────────────────────────────────────────── */}
+      <div className="tableau">
+        <div className="pile" data-actionable={isMyTurn && s.phase === "must_draw" ? "true" : "false"}>
+          <div className="slot deck" aria-hidden="true">♣</div>
           <div className="num">{s.drawPileCount}</div>
           <div className="lbl">Mazzo</div>
         </div>
-        <div className="count-box">
-          <div className="num">{s.discardTop ? "" : "—"}</div>
-          <div className="lbl">Scarto ({s.discardCount})</div>
-          {s.discardTop && (
-            <div style={{ marginTop: 4 }}>
+
+        <div className="pile" data-actionable={isMyTurn && s.phase === "must_draw" && s.discardCount > 0 ? "true" : "false"}>
+          <div className="slot" style={{ background: "transparent", padding: 0 }}>
+            {s.discardTop ? (
               <CardView card={s.discardTop} small />
-            </div>
-          )}
+            ) : (
+              <span className="slot empty">vuoto</span>
+            )}
+          </div>
+          <div className="num">{s.discardCount}</div>
+          <div className="lbl">Monte scarti</div>
         </div>
-        <div className="count-box">
+
+        <div className="pile">
+          <div className="slot facedown" aria-hidden="true" />
           <div className="num">{s.opponentHandCount}</div>
           <div className="lbl">Mano avversario</div>
         </div>
-        <div className="count-box">
+
+        <div className="pile">
+          <div className="pozzetti" aria-hidden="true">
+            {[0, 1].map((i) => (
+              <span key={i} className="pozzetto-mini" data-taken={i >= s.pozzettiRemaining ? "true" : "false"} />
+            ))}
+          </div>
           <div className="num">{s.pozzettiRemaining}</div>
-          <div className="lbl">Pozzetti rimasti</div>
+          <div className="lbl">Pozzetti</div>
         </div>
-        <div className="count-box">
-          <div className="num">{s.yourPozzettoTaken ? "sì" : "no"}</div>
-          <div className="lbl">Pozzetto preso</div>
+
+        <div className="pile">
+          <div className="num" style={{ fontSize: "1rem" }}>{s.yourPozzettoTaken ? "Preso ✓" : "Non ancora"}</div>
+          <div className="lbl">Il tuo pozzetto</div>
         </div>
       </div>
 
+      {/* ── Giochi calati ─────────────────────────────────────────────── */}
       <Melds
         melds={s.tableMelds}
         yourSeat={g.yourSeat}
@@ -162,16 +255,24 @@ export default function Page() {
         onSelectMeld={toggleMeld}
       />
 
-      <h4>La tua mano ({s.yourHand.length})</h4>
-      <div className="hand">
-        {s.yourHand.map((c) => (
-          <CardView
-            key={c.id}
-            card={c}
-            selected={selectedCards.includes(c.id)}
-            onClick={toggleCard}
-          />
-        ))}
+      {/* ── La tua mano ───────────────────────────────────────────────── */}
+      <div className="hand-zone">
+        <h4>La tua mano · {s.yourHand.length} carte</h4>
+        <div className="hand">
+          {s.yourHand.length === 0 ? (
+            <p className="faint">Mano vuota — sei andato a pozzetto!</p>
+          ) : (
+            s.yourHand.map((c) => (
+              <CardView
+                key={c.id}
+                card={c}
+                selected={selectedCards.includes(c.id)}
+                pending={pendingCardId === c.id}
+                onClick={isMyTurn && !g.pending ? toggleCard : undefined}
+              />
+            ))
+          )}
+        </div>
       </div>
 
       <ActionBar
@@ -191,4 +292,12 @@ export default function Page() {
       />
     </div>
   );
+}
+
+/**
+ * Lettura difensiva del flag `resumed` (da room_joined.resumed) finché l'hook
+ * non lo espone: campo del contratto confermato, wiring lato develop.
+ */
+function readResumed(g: ReturnType<typeof useGameSocket>): boolean | undefined {
+  return (g as unknown as { resumed?: boolean }).resumed;
 }
