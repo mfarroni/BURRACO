@@ -11,13 +11,28 @@ import type { ClientMessage } from "../contract/types.js";
  * (regole del Burraco) resta ESCLUSIVAMENTE del motore server-side.
  */
 
-const clientMoveId = z.string().optional();
+/**
+ * NEW-4 (hardening): limiti di LUNGHEZZA difensivi, coerenti col dominio. Una
+ * mano di Burraco non supera poche decine di carte, gli id sono UUID/short-id, i
+ * nomi sono brevi. Input oltre i limiti → schema non conforme → MALFORMED, come
+ * per ogni altra violazione di forma. Non incidono sulle regole (solo forma).
+ */
+const MAX_ID = 64; // id di carta/meld, token, clientMoveId
+const MAX_NAME = 64; // displayName
+// Cap difensivo generoso sul roomCode: il RoomManager lo normalizza/tronca già a
+// 12, quindi qui bastano limitare gli input patologici senza cambiarne la semantica.
+const MAX_ROOM = 64;
+const MAX_CARDS = 20; // carte per singola azione (upper bound largo sul dominio)
+
+const cardId = z.string().max(MAX_ID);
+const clientMoveId = z.string().max(MAX_ID).optional();
+const cardIdArray = z.array(cardId).max(MAX_CARDS);
 
 const joinRoom = z.object({
   type: z.literal("join_room"),
-  roomCode: z.string(),
-  playerToken: z.string().optional(),
-  displayName: z.string(),
+  roomCode: z.string().max(MAX_ROOM),
+  playerToken: z.string().max(MAX_ID).optional(),
+  displayName: z.string().max(MAX_NAME),
 });
 
 const draw = z.object({
@@ -28,27 +43,27 @@ const draw = z.object({
 
 const meldNew = z.object({
   type: z.literal("meld_new"),
-  cards: z.array(z.string()),
+  cards: cardIdArray,
   clientMoveId,
 });
 
 const meldExtend = z.object({
   type: z.literal("meld_extend"),
-  meldId: z.string(),
-  cards: z.array(z.string()),
+  meldId: z.string().max(MAX_ID),
+  cards: cardIdArray,
   clientMoveId,
 });
 
 const pinellaSubstitute = z.object({
   type: z.literal("pinella_substitute"),
-  meldId: z.string(),
-  cardInHand: z.string(),
+  meldId: z.string().max(MAX_ID),
+  cardInHand: cardId,
   clientMoveId,
 });
 
 const discard = z.object({
   type: z.literal("discard"),
-  card: z.string(),
+  card: cardId,
   clientMoveId,
 });
 
