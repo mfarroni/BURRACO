@@ -75,16 +75,19 @@ export function createDeck(): Card[] {
   for (let copy = 1; copy <= 2; copy++) {
     for (const suit of SUITS) {
       for (const rank of NATURAL_RANKS) {
+        const isTwo = rank === "2";
         cards.push({
           id: `${SUIT_CODE[suit]}-${rank}-${copy}`,
           suit,
           rank,
-          isWild: rank === "2",
+          isWild: isTwo,
+          // IDENTITÀ della carta: un 2 è una pinella; le altre naturali sono null.
+          wildKind: isTwo ? "pinella" : null,
         });
       }
     }
     for (let j = 1; j <= 2; j++) {
-      cards.push({ id: `JOKER-${copy}-${j}`, suit: null, rank: "JOKER", isWild: true });
+      cards.push({ id: `JOKER-${copy}-${j}`, suit: null, rank: "JOKER", isWild: true, wildKind: "joker" });
     }
   }
   return cards; // 108

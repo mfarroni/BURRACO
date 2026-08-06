@@ -19,11 +19,19 @@ export type Rank =
 
 export type Seat = 0 | 1;
 
+/**
+ * IDENTITÀ "matta" della carta (non il ruolo che assume in un gioco):
+ * "joker" = jolly, "pinella" = un 2, null = carta naturale.
+ * Il RUOLO effettivo di matta in un meld è descritto da `Meld.wildIndices`.
+ */
+export type WildKind = "joker" | "pinella" | null;
+
 export interface Card {
   id: string;
   suit: Suit | null;
   rank: Rank;
-  isWild: boolean;
+  isWild: boolean; // equivale a wildKind !== null
+  wildKind: WildKind;
 }
 
 export type MeldType = "sequence" | "group";
@@ -35,6 +43,11 @@ export interface Meld {
   ownerSeat: Seat;
   isBurraco: boolean;
   clean: boolean;
+  /**
+   * Indici in `cards[]` delle carte che fungono DAVVERO da matta in questo
+   * gioco. Un 2 al posto naturale NON è matta e non compare. Server-authoritative.
+   */
+  wildIndices?: number[];
 }
 
 export interface GameConfig {
@@ -65,6 +78,11 @@ export interface GameStatePublic {
   drawPileCount: number;
   pozzettiRemaining: number;
   whoseTurn: Seat;
+  /**
+   * Deadline assoluta del turno (epoch millis) per il countdown VISIVO, oppure
+   * `null` quando il timeout non è enforced (v1) → nessun countdown.
+   */
+  turnEndsAt: number | null;
   phase: Phase;
   yourPozzettoTaken: boolean;
   yourSeat: Seat;
@@ -98,21 +116,27 @@ export type RejectCode =
   | "GAME_NOT_ACTIVE"
   | "MALFORMED";
 
-/** CLIENT → SERVER (intenzioni). */
+/**
+ * CLIENT → SERVER (intenzioni). `clientMoveId` è un correlation id opzionale
+ * SOLO sui messaggi di azione (per il pending per-carta); mai su join/heartbeat.
+ */
 export type ClientMessage =
   | { type: "join_room"; roomCode: string; playerToken?: string; displayName: string }
-  | { type: "draw"; source: "deck" | "discard" }
-  | { type: "meld_new"; cards: string[] }
-  | { type: "meld_extend"; meldId: string; cards: string[] }
-  | { type: "pinella_substitute"; meldId: string; cardInHand: string }
-  | { type: "discard"; card: string }
+  | { type: "draw"; source: "deck" | "discard"; clientMoveId?: string }
+  | { type: "meld_new"; cards: string[]; clientMoveId?: string }
+  | { type: "meld_extend"; meldId: string; cards: string[]; clientMoveId?: string }
+  | { type: "pinella_substitute"; meldId: string; cardInHand: string; clientMoveId?: string }
+  | { type: "discard"; card: string; clientMoveId?: string }
   | { type: "heartbeat" };
 
 /** SERVER → CLIENT. */
 export type ServerMessage =
-  | { type: "room_joined"; yourSeat: Seat; yourToken: string; players: PlayerPublic[]; config: GameConfig }
+  | { type: "room_joined"; yourSeat: Seat; yourToken: string; players: PlayerPublic[]; config: GameConfig; resumed: boolean }
   | { type: "state"; state: GameStatePublic }
-  | { type: "move_rejected"; code: RejectCode; reason: string }
+  | { type: "move_applied"; clientMoveId: string }
+  | { type: "move_rejected"; code: RejectCode; reason: string; clientMoveId?: string }
+  | { type: "pozzetto_taken"; seat: Seat }
+  | { type: "burraco_made"; seat: Seat; meldId: string; clean: boolean }
   | { type: "turn_changed"; seat: Seat; phase: Phase }
   | { type: "hand_ended"; closerSeat: Seat | null; scores: HandScoreDetail[]; cumulative: [number, number] }
   | { type: "game_ended"; winnerSeat: Seat | null; finalScores: [number, number] }

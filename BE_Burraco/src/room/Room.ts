@@ -98,6 +98,7 @@ export class Room {
           yourToken: existing.token,
           players: this.publicPlayers(),
           config: this.config,
+          resumed: true, // riconnessione a sessione esistente
         });
         this.notifyOpponent(existing.seat, { type: "opponent_reconnected", seat: existing.seat });
         this.sendStateTo(existing);
@@ -129,6 +130,7 @@ export class Room {
       yourToken: newToken,
       players: this.publicPlayers(),
       config: this.config,
+      resumed: false, // primo ingresso
     });
 
     // Quando entrambi i seat sono occupati, avvia la partita.
@@ -173,6 +175,8 @@ export class Room {
     }
 
     const seat = slot.seat;
+    // Correlation id opzionale delle sole azioni: opaco, non influenza le regole.
+    const clientMoveId = (msg as { clientMoveId?: string }).clientMoveId;
     this.logEvent(msg.type, seat, msg);
 
     let result: MoveResult;
@@ -198,12 +202,20 @@ export class Room {
     }
 
     if (!result.ok) {
-      send(slot.ws, { type: "move_rejected", code: result.code, reason: result.reason });
+      send(slot.ws, {
+        type: "move_rejected",
+        code: result.code,
+        reason: result.reason,
+        ...(clientMoveId ? { clientMoveId } : {}),
+      });
       return;
     }
 
     this.applyEffects(result.effects);
     this.broadcastState();
+    // ACK per-attore TARGETIZZATO: separato dal broadcast `state`, mai redatto,
+    // mai inviato all'avversario. Risolve il "pending per-carta" lato client.
+    if (clientMoveId) send(slot.ws, { type: "move_applied", clientMoveId });
   }
 
   private applyEffects(effects: GameEffect[]): void {
@@ -232,6 +244,11 @@ export class Room {
           finalScores: eff.finalScores,
         });
         void persistence.endMatch(this.matchId, eff.winnerSeat);
+      } else if (eff.kind === "pozzetto_taken") {
+        // Evento CELEBRATIVO effimero: broadcast, non persistito, non replayato.
+        this.broadcast({ type: "pozzetto_taken", seat: eff.seat });
+      } else if (eff.kind === "burraco_made") {
+        this.broadcast({ type: "burraco_made", seat: eff.seat, meldId: eff.meldId, clean: eff.clean });
       }
     }
   }
@@ -291,6 +308,7 @@ export class Room {
         yourToken: p.token,
         players,
         config: this.config,
+        resumed: false, // aggiornamento roster, non una riconnessione
       });
     }
   }

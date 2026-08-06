@@ -20,12 +20,27 @@ export type Rank =
 /** Un seat identifica un giocatore nel tavolo 1v1. */
 export type Seat = 0 | 1;
 
-/** Carta del contratto. `isWild` = true per jolly e per ogni 2 (pinella). */
+/**
+ * IDENTITÀ "matta" della carta (non il ruolo che assume in un gioco):
+ *  - "joker"   → è un jolly;
+ *  - "pinella" → è un 2 (vale 20 a punti, può fungere da matta);
+ *  - null      → carta naturale qualsiasi.
+ * È una proprietà della CARTA in sé; il RUOLO effettivo di matta dentro un
+ * meld è invece descritto da `Meld.wildIndices`.
+ */
+export type WildKind = "joker" | "pinella" | null;
+
+/**
+ * Carta del contratto.
+ * - `isWild` = true per jolly e per ogni 2 (pinella) → equivale a `wildKind !== null`.
+ * - `wildKind` = identità matta della carta (vedi WildKind).
+ */
 export interface Card {
   id: string;
   suit: Suit | null; // null solo per il jolly
   rank: Rank;
   isWild: boolean;
+  wildKind: WildKind;
 }
 
 export type MeldType = "sequence" | "group";
@@ -38,6 +53,13 @@ export interface Meld {
   ownerSeat: Seat;
   isBurraco: boolean; // >= 7 carte
   clean: boolean; // burraco pulito (nessuna matta, salvo 2 al posto naturale)
+  /**
+   * Indici in `cards[]` delle carte che fungono DAVVERO da matta in questo
+   * gioco (jolly, oppure un 2 usato come matta). Un 2 al suo posto naturale
+   * NON è matta e NON compare qui. Calcolo server-authoritative, coerente con
+   * `clean`/`isBurraco`.
+   */
+  wildIndices?: number[];
 }
 
 /** Configurazione di partita (v1: valori bloccati dalla scheda di regole). */
@@ -85,6 +107,12 @@ export interface GameStatePublic {
   pozzettiRemaining: number;
   /** Di chi è il turno. */
   whoseTurn: Seat;
+  /**
+   * Deadline ASSOLUTA del turno in epoch millis, da cui il client deriva un
+   * countdown puramente VISIVO. `null` quando il timeout non è enforced (v1):
+   * in tal caso il FE non mostra alcun countdown.
+   */
+  turnEndsAt: number | null;
   /** Fase corrente del turno. */
   phase: Phase;
   /** Ho già preso il mio pozzetto? */
@@ -109,14 +137,22 @@ export interface HandScoreDetail {
 
 /* ─────────────────────────── EVENTI WEBSOCKET ─────────────────────────── */
 
-/** Messaggi CLIENT → SERVER (intenzioni; il server è l'unico a validare). */
+/**
+ * Messaggi CLIENT → SERVER (intenzioni; il server è l'unico a validare).
+ *
+ * `clientMoveId` è un correlation id OPZIONALE presente SOLO sui messaggi di
+ * AZIONE (draw/meld/pinella/discard). Serve al client per correlare la propria
+ * mossa con l'ack targetizzato `move_applied`/`move_rejected` e marcare la carta
+ * esatta "in volo". NON compare su join_room/heartbeat. Il server lo tratta come
+ * opaco: NON influenza mai la validazione delle regole.
+ */
 export type ClientMessage =
   | { type: "join_room"; roomCode: string; playerToken?: string; displayName: string }
-  | { type: "draw"; source: "deck" | "discard" }
-  | { type: "meld_new"; cards: string[] } // CardId[]
-  | { type: "meld_extend"; meldId: string; cards: string[] }
-  | { type: "pinella_substitute"; meldId: string; cardInHand: string }
-  | { type: "discard"; card: string }
+  | { type: "draw"; source: "deck" | "discard"; clientMoveId?: string }
+  | { type: "meld_new"; cards: string[]; clientMoveId?: string } // CardId[]
+  | { type: "meld_extend"; meldId: string; cards: string[]; clientMoveId?: string }
+  | { type: "pinella_substitute"; meldId: string; cardInHand: string; clientMoveId?: string }
+  | { type: "discard"; card: string; clientMoveId?: string }
   | { type: "heartbeat" };
 
 /** Codici di rifiuto mossa (stabili, il FE può mapparli a messaggi UX). */
@@ -145,9 +181,26 @@ export type ServerMessage =
       yourToken: string; // token effimero per la riconnessione
       players: PlayerPublic[];
       config: GameConfig;
+      /**
+       * true quando il join è una RICONNESSIONE a una sessione esistente
+       * (join con playerToken su una room già presente); false al primo ingresso.
+       */
+      resumed: boolean;
     }
   | { type: "state"; state: GameStatePublic }
-  | { type: "move_rejected"; code: RejectCode; reason: string }
+  /**
+   * ACK per-attore di una mossa ANDATA A BUON FINE. TARGETIZZATO al solo attore
+   * (mai broadcast, mai dentro `state`): serve a risolvere il "pending per-carta"
+   * correlando via `clientMoveId`. Non trasporta stato di gioco.
+   */
+  | { type: "move_applied"; clientMoveId: string }
+  | { type: "move_rejected"; code: RejectCode; reason: string; clientMoveId?: string }
+  /**
+   * Eventi CELEBRATIVI presentazionali, broadcast alla room. Effimeri: NON
+   * fanno parte di `state` e NON vengono replayati al rejoin.
+   */
+  | { type: "pozzetto_taken"; seat: Seat }
+  | { type: "burraco_made"; seat: Seat; meldId: string; clean: boolean }
   | { type: "turn_changed"; seat: Seat; phase: Phase }
   | {
       type: "hand_ended";

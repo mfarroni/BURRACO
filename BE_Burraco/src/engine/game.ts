@@ -40,7 +40,10 @@ export interface RejectResult {
 export type GameEffect =
   | { kind: "turn_changed"; seat: Seat; phase: Phase }
   | { kind: "hand_ended"; closerSeat: Seat | null; scores: HandScoreDetail[]; cumulative: [number, number] }
-  | { kind: "game_ended"; winnerSeat: Seat | null; finalScores: [number, number] };
+  | { kind: "game_ended"; winnerSeat: Seat | null; finalScores: [number, number] }
+  // Effetti CELEBRATIVI presentazionali (il Room li broadcasta, non persistono).
+  | { kind: "pozzetto_taken"; seat: Seat }
+  | { kind: "burraco_made"; seat: Seat; meldId: string; clean: boolean };
 
 export interface OkResult {
   ok: true;
@@ -165,8 +168,15 @@ export class GameEngine {
 
     // Commit
     this.removeFromHand(seat, cardIds);
-    this.melds.push(this.buildMeld(interp, seat));
-    return this.afterMeldMutation(seat, handAfter);
+    const newMeld = this.buildMeld(interp, seat);
+    this.melds.push(newMeld);
+
+    const effects: GameEffect[] = [];
+    // Un gioco nuovo di >= 7 carte è un burraco realizzato.
+    if (newMeld.isBurraco)
+      effects.push({ kind: "burraco_made", seat, meldId: newMeld.id, clean: newMeld.clean });
+    effects.push(...this.afterMeldMutation(seat, handAfter));
+    return { ok: true, effects };
   }
 
   meldExtend(seat: Seat, meldId: string, cardIds: string[]): MoveResult {
@@ -189,9 +199,17 @@ export class GameEngine {
     if (guardEmpty) return guardEmpty;
 
     // Commit
+    const wasBurraco = meld.isBurraco;
     this.removeFromHand(seat, cardIds);
-    this.replaceMeld(meld.id, this.buildMeld(interp, seat, meld.id));
-    return this.afterMeldMutation(seat, handAfter);
+    const rebuilt = this.buildMeld(interp, seat, meld.id);
+    this.replaceMeld(meld.id, rebuilt);
+
+    const effects: GameEffect[] = [];
+    // Burraco realizzato SOLO alla transizione < 7 → >= 7 carte.
+    if (!wasBurraco && rebuilt.isBurraco)
+      effects.push({ kind: "burraco_made", seat, meldId: rebuilt.id, clean: rebuilt.clean });
+    effects.push(...this.afterMeldMutation(seat, handAfter));
+    return { ok: true, effects };
   }
 
   pinellaSubstitute(seat: Seat, meldId: string, cardInHand: string): MoveResult {
@@ -257,7 +275,8 @@ export class GameEngine {
         this.removeFromHand(seat, [cardId]);
         this.discard.push(card);
         this.takePozzetto(seat);
-        return this.endTurn();
+        const turn = this.endTurn();
+        return { ok: true, effects: [{ kind: "pozzetto_taken", seat }, ...turn.effects] };
       }
       // Deve chiudere: serve almeno un burraco (variante italiana: qualsiasi).
       if (!this.canClose(seat))
@@ -304,13 +323,17 @@ export class GameEngine {
     return null;
   }
 
-  /** Gestione post-calata: eventuale presa pozzetto "in diretta". */
-  private afterMeldMutation(seat: Seat, handAfter: number): MoveResult {
+  /**
+   * Gestione post-calata: eventuale presa pozzetto "in diretta".
+   * Ritorna gli effetti celebrativi generati (pozzetto_taken) da concatenare.
+   */
+  private afterMeldMutation(seat: Seat, handAfter: number): GameEffect[] {
     if (handAfter === 0 && !this.seats[seat].pozzettoTaken && this.pozzetti.length > 0) {
       // Pozzetto IN DIRETTA: prende subito il pozzetto e continua lo stesso turno.
       this.takePozzetto(seat);
+      return [{ kind: "pozzetto_taken", seat }];
     }
-    return { ok: true, effects: [] };
+    return [];
   }
 
   private takePozzetto(seat: Seat): void {
@@ -407,6 +430,14 @@ export class GameEngine {
   }
 
   private buildMeld(interp: MeldInterpretation, seat: Seat, keepId?: string): Meld {
+    // wildIndices: posizioni in orderedCards delle carte che fungono DAVVERO da
+    // matta. interp.wilds esclude già i 2 al posto naturale (che restano naturali
+    // in `suited`), quindi qui marchiamo solo le vere matte — coerente con `clean`.
+    const wildIds = new Set(interp.wilds.map((w) => w.cardId));
+    const wildIndices = interp.orderedCards.reduce<number[]>((acc, c, i) => {
+      if (wildIds.has(c.id)) acc.push(i);
+      return acc;
+    }, []);
     return {
       id: keepId ?? nextMeldId(),
       type: interp.type,
@@ -414,6 +445,7 @@ export class GameEngine {
       ownerSeat: seat,
       isBurraco: interp.isBurraco,
       clean: interp.clean,
+      wildIndices,
     };
   }
 

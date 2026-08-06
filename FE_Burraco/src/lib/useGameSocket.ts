@@ -11,6 +11,7 @@ import type {
   Seat,
   ServerMessage,
 } from "./contract";
+import type { CelebrationInfo } from "@/components/StateBanners";
 
 /**
  * Hook che possiede la connessione WebSocket e lo STATO CLIENT (architettura FE
@@ -18,12 +19,16 @@ import type {
  * riflette lo stato REDATTO ricevuto dal server, che è l'unica autorità.
  *
  * Copre l'esigenza UX chiave: tra l'invio di una mossa e la risposta del server
- * c'è latenza -> stato `pending` ("attendo conferma").
+ * c'è latenza -> stato `pending` ("attendo conferma"). Il pending è disponibile
+ * sia globale (`pending`) sia PER-CARTA (`inFlightCardId`/`pendingCardIds`),
+ * correlato all'ack `move_applied` tramite un `clientMoveId` opaco.
  */
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8080";
 const RECONNECT_DELAY_MS = 1500;
 const HEARTBEAT_MS = 25_000;
+/** Durata di vita dello stato effimero di celebrazione (poi si auto-svuota). */
+const CELEBRATION_TTL_MS = 1600;
 
 export type ConnPhase = "idle" | "connecting" | "connected" | "reconnecting" | "closed";
 
@@ -45,6 +50,8 @@ export interface GameEndedInfo {
 export interface GameSocketApi {
   connPhase: ConnPhase;
   joined: boolean;
+  /** true SOLO dopo un rejoin che ha ripristinato una sessione esistente. */
+  resumed: boolean;
   yourSeat: Seat | null;
   players: PlayerPublic[];
   config: GameConfig | null;
@@ -52,8 +59,14 @@ export interface GameSocketApi {
   rejection: RejectionInfo | null;
   handEnded: HandEndedInfo | null;
   gameEnded: GameEndedInfo | null;
-  /** true tra l'invio di una mossa e la risposta del server. */
+  /** true tra l'invio di una mossa e la risposta del server (globale). */
   pending: boolean;
+  /** cardIds coinvolti nella mossa in volo (per il pending PER-CARTA). */
+  pendingCardIds: string[];
+  /** la singola carta "in volo" quando la mossa ne coinvolge esattamente una. */
+  inFlightCardId: string | null;
+  /** celebrazione effimera (pozzetto/burraco), si auto-svuota. */
+  celebration: CelebrationInfo | null;
   errorMessage: string | null;
 
   join: (roomCode: string, displayName: string) => void;
@@ -66,13 +79,28 @@ export interface GameSocketApi {
   dismissRejection: () => void;
 }
 
+interface InFlight {
+  clientMoveId: string;
+  cardIds: string[];
+}
+
 function tokenKey(room: string): string {
   return `burraco_token_${room.toUpperCase()}`;
+}
+
+/** correlation id opaco per correlare mossa ↔ ack `move_applied`. */
+function genMoveId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `mv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
 }
 
 export function useGameSocket(): GameSocketApi {
   const [connPhase, setConnPhase] = useState<ConnPhase>("idle");
   const [joined, setJoined] = useState(false);
+  const [resumed, setResumed] = useState(false);
   const [yourSeat, setYourSeat] = useState<Seat | null>(null);
   const [players, setPlayers] = useState<PlayerPublic[]>([]);
   const [config, setConfig] = useState<GameConfig | null>(null);
@@ -81,6 +109,9 @@ export function useGameSocket(): GameSocketApi {
   const [handEnded, setHandEnded] = useState<HandEndedInfo | null>(null);
   const [gameEnded, setGameEnded] = useState<GameEndedInfo | null>(null);
   const [pending, setPending] = useState(false);
+  const [pendingCardIds, setPendingCardIds] = useState<string[]>([]);
+  const [inFlightCardId, setInFlightCardId] = useState<string | null>(null);
+  const [celebration, setCelebration] = useState<CelebrationInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -89,6 +120,12 @@ export function useGameSocket(): GameSocketApi {
   const wantConnectedRef = useRef(false);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** seat corrente per correlare gli eventi celebrativi (byYou). */
+  const yourSeatRef = useRef<Seat | null>(null);
+  /** mossa attualmente in volo (correlata via clientMoveId). */
+  const inFlightRef = useRef<InFlight | null>(null);
+  /** contatore per la chiave univoca delle celebrazioni. */
+  const celebIdRef = useRef(0);
 
   const storedToken = useCallback((room: string): string | undefined => {
     try {
@@ -107,68 +144,114 @@ export function useGameSocket(): GameSocketApi {
     return false;
   }, []);
 
-  /** Invia un'intenzione di mossa e attiva lo stato "attendo conferma". */
+  /** Azzera lo stato "in volo" (globale + per-carta). */
+  const clearInFlight = useCallback(() => {
+    inFlightRef.current = null;
+    setPending(false);
+    setPendingCardIds([]);
+    setInFlightCardId(null);
+  }, []);
+
+  /**
+   * Invia un'intenzione di mossa, genera il correlation id e attiva lo stato
+   * "attendo conferma", marcando le carte coinvolte come pending (per-carta).
+   */
   const sendMove = useCallback(
-    (msg: ClientMessage) => {
+    (msg: ClientMessage, cardIds: string[] = []) => {
       setRejection(null);
-      const ok = sendRaw(msg);
-      if (ok) setPending(true);
+      const clientMoveId = genMoveId();
+      const ok = sendRaw({ ...msg, clientMoveId } as ClientMessage);
+      if (ok) {
+        inFlightRef.current = { clientMoveId, cardIds };
+        setPending(true);
+        setPendingCardIds(cardIds);
+        setInFlightCardId(cardIds.length === 1 ? cardIds[0]! : null);
+      }
     },
     [sendRaw],
   );
 
-  const handleMessage = useCallback((msg: ServerMessage) => {
-    switch (msg.type) {
-      case "room_joined": {
-        setJoined(true);
-        setYourSeat(msg.yourSeat);
-        setPlayers(msg.players);
-        setConfig(msg.config);
-        try {
-          if (roomRef.current) localStorage.setItem(tokenKey(roomRef.current), msg.yourToken);
-        } catch {
-          /* storage non disponibile: la riconnessione userà comunque la sessione viva */
+  const handleMessage = useCallback(
+    (msg: ServerMessage) => {
+      switch (msg.type) {
+        case "room_joined": {
+          setJoined(true);
+          setResumed(msg.resumed);
+          setYourSeat(msg.yourSeat);
+          yourSeatRef.current = msg.yourSeat;
+          setPlayers(msg.players);
+          setConfig(msg.config);
+          try {
+            if (roomRef.current) localStorage.setItem(tokenKey(roomRef.current), msg.yourToken);
+          } catch {
+            /* storage non disponibile: la riconnessione userà comunque la sessione viva */
+          }
+          break;
         }
-        break;
+        case "state": {
+          setState(msg.state);
+          // Lo stato broadcast conferma l'atterraggio della mossa: chiude ogni
+          // pending (globale e per-carta) come rete di sicurezza.
+          clearInFlight();
+          if (msg.state.status === "playing") setHandEnded(null);
+          break;
+        }
+        case "move_applied": {
+          // ACK per-attore: risolve il pending SOLO se correla con la mossa in volo.
+          if (inFlightRef.current && inFlightRef.current.clientMoveId === msg.clientMoveId) {
+            clearInFlight();
+          }
+          break;
+        }
+        case "move_rejected": {
+          setRejection({ code: msg.code, reason: msg.reason, at: Date.now() });
+          clearInFlight();
+          break;
+        }
+        case "pozzetto_taken": {
+          setCelebration({
+            kind: "pozzetto",
+            byYou: msg.seat === yourSeatRef.current,
+            id: ++celebIdRef.current,
+          });
+          break;
+        }
+        case "burraco_made": {
+          setCelebration({
+            kind: msg.clean ? "burraco-clean" : "burraco-dirty",
+            byYou: msg.seat === yourSeatRef.current,
+            id: ++celebIdRef.current,
+          });
+          break;
+        }
+        case "turn_changed":
+          // Lo stato redatto arriva subito dopo: nessuna azione necessaria qui.
+          break;
+        case "hand_ended":
+          setHandEnded({ closerSeat: msg.closerSeat, scores: msg.scores, cumulative: msg.cumulative });
+          clearInFlight();
+          break;
+        case "game_ended":
+          setGameEnded({ winnerSeat: msg.winnerSeat, finalScores: msg.finalScores });
+          clearInFlight();
+          break;
+        case "opponent_disconnected":
+        case "opponent_reconnected":
+          setPlayers((prev) =>
+            prev.map((p) =>
+              p.seat === msg.seat
+                ? { ...p, connectionStatus: msg.type === "opponent_reconnected" ? "connected" : "disconnected" }
+                : p,
+            ),
+          );
+          break;
+        case "error":
+          setErrorMessage(msg.message);
+          break;
       }
-      case "state": {
-        setState(msg.state);
-        setPending(false);
-        // Un nuovo stato "playing" chiude gli overlay di fine mano.
-        if (msg.state.status === "playing") setHandEnded(null);
-        break;
-      }
-      case "move_rejected": {
-        setRejection({ code: msg.code, reason: msg.reason, at: Date.now() });
-        setPending(false);
-        break;
-      }
-      case "turn_changed":
-        // Lo stato redatto arriva subito dopo: nessuna azione necessaria qui.
-        break;
-      case "hand_ended":
-        setHandEnded({ closerSeat: msg.closerSeat, scores: msg.scores, cumulative: msg.cumulative });
-        setPending(false);
-        break;
-      case "game_ended":
-        setGameEnded({ winnerSeat: msg.winnerSeat, finalScores: msg.finalScores });
-        setPending(false);
-        break;
-      case "opponent_disconnected":
-      case "opponent_reconnected":
-        setPlayers((prev) =>
-          prev.map((p) =>
-            p.seat === msg.seat
-              ? { ...p, connectionStatus: msg.type === "opponent_reconnected" ? "connected" : "disconnected" }
-              : p,
-          ),
-        );
-        break;
-      case "error":
-        setErrorMessage(msg.message);
-        break;
-    }
-  }, []);
+    },
+    [clearInFlight],
+  );
 
   const connect = useCallback(() => {
     const room = roomRef.current;
@@ -228,6 +311,13 @@ export function useGameSocket(): GameSocketApi {
     [connect],
   );
 
+  // La celebrazione è effimera: si auto-svuota dopo un breve intervallo.
+  useEffect(() => {
+    if (!celebration) return;
+    const t = setTimeout(() => setCelebration(null), CELEBRATION_TTL_MS);
+    return () => clearTimeout(t);
+  }, [celebration]);
+
   useEffect(() => {
     return () => {
       wantConnectedRef.current = false;
@@ -240,6 +330,7 @@ export function useGameSocket(): GameSocketApi {
   return {
     connPhase,
     joined,
+    resumed,
     yourSeat,
     players,
     config,
@@ -248,14 +339,18 @@ export function useGameSocket(): GameSocketApi {
     handEnded,
     gameEnded,
     pending,
+    pendingCardIds,
+    inFlightCardId,
+    celebration,
     errorMessage,
     join,
     drawDeck: () => sendMove({ type: "draw", source: "deck" }),
     drawDiscard: () => sendMove({ type: "draw", source: "discard" }),
-    meldNew: (cards) => sendMove({ type: "meld_new", cards }),
-    meldExtend: (meldId, cards) => sendMove({ type: "meld_extend", meldId, cards }),
-    pinellaSubstitute: (meldId, cardInHand) => sendMove({ type: "pinella_substitute", meldId, cardInHand }),
-    discard: (card) => sendMove({ type: "discard", card }),
+    meldNew: (cards) => sendMove({ type: "meld_new", cards }, cards),
+    meldExtend: (meldId, cards) => sendMove({ type: "meld_extend", meldId, cards }, cards),
+    pinellaSubstitute: (meldId, cardInHand) =>
+      sendMove({ type: "pinella_substitute", meldId, cardInHand }, [cardInHand]),
+    discard: (card) => sendMove({ type: "discard", card }, [card]),
     dismissRejection: () => setRejection(null),
   };
 }
