@@ -79,8 +79,9 @@ export interface GameStatePublic {
   pozzettiRemaining: number;
   whoseTurn: Seat;
   /**
-   * Deadline assoluta del turno (epoch millis) per il countdown VISIVO, oppure
-   * `null` quando il timeout non è enforced (v1) → nessun countdown.
+   * Deadline assoluta del turno (epoch millis) per il countdown VISIVO. Popolata
+   * durante un turno attivo (il server enforce il timeout); `null` solo senza
+   * turno attivo (mano/partita conclusa) o con timeout disattivato via config.
    */
   turnEndsAt: number | null;
   phase: Phase;
@@ -139,7 +140,9 @@ export type ServerMessage =
   | { type: "burraco_made"; seat: Seat; meldId: string; clean: boolean }
   | { type: "turn_changed"; seat: Seat; phase: Phase }
   | { type: "hand_ended"; closerSeat: Seat | null; scores: HandScoreDetail[]; cumulative: [number, number] }
-  | { type: "game_ended"; winnerSeat: Seat | null; finalScores: [number, number] }
+  // `reason?: "forfeit"` = l'avversario ha abbandonato (disconnessione oltre la
+  // grazia); assente = fine normale per obiettivo raggiunto.
+  | { type: "game_ended"; winnerSeat: Seat | null; finalScores: [number, number]; reason?: "forfeit" }
   | { type: "opponent_disconnected"; seat: Seat }
   | { type: "opponent_reconnected"; seat: Seat }
   | { type: "error"; message: string };

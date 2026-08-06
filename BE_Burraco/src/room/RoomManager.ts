@@ -17,11 +17,23 @@ export class RoomManager {
 
   private getOrCreate(code: string, config: GameConfig): Room {
     let room = this.rooms.get(code);
-    if (!room) {
+    // Se la room esiste ma è già stata smaltita (conclusa/abbandonata), la si
+    // sostituisce con una nuova: nessun aggancio a una room morta.
+    if (!room || room.isDisposed()) {
       room = new Room(code, config);
+      // SEC-05 GC: quando la room si conclude, rimuovila dalla mappa in-RAM
+      // (solo se è ancora QUESTA la room mappata sotto quel codice).
+      room.onDispose = () => {
+        if (this.rooms.get(code) === room) this.rooms.delete(code);
+      };
       this.rooms.set(code, room);
     }
     return room;
+  }
+
+  /** Numero di room attive in memoria (per test/diagnostica GC). */
+  activeRoomCount(): number {
+    return this.rooms.size;
   }
 
   handleJoin(ws: WebSocket, msg: Extract<ClientMessage, { type: "join_room" }>): void {
@@ -53,7 +65,8 @@ export class RoomManager {
     if (!room) return;
     room.onDisconnect(ws);
     this.socketRoom.delete(ws);
-    // v1: la room resta in memoria per consentire la riconnessione via token.
-    // TODO(ciclo 2): garbage collection delle room concluse/abbandonate.
+    // La room resta in memoria durante la finestra di grazia per la riconnessione
+    // via token; alla scadenza la room fa forfeit/abbandono e si auto-rimuove
+    // dalla mappa tramite l'hook onDispose (SEC-05, GC).
   }
 }

@@ -102,7 +102,8 @@ test("stato iniziale redatto coerente per entrambi i client", async () => {
   assert.equal(sb.opponentHandCount, 11);
   assert.equal(sa.drawPileCount, 64);
   assert.equal(sa.pozzettiRemaining, 2);
-  assert.equal(sa.turnEndsAt, null, "v1: nessun countdown");
+  assert.equal(typeof sa.turnEndsAt, "number", "SEC-05: turnEndsAt popolato nel turno attivo");
+  assert.ok(sa.turnEndsAt! > Date.now(), "deadline nel futuro");
   assert.equal(sa.whoseTurn, sb.whoseTurn, "stesso turno visto da entrambi");
   assert.equal(sa.phase, "must_draw");
   // anti-leak: nel JSON dello stato di A non compaiono le carte di B

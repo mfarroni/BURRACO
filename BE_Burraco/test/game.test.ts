@@ -352,8 +352,10 @@ test("redactFor: nessun leak della mano avversaria, pozzetti o mazzo", () => {
   // lo scarto espone solo la cima
   assert.equal(view0.discardTop!.id, g.discard[g.discard.length - 1]!.id);
   assert.equal(view0.discardCount, 1);
-  // turnEndsAt nullo in v1
-  assert.equal(view0.turnEndsAt, null);
+  // SEC-05: il timeout turno è ora enforced → durante un turno attivo la
+  // deadline reale (epoch millis) è esposta, non più null.
+  assert.equal(typeof view0.turnEndsAt, "number");
+  assert.ok(view0.turnEndsAt! > Date.now());
   // whitelist: nessuna chiave inattesa che possa trasportare stato nascosto
   const allowed = new Set([
     "yourHand", "tableMelds", "opponentHandCount", "discardTop", "discardCount",

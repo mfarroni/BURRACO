@@ -25,10 +25,10 @@ export function redactFor(engine: GameEngine, viewer: Seat): GameStatePublic {
     drawPileCount: engine.drawPile.length,
     pozzettiRemaining: engine.pozzetti.length,
     whoseTurn: engine.currentSeat,
-    // v1: timeout del turno NON enforced dal server → nessuna deadline, niente
-    // countdown lato client. Quando l'enforcement verrà attivato, esporre qui la
-    // deadline assoluta (es. engine.turnEndsAt) in epoch millis.
-    turnEndsAt: null,
+    // Deadline REALE del turno attivo (epoch millis) per il countdown VISIVO del
+    // client. Il server enforce il timeout (SEC-05). Esposta solo durante un
+    // turno attivo: a mano/partita conclusa non c'è deadline.
+    turnEndsAt: engine.status === "playing" ? engine.turnEndsAt : null,
     phase: engine.phase,
     yourPozzettoTaken: engine.pozzettoTaken(viewer),
     scores: [engine.cumulative[0], engine.cumulative[1]],

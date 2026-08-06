@@ -81,6 +81,13 @@ export class GameEngine {
   dealerSeat: Seat = 0;
   currentSeat: Seat = 1;
   phase: Phase = "must_draw";
+  /**
+   * Deadline ASSOLUTA (epoch millis) del turno attivo, o null quando non c'è un
+   * turno in corso (mano/partita conclusa) o il timeout è disattivato
+   * (config.turnTimeoutMs <= 0). È DATO (nessun timer qui): l'enforcement vero
+   * vive nel Room, che programma il setTimeout. Il redact espone questo valore.
+   */
+  turnEndsAt: number | null = null;
   handNumber = 0;
   cumulative: [number, number] = [0, 0];
   status: "playing" | "hand_ended" | "game_ended" = "playing";
@@ -110,6 +117,17 @@ export class GameEngine {
     this.phase = "must_draw";
     this.status = "playing";
     this.handNumber += 1;
+    this.startTurnClock();
+  }
+
+  /**
+   * (Ri)arma la deadline del turno corrente. Chiamata all'inizio di ogni turno
+   * (nuova mano e cambio di mano). Non viene reimpostata dalla pesca: la
+   * deadline copre l'INTERO turno (must_draw → may_meld → scarto).
+   */
+  private startTurnClock(): void {
+    const ms = this.config.turnTimeoutMs;
+    this.turnEndsAt = ms > 0 ? Date.now() + ms : null;
   }
 
   /* ─────────────────────────────── mosse ─────────────────────────────── */
@@ -354,6 +372,7 @@ export class GameEngine {
   private endTurn(): OkResult {
     this.currentSeat = (1 - this.currentSeat) as Seat;
     this.phase = "must_draw";
+    this.startTurnClock(); // nuova deadline per il giocatore entrante
     // Nota (A4 rivista): l'esaurimento del mazzo NON termina qui la smazzata. Il
     // nuovo giocatore può pescare dallo scarto; la fine per esaurimento è decisa
     // in draw() quando mazzo E monte scarti sono entrambi vuoti.
@@ -371,6 +390,7 @@ export class GameEngine {
     }));
     const scores = scoreHand(seatStates, this.melds, closerSeat);
     this.lastHandScores = scores;
+    this.turnEndsAt = null; // mano conclusa: nessun turno attivo
 
     for (const sc of scores) this.cumulative[sc.seat] += sc.totalDelta;
 
