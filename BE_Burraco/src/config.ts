@@ -28,7 +28,8 @@ export const env = {
 /**
  * Configurazione di partita di default per la v1 (scheda di regole bloccata).
  * numero_giocatori=2, individuale, obiettivo 2005, chiusura italiana,
- * pozzetto in diretta e differita, max 2 calate prima del pozzetto.
+ * pozzetto in diretta e differita, NESSUN limite di calate prima del pozzetto
+ * (il cap è una house-rule opzionale, spenta di default: vedi GameConfig).
  */
 export function defaultGameConfig(): GameConfig {
   return {
@@ -37,7 +38,7 @@ export function defaultGameConfig(): GameConfig {
     punteggioObiettivo: 2005,
     varianteChiusura: "italiana",
     presaPozzetto: "in_diretta_e_differita",
-    limiteCalatePrimaDelPozzetto: 2,
+    limiteCalatePrimaDelPozzetto: null, // nessun limite (base); house-rule = numero > 0
     turnTimeoutMs: env.turnTimeoutMs,
   };
 }

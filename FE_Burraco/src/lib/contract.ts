@@ -56,7 +56,9 @@ export interface GameConfig {
   punteggioObiettivo: number;
   varianteChiusura: "italiana" | "internazionale";
   presaPozzetto: "in_diretta_e_differita" | "solo_differita";
-  limiteCalatePrimaDelPozzetto: number;
+  // Copia ALLINEATA A MANO al contratto BE (nessun package condiviso). House-rule
+  // opzionale: `null` = nessun limite (default); un numero > 0 attiva il cap.
+  limiteCalatePrimaDelPozzetto: number | null;
   turnTimeoutMs: number;
 }
 

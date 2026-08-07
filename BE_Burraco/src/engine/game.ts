@@ -164,13 +164,17 @@ export class GameEngine {
     const g = this.guardTurn(seat, "may_meld");
     if (g) return g;
 
-    // A5: limite di calate prima del pozzetto.
-    if (!this.seats[seat].pozzettoTaken) {
+    // A5: limite di calate prima del pozzetto. Nel Burraco base NON esiste alcun
+    // cap (impedirebbe di svuotare la mano per andare a pozzetto): il limite è una
+    // house-rule OPZIONALE, attiva solo se `limiteCalatePrimaDelPozzetto` è un
+    // numero finito > 0. Con `null` (default) non si rifiuta mai per questo motivo.
+    const cap = this.config.limiteCalatePrimaDelPozzetto;
+    if (cap !== null && Number.isFinite(cap) && cap > 0 && !this.seats[seat].pozzettoTaken) {
       const own = this.melds.filter((m) => m.ownerSeat === seat).length;
-      if (own >= this.config.limiteCalatePrimaDelPozzetto)
+      if (own >= cap)
         return reject(
           "MELD_LIMIT_REACHED",
-          `Prima di prendere il pozzetto puoi calare al massimo ${this.config.limiteCalatePrimaDelPozzetto} giochi.`,
+          `Prima di prendere il pozzetto puoi calare al massimo ${cap} giochi.`,
         );
     }
 
