@@ -22,8 +22,18 @@ import { persistence } from "../db/persistence.js";
 interface PlayerSlot {
   seat: Seat;
   displayName: string;
-  token: string; // token effimero (in chiaro solo in RAM)
+  token: string; // token corrente (in chiaro solo in RAM)
   tokenHash: string;
+  /**
+   * NEW-1: token PRECEDENTE ancora accettato durante la transizione di
+   * riconnessione. Alla riconnessione ruotiamo il token, ma teniamo valido
+   * ANCHE quello appena presentato dal client finché il client non conferma il
+   * nuovo token (prima azione valida sul socket) o finché non scade il TTL.
+   * Questo evita il lockout se il frame `room_joined{yourToken}` va perso.
+   */
+  prevToken: string | null;
+  /** NEW-1: scadenza assoluta (epoch ms) del `prevToken`; oltre, non è più accettato. */
+  prevTokenExpiry: number | null;
   ws: WebSocket | null;
   status: ConnectionStatus;
   /** Hook riconnessione: timer della finestra di grazia (v1 tiene viva la room). */
@@ -78,6 +88,39 @@ export class Room {
     return this.players.find((p) => p.ws === ws);
   }
 
+  /**
+   * NEW-1: TTL entro cui il token PRECEDENTE resta accettato dopo una rotazione,
+   * per coprire la perdita del frame `room_joined{yourToken}` durante una
+   * riconnessione. Breve per non riaprire SEC-10.
+   */
+  private rotationTtlMs(): number {
+    return Number(process.env.TOKEN_ROTATION_TTL_MS ?? 15_000);
+  }
+
+  /**
+   * NEW-1: un token è valido per uno slot se coincide con quello CORRENTE oppure
+   * con il PRECEDENTE ancora entro il TTL. Il controllo SEC-04 (rifiuto se il
+   * legittimo è connesso) è applicato a valle in `join`, quindi vale per
+   * entrambi i token.
+   */
+  private tokenMatches(p: PlayerSlot, token: string): boolean {
+    if (p.token === token) return true;
+    return p.prevToken === token && p.prevTokenExpiry !== null && p.prevTokenExpiry > Date.now();
+  }
+
+  /**
+   * NEW-1: "commit" del token corrente. Alla PRIMA azione valida sul socket già
+   * associato allo slot, il client ha necessariamente ricevuto il nuovo token
+   * (era sullo stesso socket del `room_joined`): scartiamo il precedente,
+   * chiudendo la finestra di replay (SEC-10). Idempotente.
+   */
+  private commitToken(slot: PlayerSlot): void {
+    if (slot.prevToken !== null || slot.prevTokenExpiry !== null) {
+      slot.prevToken = null;
+      slot.prevTokenExpiry = null;
+    }
+  }
+
   private publicPlayers(): PlayerPublic[] {
     return this.players.map((p) => ({
       seat: p.seat,
@@ -97,13 +140,16 @@ export class Room {
       return;
     }
 
-    // Riconnessione per token.
+    // Riconnessione per token. Il token è accettato se coincide con quello
+    // CORRENTE oppure con il PRECEDENTE ancora entro il TTL (NEW-1).
     if (token) {
-      const existing = this.players.find((p) => p.token === token);
+      const existing = this.players.find((p) => this.tokenMatches(p, token));
       if (existing) {
         // SEC-04: takeover di sessione ATTIVA vietato. Si rebinda SOLO se lo
         // slot è disconnesso; se il socket è ancora vivo, si rifiuta il secondo
-        // ingresso e NON si tocca la connessione legittima.
+        // ingresso e NON si tocca la connessione legittima. Il controllo vale
+        // anche per il token PRECEDENTE: finché il legittimo è connesso, nessun
+        // token (corrente o precedente) dà accesso.
         if (existing.status === "connected" && existing.ws && existing.ws.readyState === WebSocket.OPEN) {
           send(ws, { type: "error", message: "Sessione già attiva su un'altra connessione." });
           try {
@@ -121,9 +167,16 @@ export class Room {
         }
         existing.ws = ws;
         existing.status = "connected";
-        // SEC-10: ruota il token a ogni riconnessione riuscita → il precedente
-        // diventa inutilizzabile (non corrisponde più ad alcuno slot).
+        // SEC-10 + NEW-1: ruota il token a ogni riconnessione, MA tieni valido
+        // ANCORA il token appena presentato (come `prevToken`) entro un breve
+        // TTL. Così, se `room_joined{yourToken}` va perso e il client riprova
+        // con il token vecchio, viene comunque riconosciuto e riammesso. Il
+        // token vecchio muore alla PRIMA azione valida sul nuovo socket
+        // (commit, vedi onMessage) o allo scadere del TTL: non resta
+        // rigiocabile a lungo (SEC-10 sostanzialmente preservato).
         const rotated = randomUUID();
+        existing.prevToken = token; // il token appena presentato dal client
+        existing.prevTokenExpiry = Date.now() + this.rotationTtlMs();
         existing.token = rotated;
         existing.tokenHash = sha256(rotated);
         send(ws, {
@@ -138,8 +191,8 @@ export class Room {
         this.sendStateTo(existing);
         return;
       }
-      // Token non riconosciuto (es. vecchio token ruotato): si prosegue come
-      // nuovo ingresso; se la room è piena verrà rifiutato sotto.
+      // Token non riconosciuto (né corrente né precedente-entro-TTL): si prosegue
+      // come nuovo ingresso; se la room è piena verrà rifiutato sotto.
     }
 
     if (this.isFull()) {
@@ -154,6 +207,8 @@ export class Room {
       displayName: displayName.slice(0, 40) || `Giocatore ${seat + 1}`,
       token: newToken,
       tokenHash: sha256(newToken),
+      prevToken: null,
+      prevTokenExpiry: null,
       ws,
       status: "connected",
       graceTimer: null,
@@ -215,6 +270,10 @@ export class Room {
       send(ws, { type: "error", message: "Socket non associato a un giocatore." });
       return;
     }
+    // NEW-1: qualunque messaggio valido su questo socket conferma la ricezione
+    // del token corrente (incluso l'heartbeat periodico del client) → scarta il
+    // token precedente. Chiude la finestra di replay del vecchio token (SEC-10).
+    this.commitToken(slot);
     if (msg.type === "heartbeat") return; // liveness gestita a livello ws
 
     if (!this.engine) {
@@ -470,13 +529,39 @@ export class Room {
       return;
     }
 
-    // Nessuna mossa automatica legale possibile: stallo raro (il giocatore ha
-    // melato fino a lasciarsi in mano solo una matta non scartabile e senza
-    // possibilità di chiusura). Non riarmare un timer a 0ms (eviterebbe un loop):
-    // si ritrasmette lo stato e il turno resta fermo. Se il giocatore è
-    // disconnesso, sarà la grace-window a risolvere con il forfeit.
-    this.clearTurnTimer();
-    for (const p of this.players) this.sendStateTo(p);
+    // Stallo. Dopo la pesca d'ufficio (ramo `must_draw`) questo caso NON è
+    // raggiungibile: la mano ha ≥2 carte e uno scarto ordinario è sempre legale.
+    // Resta raggiungibile SOLO se il giocatore aveva già pescato e si è calato
+    // fino a un'unica carta NON scartabile come ultimo scarto (una matta, oppure
+    // una naturale senza pozzetto disponibile e senza burraco per chiudere): non
+    // esiste alcuna mossa automatica legale.
+    //
+    // La skill-burraco non copre questo vicolo cieco. Per non congelare il turno
+    // (né riarmare un timer a 0ms, che ciclerebbe) adottiamo una risoluzione
+    // DETERMINISTICA: forfeit d'ufficio del seat in stallo → l'avversario vince
+    // la partita, per la stessa via `game_ended` già usata (reason "forfeit").
+    this.forfeitStalledSeat(activeSeat);
+  }
+
+  /**
+   * NEW-3: chiusura deterministica di un turno in stallo irrisolvibile: il seat
+   * in stallo perde d'ufficio, l'avversario è dichiarato vincitore della
+   * partita. Riusa il canale `game_ended` (reason "forfeit"). Poi GC della room.
+   */
+  private forfeitStalledSeat(stalledSeat: Seat): void {
+    if (this.disposed) return;
+    const e = this.engine;
+    const opp = this.players.find((p) => p.seat !== stalledSeat);
+    const winnerSeat = (opp ? opp.seat : (1 - stalledSeat)) as Seat;
+    if (e && e.status === "playing") {
+      e.status = "game_ended";
+      e.winnerSeat = winnerSeat;
+      e.turnEndsAt = null;
+      const finalScores: [number, number] = [e.cumulative[0], e.cumulative[1]];
+      this.broadcast({ type: "game_ended", winnerSeat, finalScores, reason: "forfeit" });
+      void persistence.endMatch(this.matchId, winnerSeat);
+    }
+    this.dispose();
   }
 
   /* ─────────────────────────── broadcast/redaction ─────────────────────── */

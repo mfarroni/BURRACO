@@ -96,6 +96,48 @@ test("SEC-05 auto-scarto: allo scadere del turno il server auto-completa un turn
   (room as unknown as { dispose(): void }).dispose();
 });
 
+/* ─────────────────────────── NEW-3: STALLO DETERMINISTICO ─────────────────────────── */
+
+test("NEW-3: turno in stallo irrisolvibile (mano ridotta a una sola matta) → forfeit deterministico, l'avversario vince", () => {
+  const room = new Room("STALL1", { ...defaultGameConfig(), turnTimeoutMs: 100_000 });
+  const a = new FakeSocket();
+  const b = new FakeSocket();
+  room.join(a.as(), undefined, "Alice");
+  room.join(b.as(), undefined, "Bob");
+
+  const s = a.lastState()!;
+  const activeSeat = s.whoseTurn;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const eng = (room as any).engine;
+
+  // Stato degenere NON raggiungibile dopo la pesca d'ufficio, ma possibile se il
+  // giocatore aveva già pescato e si è calato fino a un'unica matta (jolly): nessuno
+  // scarto legale (l'ultimo scarto non può essere una matta) e nessun pozzetto di
+  // salvataggio. Lo forziamo per esercitare la risoluzione deterministica.
+  const joker = { id: "JK-STALL", suit: null, rank: "JOKER", isWild: true, wildKind: "joker" };
+  eng.seats[activeSeat].hand = [joker];
+  eng.seats[activeSeat].pozzettoTaken = true; // niente pozzetto "in differita" di salvataggio
+  eng.pozzetti = [];
+  eng.phase = "may_meld"; // ha già pescato
+  eng.currentSeat = activeSeat;
+
+  // Invoca l'auto-play come farebbe il turn timer allo scadere del turno.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (room as any).autoPlayTurn(activeSeat);
+
+  const geA = a.sent.find((m) => m.type === "game_ended") as
+    | Extract<ServerMessage, { type: "game_ended" }>
+    | undefined;
+  const geB = b.sent.find((m) => m.type === "game_ended") as
+    | Extract<ServerMessage, { type: "game_ended" }>
+    | undefined;
+  assert.ok(geA && geB, "entrambi i giocatori ricevono game_ended");
+  assert.equal(geA!.winnerSeat, (1 - activeSeat) as 0 | 1, "vince l'avversario del seat in stallo");
+  assert.equal(geA!.reason, "forfeit", "risoluzione via forfeit deterministico (canale game_ended)");
+  // Il turno NON resta congelato: la room è conclusa e smaltita.
+  assert.equal((room as unknown as { isDisposed(): boolean }).isDisposed(), true, "room smaltita dopo il forfeit di stallo");
+});
+
 /* ─────────────────────────── SEC-05: FORFEIT ─────────────────────────── */
 
 test("SEC-05 forfeit: scaduta la grace-window su disconnessione, l'avversario connesso vince con reason:forfeit", async () => {
@@ -243,5 +285,34 @@ test("SEC-07: parseClientMessage rifiuta gli input malformati (forma) senza ecce
   for (const g of good) {
     const r = parseClientMessage(g);
     assert.equal(r.ok, true, `attesa accettazione per: ${JSON.stringify(g)}`);
+  }
+});
+
+/* ─────────────────────────── NEW-4: LIMITI DI LUNGHEZZA (hardening) ─────────────────────────── */
+
+test("NEW-4: input oltre i limiti di lunghezza sono rifiutati come forma non conforme (MALFORMED)", () => {
+  const tooLong: unknown[] = [
+    { type: "join_room", roomCode: "X", displayName: "z".repeat(65) }, // displayName > 64
+    { type: "discard", card: "z".repeat(65) }, // cardId > 64
+    { type: "meld_new", cards: Array.from({ length: 21 }, (_, i) => `c${i}`) }, // > 20 carte
+    { type: "meld_extend", meldId: "z".repeat(65), cards: ["a"] }, // meldId > 64
+    { type: "pinella_substitute", meldId: "m", cardInHand: "z".repeat(65) }, // cardInHand > 64
+    { type: "draw", source: "deck", clientMoveId: "z".repeat(65) }, // clientMoveId > 64
+    { type: "join_room", roomCode: "X", playerToken: "z".repeat(65), displayName: "A" }, // token > 64
+  ];
+  for (const t of tooLong) {
+    const r = parseClientMessage(t);
+    assert.equal(r.ok, false, `NEW-4: atteso rifiuto oltre-limite per ${JSON.stringify(t).slice(0, 48)}…`);
+  }
+
+  // Ai limiti (esattamente al massimo) restano ACCETTATI: il cap non è troppo stretto.
+  const atLimit: unknown[] = [
+    { type: "join_room", roomCode: "X", displayName: "z".repeat(64) },
+    { type: "discard", card: "z".repeat(64) },
+    { type: "meld_new", cards: Array.from({ length: 20 }, (_, i) => `c${i}`) },
+  ];
+  for (const t of atLimit) {
+    const r = parseClientMessage(t);
+    assert.equal(r.ok, true, `NEW-4: atteso OK al limite per ${JSON.stringify(t).slice(0, 48)}…`);
   }
 });
