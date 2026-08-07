@@ -124,12 +124,12 @@ export default function Page() {
           </p>
         </div>
         <p className="muted" style={{ textAlign: "center" }}>
-          Condividi il codice con l'altro giocatore: la partita inizia appena si siede.
+          Condividi il codice con l'altro giocatore: la partita inizia appena si siede al tavolo.
         </p>
         <ConnectionBanner connPhase={g.connPhase} resumed={g.resumed} />
         {/* Reset consentito in attesa: nessun avversario da penalizzare. */}
-        <div style={{ display: "flex", justifyContent: "center", marginTop: "var(--sp-3)" }}>
-          <ResetTableButton onReset={g.resetRoom} />
+        <div style={{ display: "flex", justifyContent: "center", marginTop: "var(--sp-4)" }}>
+          <ResetTableButton onReset={g.resetRoom} context="waiting" />
         </div>
       </div>
     );
@@ -165,10 +165,13 @@ export default function Page() {
         <div className="banner" data-tone="warn" role="status" aria-live="polite">
           <span className="spinner" aria-hidden="true" />
           <span className="banner-body">
-            <span className="banner-title">{opponentName} si è disconnesso</span>
-            <span className="banner-sub">Rientro in corso… puoi attendere o terminare il tavolo.</span>
+            <span className="banner-title">{opponentName} ha perso la connessione</span>
+            <span className="banner-sub">
+              Rientro in corso: ha qualche minuto per riconnettersi e riprendere la partita. Puoi
+              aspettarlo oppure terminare il tavolo.
+            </span>
           </span>
-          <ResetTableButton onReset={g.resetRoom} />
+          <ResetTableButton onReset={g.resetRoom} context="opponent-offline" />
         </div>
       )}
 

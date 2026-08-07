@@ -250,21 +250,48 @@ button:disabled {
   background: transparent;
   border-color: var(--border);
 }
-/* Placeholder FUNZIONALE del pulsante "termina/annulla tavolo".
-   Aspetto/testo finali: co-design con agente_ui_ux. */
+/* Pulsante "termina/annulla tavolo" — AZIONE DISTRUTTIVA.
+   Variante ghost (bordo/testo rosso su fondo trasparente): resta secondaria e
+   NON compete con l'oro delle azioni primarie di gioco. La variante `.solid`
+   (rosso pieno) è riservata alla CONFERMA finale dentro il dialog. */
 .btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
   background: transparent;
-  border-color: var(--danger-300, #d98c8c);
-  color: var(--danger-300, #d98c8c);
+  border-color: var(--danger-300);
+  color: var(--danger-300); /* su feltro: ~6.7:1 AA */
   font-weight: 600;
 }
 .btn-danger:not(:disabled):hover {
-  background: rgba(217, 140, 140, 0.12);
+  background: rgba(224, 87, 75, 0.14);
+  border-color: var(--danger-500);
+  color: var(--danger-300);
+}
+.btn-danger .btn-danger-icon {
+  font-size: 1em;
+  line-height: 1;
+}
+/* CONFERMA distruttiva: rosso pieno SCURO così il testo chiaro resta ≥ AA. */
+.btn-danger.solid {
+  background: linear-gradient(180deg, #a83226, #8a291f); /* testo chiaro: ~5.7:1 AA */
+  color: var(--text-strong);
+  border-color: var(--danger-300);
+}
+.btn-danger.solid:not(:disabled):hover {
+  background: linear-gradient(180deg, #b83a2c, #9a2f24);
+  border-color: var(--danger-300);
+  color: var(--text-strong);
 }
 .reset-table {
+  font-size: var(--fs-sm);
+  min-height: 40px;
+  padding: var(--sp-2) var(--sp-4);
+}
+/* Nel banner "avversario offline" il pulsante è spinto a destra; altrove
+   (es. schermata d'attesa) resta centrato dal contenitore. */
+.banner .reset-table {
   margin-left: auto;
-  font-size: 0.85rem;
-  padding: var(--sp-2, 8px) var(--sp-3, 12px);
 }
 
 /* ===================================================================
@@ -1049,6 +1076,84 @@ button:disabled {
   margin-top: var(--sp-3);
   text-align: center;
   color: var(--text);
+}
+
+/* ── Esiti TERMINALI senza vincitore (RoomClosedOverlay) ──────────────
+   Tre chiusure DISTINGUIBILI a colpo d'occhio grazie all'accento:
+   · vittoria/fine partita → oro (default .overlay-card, invariato);
+   · interrupted (tavolo chiuso) → blu informativo, neutro;
+   · abandoned (abbandono)  → ambra d'attenzione, MAI rosso (non è una colpa).
+   Distinzione anche senza colore: occhiello di categoria + icona + testo. */
+.overlay-eyebrow {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-1);
+}
+.outcome-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  text-align: center;
+  margin-bottom: var(--sp-2);
+}
+.overlay-card[data-outcome="interrupted"] {
+  border-top-color: var(--info-500);
+}
+.overlay-card[data-outcome="interrupted"] h2,
+.overlay-card[data-outcome="interrupted"] .overlay-eyebrow,
+.overlay-card[data-outcome="interrupted"] .outcome-icon {
+  color: var(--info-300);
+}
+.overlay-card[data-outcome="abandoned"] {
+  border-top-color: var(--warn-500);
+}
+.overlay-card[data-outcome="abandoned"] h2,
+.overlay-card[data-outcome="abandoned"] .overlay-eyebrow,
+.overlay-card[data-outcome="abandoned"] .outcome-icon {
+  color: var(--warn-300);
+}
+
+/* ── Dialog di CONFERMA (azione distruttiva) ──────────────────────────
+   Riusa .overlay/.overlay-card; più stretto e centrato. */
+.overlay-card.confirm {
+  max-width: 440px;
+  text-align: center;
+}
+.confirm-title {
+  font-size: var(--fs-h1);
+  color: var(--text-strong);
+  text-align: center;
+}
+.confirm-body {
+  color: var(--text);
+  text-align: center;
+  margin-bottom: var(--sp-4);
+}
+.dialog-actions {
+  display: flex;
+  gap: var(--sp-3);
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: var(--sp-5);
+}
+.dialog-actions.single {
+  margin-top: var(--sp-5);
+}
+.dialog-actions button {
+  min-height: 44px;
+  padding-inline: var(--sp-5);
+}
+/* Mobile: azioni impilate; la SICURA resta in basso (a portata di pollice),
+   la distruttiva sopra, per ridurre i tocchi accidentali. */
+@media (max-width: 480px) {
+  .dialog-actions {
+    flex-direction: column-reverse;
+  }
+  .dialog-actions button {
+    width: 100%;
+  }
 }
 
 /* Celebrazione effimera (pozzetto / burraco). Non blocca il gioco. */
