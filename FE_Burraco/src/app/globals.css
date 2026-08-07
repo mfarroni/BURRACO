@@ -250,6 +250,22 @@ button:disabled {
   background: transparent;
   border-color: var(--border);
 }
+/* Placeholder FUNZIONALE del pulsante "termina/annulla tavolo".
+   Aspetto/testo finali: co-design con agente_ui_ux. */
+.btn-danger {
+  background: transparent;
+  border-color: var(--danger-300, #d98c8c);
+  color: var(--danger-300, #d98c8c);
+  font-weight: 600;
+}
+.btn-danger:not(:disabled):hover {
+  background: rgba(217, 140, 140, 0.12);
+}
+.reset-table {
+  margin-left: auto;
+  font-size: 0.85rem;
+  padding: var(--sp-2, 8px) var(--sp-3, 12px);
+}
 
 /* ===================================================================
  * LOBBY / SCHERMATA D'INGRESSO — la prima impressione

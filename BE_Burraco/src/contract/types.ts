@@ -149,12 +149,18 @@ export interface HandScoreDetail {
  * opaco: NON influenza mai la validazione delle regole.
  */
 export type ClientMessage =
-  | { type: "join_room"; roomCode: string; playerToken?: string; displayName: string }
+  // `clientId` (LIFECYCLE): identità di sessione STABILE per-browser (non
+  // per-room), usata per il RECLAIM di un posto disconnesso quando il token di
+  // room è perso. Opaca per il server; non concede mai accesso a un posto vivo.
+  | { type: "join_room"; roomCode: string; playerToken?: string; displayName: string; clientId?: string }
   | { type: "draw"; source: "deck" | "discard"; clientMoveId?: string }
   | { type: "meld_new"; cards: string[]; clientMoveId?: string } // CardId[]
   | { type: "meld_extend"; meldId: string; cards: string[]; clientMoveId?: string }
   | { type: "pinella_substitute"; meldId: string; cardInHand: string; clientMoveId?: string }
   | { type: "discard"; card: string; clientMoveId?: string }
+  // LIFECYCLE: smontaggio esplicito del tavolo (nessun payload; room dedotta dal
+  // socket). Consentito solo in attesa o con avversario disconnesso.
+  | { type: "reset_room" }
   | { type: "heartbeat" };
 
 /** Codici di rifiuto mossa (stabili, il FE può mapparli a messaggi UX). */
@@ -216,6 +222,14 @@ export type ServerMessage =
    * grazia e ha abbandonato (in 2 giocatori l'altro è dichiarato vincitore).
    */
   | { type: "game_ended"; winnerSeat: Seat | null; finalScores: [number, number]; reason?: "forfeit" }
+  /**
+   * LIFECYCLE: chiusura TERMINALE del tavolo SENZA vincitore, distinta da
+   * `game_ended`. `reason`:
+   *  - "interrupted" → un giocatore ha smontato il tavolo (reset_room);
+   *  - "abandoned"   → l'avversario non è rientrato entro la finestra di grazia.
+   * Alla ricezione il client mostra un esito chiaro e non resta bloccato.
+   */
+  | { type: "room_closed"; reason: "interrupted" | "abandoned" }
   | { type: "opponent_disconnected"; seat: Seat }
   | { type: "opponent_reconnected"; seat: Seat }
   | { type: "error"; message: string };

@@ -1,7 +1,7 @@
 "use client";
 
 import type { GameConfig, HandScoreDetail, PlayerPublic, Seat } from "@/lib/contract";
-import type { GameEndedInfo, HandEndedInfo, RejectionInfo } from "@/lib/useGameSocket";
+import type { GameEndedInfo, HandEndedInfo, RejectionInfo, RoomClosedInfo } from "@/lib/useGameSocket";
 import { REJECT_TITLE, rejectText } from "@/lib/rejectMessages";
 
 /**
@@ -107,6 +107,51 @@ export function HandEndedOverlay({
         </p>
       </div>
     </div>
+  );
+}
+
+/**
+ * Esito TERMINALE del tavolo SENZA vincitore (reset o abbandono), distinto dal
+ * game_ended. Placeholder FUNZIONALE: testi/stile finali sono co-design con ui_ux.
+ * `onLeave` riporta alla lobby.
+ */
+export function RoomClosedOverlay({
+  info,
+  onLeave,
+}: {
+  info: RoomClosedInfo | null;
+  onLeave: () => void;
+}) {
+  if (!info) return null;
+  const isInterrupted = info.reason === "interrupted";
+  return (
+    <div className="overlay">
+      <div className="overlay-card">
+        <h2>{isInterrupted ? "Tavolo chiuso" : "Partita interrotta"}</h2>
+        <p className="verdict">
+          {isInterrupted
+            ? "Il tavolo è stato chiuso: la partita non prosegue."
+            : "L'avversario ha abbandonato e non è rientrato in tempo: la partita è annullata."}
+        </p>
+        <p className="muted" style={{ textAlign: "center" }}>Nessun vincitore assegnato.</p>
+        <button type="button" className="cta btn-primary" onClick={onLeave} style={{ marginTop: "var(--sp-3)" }}>
+          Torna alla lobby
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Pulsante FUNZIONALE "termina/annulla tavolo" (placeholder di stile: aspetto e
+ * testo finali sono co-design con ui_ux). Visibile solo quando il reset è
+ * consentito (in attesa oppure con avversario disconnesso).
+ */
+export function ResetTableButton({ onReset }: { onReset: () => void }) {
+  return (
+    <button type="button" className="btn-danger reset-table" onClick={onReset}>
+      Termina tavolo
+    </button>
   );
 }
 

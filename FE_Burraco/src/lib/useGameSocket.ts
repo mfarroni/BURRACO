@@ -50,6 +50,14 @@ export interface GameEndedInfo {
   /** "forfeit" se la partita è finita per abbandono dell'avversario. */
   reason?: "forfeit";
 }
+/**
+ * Chiusura TERMINALE del tavolo SENZA vincitore (distinta da game_ended):
+ * "interrupted" = tavolo smontato con reset; "abandoned" = avversario non
+ * rientrato entro la grazia.
+ */
+export interface RoomClosedInfo {
+  reason: "interrupted" | "abandoned";
+}
 
 export interface GameSocketApi {
   connPhase: ConnPhase;
@@ -63,6 +71,8 @@ export interface GameSocketApi {
   rejection: RejectionInfo | null;
   handEnded: HandEndedInfo | null;
   gameEnded: GameEndedInfo | null;
+  /** tavolo chiuso senza vincitore (reset/abbandono); terminale. */
+  roomClosed: RoomClosedInfo | null;
   /** true tra l'invio di una mossa e la risposta del server (globale). */
   pending: boolean;
   /** cardIds coinvolti nella mossa in volo (per il pending PER-CARTA). */
@@ -74,6 +84,8 @@ export interface GameSocketApi {
   errorMessage: string | null;
 
   join: (roomCode: string, displayName: string) => void;
+  /** Smonta il tavolo (invia reset_room): valido in attesa o con avversario offline. */
+  resetRoom: () => void;
   drawDeck: () => void;
   drawDiscard: () => void;
   meldNew: (cards: string[]) => void;
@@ -90,6 +102,27 @@ interface InFlight {
 
 function tokenKey(room: string): string {
   return `burraco_token_${room.toUpperCase()}`;
+}
+
+/** Chiave dell'identità di sessione STABILE per-browser (non per-room). */
+const CLIENT_ID_KEY = "burraco_client_id";
+
+/**
+ * Ritorna il clientId per-browser, generandolo e persistendolo al primo uso.
+ * È inviato in `join_room` per consentire il RECLAIM del posto quando il token
+ * di room è perso. Se localStorage non è disponibile, ripiega su un id volatile
+ * (la riconnessione userà comunque token/sessione viva quando possibile).
+ */
+function getClientId(): string {
+  try {
+    const existing = localStorage.getItem(CLIENT_ID_KEY);
+    if (existing) return existing;
+    const fresh = genMoveId();
+    localStorage.setItem(CLIENT_ID_KEY, fresh);
+    return fresh;
+  } catch {
+    return genMoveId();
+  }
 }
 
 /** correlation id opaco per correlare mossa ↔ ack `move_applied`. */
@@ -112,6 +145,7 @@ export function useGameSocket(): GameSocketApi {
   const [rejection, setRejection] = useState<RejectionInfo | null>(null);
   const [handEnded, setHandEnded] = useState<HandEndedInfo | null>(null);
   const [gameEnded, setGameEnded] = useState<GameEndedInfo | null>(null);
+  const [roomClosed, setRoomClosed] = useState<RoomClosedInfo | null>(null);
   const [pending, setPending] = useState(false);
   const [pendingCardIds, setPendingCardIds] = useState<string[]>([]);
   const [inFlightCardId, setInFlightCardId] = useState<string | null>(null);
@@ -239,6 +273,13 @@ export function useGameSocket(): GameSocketApi {
           setGameEnded({ winnerSeat: msg.winnerSeat, finalScores: msg.finalScores, reason: msg.reason });
           clearInFlight();
           break;
+        case "room_closed":
+          // Esito TERMINALE senza vincitore: non si tenta più di riconnettere.
+          setRoomClosed({ reason: msg.reason });
+          wantConnectedRef.current = false;
+          if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+          clearInFlight();
+          break;
         case "opponent_disconnected":
         case "opponent_reconnected":
           setPlayers((prev) =>
@@ -285,6 +326,7 @@ export function useGameSocket(): GameSocketApi {
         roomCode: room,
         displayName: nameRef.current,
         playerToken: storedToken(room),
+        clientId: getClientId(),
       });
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
       heartbeatTimer.current = setInterval(() => sendRaw({ type: "heartbeat" }), HEARTBEAT_MS);
@@ -354,12 +396,14 @@ export function useGameSocket(): GameSocketApi {
     rejection,
     handEnded,
     gameEnded,
+    roomClosed,
     pending,
     pendingCardIds,
     inFlightCardId,
     celebration,
     errorMessage,
     join,
+    resetRoom: () => sendRaw({ type: "reset_room" }),
     drawDeck: () => sendMove({ type: "draw", source: "deck" }),
     drawDiscard: () => sendMove({ type: "draw", source: "discard" }),
     meldNew: (cards) => sendMove({ type: "meld_new", cards }, cards),

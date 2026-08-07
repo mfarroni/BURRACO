@@ -138,9 +138,13 @@ test("NEW-3: turno in stallo irrisolvibile (mano ridotta a una sola matta) → f
   assert.equal((room as unknown as { isDisposed(): boolean }).isDisposed(), true, "room smaltita dopo il forfeit di stallo");
 });
 
-/* ─────────────────────────── SEC-05: FORFEIT ─────────────────────────── */
+/* ─────────────────────────── LIFECYCLE: ABBANDONO (ex SEC-05 forfeit) ─────────────────────────── */
 
-test("SEC-05 forfeit: scaduta la grace-window su disconnessione, l'avversario connesso vince con reason:forfeit", async () => {
+// NOTA: decisione di prodotto approvata dal lead. Il vecchio comportamento
+// "forfeit-win" (l'avversario connesso vinceva) è stato ANNULLATO: alla scadenza
+// della grazia la partita si chiude SENZA vincitore con room_closed{abandoned}.
+// Il test è aggiornato di conseguenza.
+test("LIFECYCLE: scaduta la grace-window su disconnessione, la partita è ANNULLATA per abbandono (room_closed{abandoned}), nessun vincitore", async () => {
   process.env.RECONNECT_GRACE_MS = "60"; // grace brevissima
   const mgr = new RoomManager();
   const a = new FakeSocket();
@@ -155,14 +159,15 @@ test("SEC-05 forfeit: scaduta la grace-window su disconnessione, l'avversario co
 
   await delay(160); // > grace
 
-  const ge = b.sent.find((m) => m.type === "game_ended") as
-    | Extract<ServerMessage, { type: "game_ended" }>
+  const rc = b.sent.find((m) => m.type === "room_closed") as
+    | Extract<ServerMessage, { type: "room_closed" }>
     | undefined;
-  assert.ok(ge, "l'avversario riceve game_ended");
-  assert.equal(ge!.reason, "forfeit", "motivazione forfeit");
-  assert.equal(ge!.winnerSeat, 1, "vince il seat connesso (Bob=1)");
+  assert.ok(rc, "l'avversario riceve room_closed");
+  assert.equal(rc!.reason, "abandoned", "motivazione abbandono");
+  // Nessun vincitore: NON deve essere emesso alcun game_ended (né forfeit-win).
+  assert.ok(!b.has("game_ended"), "nessun forfeit-win: nessun game_ended emesso");
 
-  // SEC-05 GC: room rimossa dalla mappa dopo la conclusione.
+  // GC: room rimossa dalla mappa dopo la chiusura.
   assert.equal(mgr.activeRoomCount(), 0, "room conclusa rimossa dalla mappa (GC)");
 });
 

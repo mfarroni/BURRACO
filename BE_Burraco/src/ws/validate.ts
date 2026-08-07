@@ -33,7 +33,13 @@ const joinRoom = z.object({
   roomCode: z.string().max(MAX_ROOM),
   playerToken: z.string().max(MAX_ID).optional(),
   displayName: z.string().max(MAX_NAME),
+  // LIFECYCLE: identità di sessione per-browser per il reclaim del posto. Cap
+  // difensivo coerente con gli altri id (è un UUID lato client).
+  clientId: z.string().max(MAX_ID).optional(),
 });
+
+// LIFECYCLE: smontaggio esplicito del tavolo. Nessun payload oltre al tipo.
+const resetRoom = z.object({ type: z.literal("reset_room") });
 
 const draw = z.object({
   type: z.literal("draw"),
@@ -76,6 +82,7 @@ const clientMessageSchema = z.discriminatedUnion("type", [
   meldExtend,
   pinellaSubstitute,
   discard,
+  resetRoom,
   heartbeat,
 ]);
 

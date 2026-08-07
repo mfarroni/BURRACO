@@ -44,7 +44,7 @@ export class RoomManager {
     }
     const room = this.getOrCreate(code, defaultGameConfig());
     this.socketRoom.set(ws, room);
-    room.join(ws, msg.playerToken, msg.displayName ?? "");
+    room.join(ws, msg.playerToken, msg.displayName ?? "", msg.clientId);
   }
 
   handleMessage(ws: WebSocket, msg: ClientMessage): void {
@@ -66,7 +66,8 @@ export class RoomManager {
     room.onDisconnect(ws);
     this.socketRoom.delete(ws);
     // La room resta in memoria durante la finestra di grazia per la riconnessione
-    // via token; alla scadenza la room fa forfeit/abbandono e si auto-rimuove
-    // dalla mappa tramite l'hook onDispose (SEC-05, GC).
+    // (token o clientId); alla scadenza, se l'avversario è presente, la partita è
+    // ANNULLATA per abbandono (room_closed{abandoned}) e la room si auto-rimuove
+    // dalla mappa tramite l'hook onDispose (GC).
   }
 }
