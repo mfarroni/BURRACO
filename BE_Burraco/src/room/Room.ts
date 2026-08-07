@@ -148,8 +148,14 @@ export class Room {
    *  (2) clientId che combacia con un posto DISCONNESSO → reclaim (token perso);
    *  (3) posto libero → nuovo seat;
    *  (4) room piena ma con un posto DISCONNESSO non associabile a un posto vivo
-   *      → reclaim del posto disconnesso (fallback open-table);
-   *  (5) room realmente al completo (due posti vivi) → rifiuto.
+   *      → reclaim del posto disconnesso (fallback open-table). CONSENTITO SOLO
+   *      PRE-PARTITA (`!this.engine`): serve unicamente a completare la coppia
+   *      quando il match non è ancora avviato (senza engine non c'è mano da
+   *      divulgare, `sendStateTo` è no-op). A PARTITA IN CORSO è DISATTIVATO
+   *      (SEC-11): impedisce che un terzo, conoscendo solo il codice tavolo,
+   *      subentri al posto di un disconnesso e ne riceva la mano esatta. Mid-game
+   *      il rientro è ammesso SOLO col reclaim autenticato via clientId (branch 2).
+   *  (5) room realmente al completo (o partita avviata senza reclaim valido) → rifiuto.
    * Il reclaim (2)/(4) vale SOLO per posti disconnessi: un posto VIVO non è mai
    * reclamabile né via token né via clientId (SEC-04). Mai più di 2 slot.
    */
@@ -200,15 +206,21 @@ export class Room {
       return;
     }
 
-    // (4) Fallback: room piena ma con un posto DISCONNESSO e join non associabile
-    //     ad alcun posto vivo → reclaim del posto disconnesso (mai di uno vivo).
-    const disconnected = this.players.find((p) => !this.isSeatLive(p));
-    if (disconnected) {
-      this.reconnectInto(disconnected, ws, null, displayName, clientId);
-      return;
+    // (4) Fallback open-table: room piena ma con un posto DISCONNESSO e join non
+    //     associabile ad alcun posto vivo → reclaim del posto disconnesso (mai di
+    //     uno vivo). SEC-11: consentito SOLO PRE-PARTITA. A partita avviata
+    //     (`this.engine` presente) NON si reclama un posto disconnesso senza
+    //     autenticazione via clientId (branch 2): eviterebbe l'hijack del posto e
+    //     il leak della mano esatta del disconnesso verso chi conosce solo il codice.
+    if (!this.engine) {
+      const disconnected = this.players.find((p) => !this.isSeatLive(p));
+      if (disconnected) {
+        this.reconnectInto(disconnected, ws, null, displayName, clientId);
+        return;
+      }
     }
 
-    // (5) Room realmente al completo (due posti vivi).
+    // (5) Room al completo (due posti vivi) o partita in corso senza reclaim valido.
     send(ws, { type: "error", message: "La room è al completo." });
   }
 

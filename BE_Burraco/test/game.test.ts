@@ -199,8 +199,9 @@ test("meldNew valido: -3 carte in mano, +1 meld", () => {
   assert.equal(g.handOf(1).length, 2);
 });
 
-test("meld limit: 2 calate gia' fatte, pozzetto non preso -> MELD_LIMIT_REACHED", () => {
-  const g = fresh();
+test("A5 house-rule ATTIVA (cap=2): 2 calate gia' fatte, pozzetto non preso -> MELD_LIMIT_REACHED", () => {
+  // Il cap NON è comportamento base: va abilitato esplicitamente come house-rule.
+  const g = new GameEngine({ ...defaultGameConfig(), limiteCalatePrimaDelPozzetto: 2 }, 0);
   g.currentSeat = 1; g.phase = "may_meld";
   g.seats[1].pozzettoTaken = false;
   g.melds = [
@@ -212,6 +213,40 @@ test("meld limit: 2 calate gia' fatte, pozzetto non preso -> MELD_LIMIT_REACHED"
   const r = g.meldNew(1, [a.id, b.id, c.id]);
   assert.equal(r.ok, false);
   if (!r.ok) assert.equal(r.code, "MELD_LIMIT_REACHED");
+});
+
+test("A5 DEFAULT (nessun limite): 3+ calate consecutive prima del pozzetto sono tutte accettate", () => {
+  // Config di default → limiteCalatePrimaDelPozzetto = null → nessun cap.
+  const g = fresh();
+  assert.equal(g.config.limiteCalatePrimaDelPozzetto, null, "default: nessun limite");
+  g.currentSeat = 1; g.phase = "may_meld";
+  g.seats[1].pozzettoTaken = false;
+  g.melds = [
+    buildMeld([card("3", "clubs"), card("3", "diamonds"), card("3", "hearts")], 1),
+    buildMeld([card("4", "clubs"), card("4", "diamonds"), card("4", "hearts")], 1),
+  ];
+  // Terza calata: col vecchio cap=2 sarebbe stata rifiutata; ora deve passare.
+  const a = card("5", "clubs"), b = card("5", "diamonds"), c = card("5", "hearts");
+  g.seats[1].hand = [a, b, c, card("K", "spades")];
+  const r = g.meldNew(1, [a.id, b.id, c.id]);
+  assert.equal(r.ok, true, "nessun MELD_LIMIT_REACHED col default");
+  assert.equal(g.melds.filter((m) => m.ownerSeat === 1).length, 3, "terza calata registrata");
+});
+
+test("A5 DEFAULT: svuotare la mano calando prima del pozzetto porta a prendere il pozzetto (nessun cap)", () => {
+  // Scenario funzionale del bug: molte calate che azzerano la mano → pozzetto in diretta.
+  const g = fresh();
+  g.currentSeat = 1; g.phase = "may_meld";
+  g.seats[1].pozzettoTaken = false;
+  // Mano di 6 carte = due tris che, calati entrambi, svuotano la mano.
+  const t1 = [card("3", "clubs"), card("3", "diamonds"), card("3", "hearts")];
+  const t2 = [card("4", "clubs"), card("4", "diamonds"), card("4", "hearts")];
+  g.seats[1].hand = [...t1, ...t2];
+  const r1 = g.meldNew(1, t1.map((c) => c.id));
+  assert.equal(r1.ok, true);
+  const r2 = g.meldNew(1, t2.map((c) => c.id)); // svuota la mano
+  assert.equal(r2.ok, true, "seconda calata che svuota la mano: accettata");
+  assert.equal(g.pozzettoTaken(1), true, "presa del pozzetto in diretta, mai bloccata dal cap");
 });
 
 test("meldNew che svuota la mano con pozzetto GIA' preso -> MUST_KEEP_CARD_TO_DISCARD", () => {

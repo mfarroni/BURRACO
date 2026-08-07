@@ -296,23 +296,89 @@ test("(9a) SEC-04: un secondo socket col token del legittimo CONNESSO è rifiuta
   disposeOf(room);
 });
 
-test("(9b) SEC-04: clientId che COLLIDE con un posto CONNESSO non lo reclama mai (prende semmai un posto disconnesso)", () => {
+test("(9b) SEC-04: clientId che COLLIDE con un posto CONNESSO non lo reclama mai (a partita avviata è respinto, SEC-11)", () => {
   process.env.RECONNECT_GRACE_MS = "100000";
   const room = new Room("SEC04C", cfg());
   const a = new FakeSocket();
   const b = new FakeSocket();
   room.join(a.as(), undefined, "Alice", "cidX"); // seat0 connesso
-  room.join(b.as(), undefined, "Bob", "cidY"); // seat1 connesso
+  room.join(b.as(), undefined, "Bob", "cidY"); // seat1 connesso → engine avviato
+  assert.ok(engineStarted(room), "partita avviata");
   room.onDisconnect(b.as()); // seat1 disconnesso; seat0 VIVO
 
-  // Un socket con il clientId di Alice (seat0 VIVO): il reclaim via clientId
-  // salta i posti vivi. Con room piena, il fallback prende il posto DISCONNESSO
-  // (seat1), MAI il posto connesso di Alice (seat0).
+  // Un socket con il clientId di Alice (seat0 VIVO): il reclaim via clientId salta
+  // i posti vivi (nessun disconnesso con cidX). A PARTITA AVVIATA il fallback
+  // open-table è disattivato (SEC-11): x NON subentra al posto disconnesso di Bob
+  // e viene RESPINTO ("al completo"). Il posto di Alice non è mai toccato (SEC-04).
   const x = new FakeSocket();
   room.join(x.as(), undefined, "X", "cidX");
-  assert.equal(x.roomJoined()?.yourSeat, 1, "prende il posto disconnesso, non quello di Alice");
+  assert.ok(!x.has("room_joined"), "SEC-11: nessun subentro al posto disconnesso a partita avviata");
+  assert.ok(!x.has("state"), "nessuno stato/mano divulgato all'estraneo");
+  assert.ok(
+    x.sent.some((m) => m.type === "error" && /completo/i.test((m as { message: string }).message)),
+    "respinto: la room è al completo",
+  );
   assert.equal(slotsOf(room).find((s) => s.seat === 0)?.status, "connected", "seat0 di Alice mai reclamato");
   assert.equal(slotsOf(room).find((s) => s.seat === 0)?.ws, a, "socket di Alice intatto");
+  // Il posto di Bob resta il SUO: disconnesso, non ceduto a x (rientra col proprio clientId).
+  assert.equal(slotsOf(room).find((s) => s.seat === 1)?.status, "disconnected", "posto di Bob non ceduto");
+  assert.equal(slotsOf(room).length, 2, "nessuno slot in più");
+  disposeOf(room);
+});
+
+/* ─────────────────────────── (11) SEC-11: HIJACK POSTO DISCONNESSO ─────────────────────────── */
+
+test("(11) SEC-11 (PROVA A): a partita avviata un join col solo codice tavolo NON subentra al disconnesso né vede la sua mano", () => {
+  process.env.RECONNECT_GRACE_MS = "100000";
+  const room = new Room("HIJK", cfg());
+  const a = new FakeSocket();
+  const b = new FakeSocket();
+  room.join(a.as(), undefined, "Alice", "cidA");
+  room.join(b.as(), undefined, "Bob", "cidB"); // engine avviato
+  assert.ok(engineStarted(room), "partita avviata");
+  // mani da cercare in un eventuale leak verso l'attaccante
+  const bHand = b.lastState()!.yourHand.map((c) => c.id);
+  const aHand = a.lastState()!.yourHand.map((c) => c.id);
+
+  room.onDisconnect(b.as()); // seat1 disconnesso (grazia lunga: non scade)
+
+  // Attaccante che conosce SOLO il codice tavolo: nessun token, nessun clientId.
+  const attacker = new FakeSocket();
+  room.join(attacker.as(), undefined, "Mallory");
+
+  // Deve essere RIFIUTATO: nessun room_joined, nessun resumed, nessuno state.
+  assert.ok(!attacker.has("room_joined"), "nessun room_joined{resumed} all'attaccante");
+  assert.ok(!attacker.has("state"), "nessuno state redatto all'attaccante");
+  assert.ok(
+    attacker.sent.some((m) => m.type === "error" && /completo/i.test((m as { message: string }).message)),
+    "join respinto: room al completo",
+  );
+  // Nessuna mano (né di Bob né di Alice) divulgata nei messaggi ricevuti dall'attaccante.
+  const json = JSON.stringify(attacker.sent);
+  for (const id of [...bHand, ...aHand])
+    assert.ok(!json.includes(id), `nessuna carta divulgata all'attaccante: ${id}`);
+  // Il posto di Bob resta suo e disconnesso, pronto per il reclaim autenticato.
+  assert.equal(slotsOf(room).find((s) => s.seat === 1)?.status, "disconnected", "posto di Bob intatto");
+  assert.equal(slotsOf(room).length, 2, "nessuno slot in più");
+  disposeOf(room);
+});
+
+test("(11b) SEC-11: il legittimo disconnesso rientra col PROPRIO clientId mid-game (reclaim branch 2 preservato)", () => {
+  process.env.RECONNECT_GRACE_MS = "100000";
+  const room = new Room("HIJK2", cfg());
+  const a = new FakeSocket();
+  const b = new FakeSocket();
+  room.join(a.as(), undefined, "Alice", "cidA");
+  room.join(b.as(), undefined, "Bob", "cidB"); // engine avviato
+  room.onDisconnect(b.as());
+
+  // Bob riapre col proprio clientId (token perso): reclaim autenticato → resumed.
+  const b2 = new FakeSocket();
+  room.join(b2.as(), undefined, "Bob", "cidB");
+  assert.equal(b2.roomJoined()?.resumed, true, "reclaim via clientId del legittimo = resumed");
+  assert.ok(b2.has("state"), "stato di gioco ripristinato per il legittimo");
+  assert.equal(slotsOf(room).find((s) => s.seat === 1)?.status, "connected", "posto riagganciato");
+  assert.equal(slotsOf(room).length, 2, "nessuno slot in più");
   disposeOf(room);
 });
 

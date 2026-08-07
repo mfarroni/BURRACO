@@ -69,7 +69,13 @@ export interface GameConfig {
   punteggioObiettivo: number; // 2005
   varianteChiusura: "italiana" | "internazionale";
   presaPozzetto: "in_diretta_e_differita" | "solo_differita";
-  limiteCalatePrimaDelPozzetto: number; // 2
+  /**
+   * House-rule OPZIONALE (spenta di default). `null` = NESSUN LIMITE di calate
+   * prima di prendere il pozzetto (comportamento base del Burraco). Un numero
+   * finito > 0 attiva il cap: il motore rifiuta con MELD_LIMIT_REACHED oltre
+   * quel numero di giochi calati prima del pozzetto.
+   */
+  limiteCalatePrimaDelPozzetto: number | null;
   turnTimeoutMs: number; // definito, non enforced in v1
 }
 

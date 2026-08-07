@@ -43,7 +43,7 @@ come specifica futura.
   (IMPLEMENTATO: solo "italiano"; gli altri sono documentati piu' sotto)
 - punteggio_obiettivo: 505 | 1005 | 2005 (scelto a inizio partita; default 2005)
 - variante_chiusura: "italiana" | "internazionale"
-- limite_calate_prima_del_pozzetto: numero | nessun_limite (default: 2 = originale)
+- limite_calate_prima_del_pozzetto: numero | nessun_limite (default: nessun_limite)
 - presa_pozzetto: "in_diretta_e_differita" | "solo_differita" (default: entrambe)
 
 ## Materiali
