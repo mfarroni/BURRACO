@@ -1,6 +1,6 @@
 ---
 name: skill-burraco
-description: Regole del Burraco. IMPLEMENTATO: Burraco "italiano" base, 2 giocatori individuale, chiusura italiana, due canaste (pulito 200 / sporco 100). DOCUMENTATE ma NON ancora implementate: le varianti tipo_burraco (Reale, Aperto, Chiuso, Chiuso STBL) e le modalita' a coppie / 4-5-6 giocatori. Fonte di verita' del dominio di gioco: consultare ogni volta che si progetta, implementa o testa logica di gioco, punteggi, stati di partita o condizioni di vittoria.
+description: "Regole del Burraco. IMPLEMENTATO: Burraco 'italiano' base, 2 giocatori individuale, chiusura italiana, due canaste (pulito 200 / sporco 100). DOCUMENTATE ma NON ancora implementate: le varianti tipo_burraco (Reale, Aperto, Chiuso, Chiuso STBL) e le modalita' a coppie / 4-5-6 giocatori. Fonte di verita' del dominio di gioco: consultare ogni volta che si progetta, implementa o testa logica di gioco, punteggi, stati di partita o condizioni di vittoria."
 ---
 
 # Regole del Burraco — Fonte di verita' del dominio
