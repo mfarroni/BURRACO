@@ -11,6 +11,8 @@ import {
   HandEndedOverlay,
   PendingBadge,
   RejectionToast,
+  ResetTableButton,
+  RoomClosedOverlay,
 } from "@/components/Overlays";
 import {
   Celebration,
@@ -101,6 +103,15 @@ export default function Page() {
     );
   }
 
+  /* ── Tavolo chiuso (terminale, senza vincitore): reset o abbandono ──── */
+  if (g.roomClosed) {
+    return (
+      <div className="game">
+        <RoomClosedOverlay info={g.roomClosed} onLeave={() => window.location.reload()} />
+      </div>
+    );
+  }
+
   /* ── In attesa dell'avversario (nessuno stato di gioco ancora) ─────── */
   if (!g.state) {
     return (
@@ -113,9 +124,13 @@ export default function Page() {
           </p>
         </div>
         <p className="muted" style={{ textAlign: "center" }}>
-          Condividi il codice con l'altro giocatore: la partita inizia appena si siede.
+          Condividi il codice con l'altro giocatore: la partita inizia appena si siede al tavolo.
         </p>
         <ConnectionBanner connPhase={g.connPhase} resumed={g.resumed} />
+        {/* Reset consentito in attesa: nessun avversario da penalizzare. */}
+        <div style={{ display: "flex", justifyContent: "center", marginTop: "var(--sp-4)" }}>
+          <ResetTableButton onReset={g.resetRoom} context="waiting" />
+        </div>
       </div>
     );
   }
@@ -142,6 +157,23 @@ export default function Page() {
       {g.pending && !g.inFlightCardId && <PendingBadge pending />}
       <HandEndedOverlay info={g.handEnded} players={g.players} yourSeat={g.yourSeat} />
       <GameEndedOverlay info={g.gameEnded} players={g.players} yourSeat={g.yourSeat} config={g.config} />
+      <RoomClosedOverlay info={g.roomClosed} onLeave={() => window.location.reload()} />
+
+      {/* Avversario offline: rientro in corso entro la finestra di grazia; nel
+          frattempo è possibile terminare il tavolo (annulla la partita). */}
+      {!opponentConnected && (
+        <div className="banner" data-tone="warn" role="status" aria-live="polite">
+          <span className="spinner" aria-hidden="true" />
+          <span className="banner-body">
+            <span className="banner-title">{opponentName} ha perso la connessione</span>
+            <span className="banner-sub">
+              Rientro in corso: ha qualche minuto per riconnettersi e riprendere la partita. Puoi
+              aspettarlo oppure terminare il tavolo.
+            </span>
+          </span>
+          <ResetTableButton onReset={g.resetRoom} context="opponent-offline" />
+        </div>
+      )}
 
       {/* ── Header / Scoreboard ───────────────────────────────────────── */}
       <div className="topbar">

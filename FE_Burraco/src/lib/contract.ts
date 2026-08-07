@@ -122,12 +122,16 @@ export type RejectCode =
  * SOLO sui messaggi di azione (per il pending per-carta); mai su join/heartbeat.
  */
 export type ClientMessage =
-  | { type: "join_room"; roomCode: string; playerToken?: string; displayName: string }
+  // `clientId`: identità di sessione STABILE per-browser (non per-room), per il
+  // RECLAIM del posto quando il token di room è perso. Opaca lato server.
+  | { type: "join_room"; roomCode: string; playerToken?: string; displayName: string; clientId?: string }
   | { type: "draw"; source: "deck" | "discard"; clientMoveId?: string }
   | { type: "meld_new"; cards: string[]; clientMoveId?: string }
   | { type: "meld_extend"; meldId: string; cards: string[]; clientMoveId?: string }
   | { type: "pinella_substitute"; meldId: string; cardInHand: string; clientMoveId?: string }
   | { type: "discard"; card: string; clientMoveId?: string }
+  // Smontaggio esplicito del tavolo (in attesa o con avversario disconnesso).
+  | { type: "reset_room" }
   | { type: "heartbeat" };
 
 /** SERVER → CLIENT. */
@@ -143,6 +147,9 @@ export type ServerMessage =
   // `reason?: "forfeit"` = l'avversario ha abbandonato (disconnessione oltre la
   // grazia); assente = fine normale per obiettivo raggiunto.
   | { type: "game_ended"; winnerSeat: Seat | null; finalScores: [number, number]; reason?: "forfeit" }
+  // Chiusura TERMINALE del tavolo SENZA vincitore, distinta da `game_ended`.
+  // "interrupted" = reset esplicito; "abandoned" = avversario non rientrato.
+  | { type: "room_closed"; reason: "interrupted" | "abandoned" }
   | { type: "opponent_disconnected"; seat: Seat }
   | { type: "opponent_reconnected"; seat: Seat }
   | { type: "error"; message: string };

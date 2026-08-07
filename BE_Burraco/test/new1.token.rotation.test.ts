@@ -113,19 +113,18 @@ test("NEW-1: una AZIONE DI GIOCO valida sul nuovo socket 'committa' il token →
   assert.equal(slot.prevToken, null, "prevToken azzerato dopo l'azione (commit)");
   assert.equal(slot.prevTokenExpiry, null, "prevTokenExpiry azzerato dopo l'azione (commit)");
 
-  // Il vecchio token NON riammette più: slot disconnesso → trattato come nuovo
-  // ingresso → room piena. Nessun resume.
-  room.onDisconnect(a2.as());
-  const a3 = new FakeSocket();
-  room.join(a3.as(), oldToken, "Alice");
-  assert.ok(
-    a3.sent.some((m) => m.type === "error" && /completo/i.test((m as { message: string }).message)),
-    "vecchio token committato → room piena (nessuna riconnessione)",
-  );
-  assert.ok(!a3.has("room_joined"), "nessun room_joined per il vecchio token committato");
-  assert.ok(!a3.has("state"), "nessuno stato al vecchio token committato");
+  // SEC-10 (preservato): con il legittimo (a2) CONNESSO e i due posti VIVI, il
+  // vecchio token committato non combacia più e non esiste alcun posto
+  // disconnesso da reclamare (open-table) → l'intruso è respinto, senza resume né
+  // stato. Il vettore di replay del vecchio token resta chiuso.
+  const intruder = new FakeSocket();
+  room.join(intruder.as(), oldToken, "Mallory");
+  assert.ok(!intruder.has("room_joined"), "nessun room_joined per il vecchio token committato");
+  assert.ok(!intruder.has("state"), "nessuno stato al vecchio token committato");
+  assert.ok(intruder.has("error"), "vecchio token committato: respinto");
 
-  // Il NUOVO token invece riconnette correttamente.
+  // Il NUOVO token invece riconnette correttamente dopo una disconnessione.
+  room.onDisconnect(a2.as());
   const a4 = new FakeSocket();
   room.join(a4.as(), newToken, "Alice");
   assert.equal(a4.roomJoined()?.resumed, true, "il nuovo token riconnette (resumed)");
@@ -150,11 +149,12 @@ test("NEW-1: un heartbeat valido sul nuovo socket 'committa' il token → il pre
   assert.equal(slot.prevToken, null, "prevToken azzerato dopo heartbeat (commit)");
   assert.equal(slot.prevTokenExpiry, null, "prevTokenExpiry azzerato dopo heartbeat (commit)");
 
-  // Vecchio token non riammette più.
-  room.onDisconnect(a2.as());
-  const a3 = new FakeSocket();
-  room.join(a3.as(), oldToken, "Alice");
-  assert.ok(!a3.has("room_joined"), "vecchio token committato: nessun resume dopo heartbeat");
+  // SEC-10 (preservato): con a2 CONNESSO e i due posti vivi, il vecchio token
+  // committato non riammette (nessun match, nessun posto disconnesso da reclamare).
+  const intruder = new FakeSocket();
+  room.join(intruder.as(), oldToken, "Mallory");
+  assert.ok(!intruder.has("room_joined"), "vecchio token committato: nessun resume dopo heartbeat");
+  assert.ok(!intruder.has("state"), "vecchio token committato: nessuno stato");
 
   (room as unknown as { dispose(): void }).dispose();
 });
@@ -173,19 +173,16 @@ test("SEC-10/NEW-1: senza alcun commit, il prevToken smette di essere accettato 
   const slot = slotsOf(room).find((p) => p.seat === activeSeat)!;
   assert.equal(slot.prevToken, oldToken, "prevToken impostato");
 
-  // a2 si disconnette SENZA aver committato (nessuna azione/heartbeat).
-  room.onDisconnect(a2.as());
-
-  // Oltre il TTL: il prevToken è scaduto → trattato come nuovo ingresso → room piena.
+  // a2 resta CONNESSO e non committa: si attende la scadenza del TTL del prevToken.
   await delay(90); // > 50ms TTL
   assert.ok(slot.prevTokenExpiry !== null && slot.prevTokenExpiry <= Date.now(), "TTL superato");
-  const a3 = new FakeSocket();
-  room.join(a3.as(), oldToken, "Alice");
-  assert.ok(
-    a3.sent.some((m) => m.type === "error" && /completo/i.test((m as { message: string }).message)),
-    "prevToken scaduto: room piena, nessun resume",
-  );
-  assert.ok(!a3.has("room_joined"), "nessun room_joined dopo scadenza TTL");
+
+  // SEC-10 (preservato): con a2 CONNESSO e prevToken scaduto, il vecchio token non
+  // combacia più e non c'è alcun posto disconnesso da reclamare → intruso respinto.
+  const intruder = new FakeSocket();
+  room.join(intruder.as(), oldToken, "Mallory");
+  assert.ok(!intruder.has("room_joined"), "prevToken scaduto: nessun resume col vecchio token");
+  assert.ok(!intruder.has("state"), "prevToken scaduto: nessuno stato");
 
   (room as unknown as { dispose(): void }).dispose();
 });

@@ -21,7 +21,7 @@ export const env = {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
-  reconnectGraceMs: Number(process.env.RECONNECT_GRACE_MS ?? 120_000),
+  reconnectGraceMs: Number(process.env.RECONNECT_GRACE_MS ?? 180_000),
   turnTimeoutMs: Number(process.env.TURN_TIMEOUT_MS ?? 90_000),
 };
 

@@ -177,23 +177,25 @@ test("SEC-10: dopo la riconnessione il token è RUOTATO; CONFERMATO il nuovo tok
   a2.send({ type: "heartbeat" });
   await delay(80);
 
-  // A2 cade; il VECCHIO token, ormai committato, non deve più consentire il rientro.
+  // SEC-10 (preservato): con A2 CONNESSO e i due posti VIVI, il vecchio token
+  // committato non combacia più e non esiste alcun posto disconnesso da reclamare
+  // (open-table). Un intruso col vecchio token è respinto: nessun resume, nessuno
+  // stato. Il vettore di replay del vecchio token resta chiuso.
+  const intruder = new Client(url); await intruder.open();
+  intruder.send({ type: "join_room", roomCode: room, playerToken: oldToken, displayName: "Mallory" });
+  const err = (await intruder.waitFor((m) => m.type === "error")) as Extract<ServerMessage, { type: "error" }>;
+  assert.match(err.message, /completo/i, "vecchio token committato: nessuna riconnessione");
+  assert.ok(!intruder.has("room_joined"), "vecchio token committato: nessun room_joined");
+  assert.ok(!intruder.has("state"), "vecchio token committato: nessuno stato");
+
+  // Il NUOVO token invece riconnette correttamente dopo una disconnessione.
   a2.close();
   await delay(80);
-  const a3 = new Client(url); await a3.open();
-  a3.send({ type: "join_room", roomCode: room, playerToken: oldToken, displayName: "Alice" });
-  // Vecchio token committato -> trattato come nuovo ingresso -> room piena.
-  const err = (await a3.waitFor((m) => m.type === "error")) as Extract<ServerMessage, { type: "error" }>;
-  assert.match(err.message, /completo/i, "vecchio token committato: nessuna riconnessione");
-  assert.ok(!a3.has("room_joined") || (a3.msgs.find((m) => m.type === "room_joined") as { resumed?: boolean } | undefined)?.resumed !== true,
-    "vecchio token non produce un resume");
-
-  // Il NUOVO token invece riconnette correttamente.
   const a4 = new Client(url); await a4.open();
   a4.send({ type: "join_room", roomCode: room, playerToken: newToken, displayName: "Alice" });
   const rj2 = (await a4.waitFor((m) => m.type === "room_joined")) as Extract<ServerMessage, { type: "room_joined" }>;
   assert.equal(rj2.resumed, true, "il nuovo token riconnette");
-  a3.close(); a4.close(); b.close();
+  intruder.close(); a4.close(); b.close();
 });
 
 /* ─────────────────────────── NEW-1: GRAZIA TOKEN ALLA RICONNESSIONE ─────────────────────────── */

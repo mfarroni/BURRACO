@@ -25,6 +25,14 @@ interface PlayerSlot {
   token: string; // token corrente (in chiaro solo in RAM)
   tokenHash: string;
   /**
+   * LIFECYCLE: identità di sessione STABILE per-browser (non per-room), fornita
+   * dal client in `join_room` (localStorage). Consente il RECLAIM di un posto
+   * DISCONNESSO quando il token di room è andato perso/ruotato+scaduto. È SOLO
+   * un aggancio di riconnessione: non concede MAI l'accesso a un posto VIVO
+   * (SEC-04), il reclaim via clientId vale esclusivamente per posti disconnessi.
+   */
+  clientId?: string;
+  /**
    * NEW-1: token PRECEDENTE ancora accettato durante la transizione di
    * riconnessione. Alla riconnessione ruotiamo il token, ma teniamo valido
    * ANCHE quello appena presentato dal client finché il client non conferma il
@@ -129,28 +137,35 @@ export class Room {
     }));
   }
 
+  /** Un posto è "vivo" se ha uno stato connesso E un socket effettivamente aperto. */
+  private isSeatLive(p: PlayerSlot): boolean {
+    return p.status === "connected" && p.ws !== null && p.ws.readyState === WebSocket.OPEN;
+  }
+
   /**
-   * Ingresso o riconnessione. Se il token corrisponde a un giocatore esistente
-   * → rebind del socket e invio dello stato corrente (riconnessione). Altrimenti
-   * assegna un nuovo seat, se disponibile.
+   * Ingresso, riconnessione o RECLAIM del posto. Ordine di risoluzione:
+   *  (1) token valido (corrente o precedente entro TTL) → riconnessione;
+   *  (2) clientId che combacia con un posto DISCONNESSO → reclaim (token perso);
+   *  (3) posto libero → nuovo seat;
+   *  (4) room piena ma con un posto DISCONNESSO non associabile a un posto vivo
+   *      → reclaim del posto disconnesso (fallback open-table);
+   *  (5) room realmente al completo (due posti vivi) → rifiuto.
+   * Il reclaim (2)/(4) vale SOLO per posti disconnessi: un posto VIVO non è mai
+   * reclamabile né via token né via clientId (SEC-04). Mai più di 2 slot.
    */
-  join(ws: WebSocket, token: string | undefined, displayName: string): void {
+  join(ws: WebSocket, token: string | undefined, displayName: string, clientId?: string): void {
     if (this.disposed) {
       send(ws, { type: "error", message: "La partita è conclusa." });
       return;
     }
 
-    // Riconnessione per token. Il token è accettato se coincide con quello
-    // CORRENTE oppure con il PRECEDENTE ancora entro il TTL (NEW-1).
+    // (1) Riconnessione per token (corrente o precedente entro TTL, NEW-1).
     if (token) {
       const existing = this.players.find((p) => this.tokenMatches(p, token));
       if (existing) {
-        // SEC-04: takeover di sessione ATTIVA vietato. Si rebinda SOLO se lo
-        // slot è disconnesso; se il socket è ancora vivo, si rifiuta il secondo
-        // ingresso e NON si tocca la connessione legittima. Il controllo vale
-        // anche per il token PRECEDENTE: finché il legittimo è connesso, nessun
-        // token (corrente o precedente) dà accesso.
-        if (existing.status === "connected" && existing.ws && existing.ws.readyState === WebSocket.OPEN) {
+        // SEC-04: takeover di sessione ATTIVA vietato. Vale anche per il token
+        // PRECEDENTE: finché il legittimo è connesso, nessun token dà accesso.
+        if (this.isSeatLive(existing)) {
           send(ws, { type: "error", message: "Sessione già attiva su un'altra connessione." });
           try {
             ws.close(1008, "Sessione già attiva.");
@@ -159,47 +174,46 @@ export class Room {
           }
           return;
         }
-
-        // Riconnessione legittima (slot disconnesso): rebind + rotazione token.
-        if (existing.graceTimer) {
-          clearTimeout(existing.graceTimer);
-          existing.graceTimer = null;
-        }
-        existing.ws = ws;
-        existing.status = "connected";
-        // SEC-10 + NEW-1: ruota il token a ogni riconnessione, MA tieni valido
-        // ANCORA il token appena presentato (come `prevToken`) entro un breve
-        // TTL. Così, se `room_joined{yourToken}` va perso e il client riprova
-        // con il token vecchio, viene comunque riconosciuto e riammesso. Il
-        // token vecchio muore alla PRIMA azione valida sul nuovo socket
-        // (commit, vedi onMessage) o allo scadere del TTL: non resta
-        // rigiocabile a lungo (SEC-10 sostanzialmente preservato).
-        const rotated = randomUUID();
-        existing.prevToken = token; // il token appena presentato dal client
-        existing.prevTokenExpiry = Date.now() + this.rotationTtlMs();
-        existing.token = rotated;
-        existing.tokenHash = sha256(rotated);
-        send(ws, {
-          type: "room_joined",
-          yourSeat: existing.seat,
-          yourToken: rotated,
-          players: this.publicPlayers(),
-          config: this.config,
-          resumed: true, // riconnessione a sessione esistente
-        });
-        this.notifyOpponent(existing.seat, { type: "opponent_reconnected", seat: existing.seat });
-        this.sendStateTo(existing);
+        // Riconnessione legittima (slot disconnesso): rebind + rotazione token,
+        // mantenendo valido il token presentato entro il TTL (NEW-1/SEC-10).
+        this.reconnectInto(existing, ws, token, displayName, clientId);
         return;
       }
-      // Token non riconosciuto (né corrente né precedente-entro-TTL): si prosegue
-      // come nuovo ingresso; se la room è piena verrà rifiutato sotto.
+      // Token non riconosciuto: si prova il reclaim per clientId, poi nuovo ingresso.
     }
 
-    if (this.isFull()) {
-      send(ws, { type: "error", message: "La room è al completo." });
+    // (2) RECLAIM di un posto DISCONNESSO tramite clientId (token perso/scaduto).
+    //     Mai su un posto VIVO (SEC-04): il filtro `!isSeatLive` lo garantisce.
+    if (clientId) {
+      const byClient = this.players.find(
+        (p) => p.clientId !== undefined && p.clientId === clientId && !this.isSeatLive(p),
+      );
+      if (byClient) {
+        this.reconnectInto(byClient, ws, null, displayName, clientId);
+        return;
+      }
+    }
+
+    // (3) Nuovo posto, se la room non è piena.
+    if (!this.isFull()) {
+      this.createSlot(ws, displayName, clientId);
       return;
     }
 
+    // (4) Fallback: room piena ma con un posto DISCONNESSO e join non associabile
+    //     ad alcun posto vivo → reclaim del posto disconnesso (mai di uno vivo).
+    const disconnected = this.players.find((p) => !this.isSeatLive(p));
+    if (disconnected) {
+      this.reconnectInto(disconnected, ws, null, displayName, clientId);
+      return;
+    }
+
+    // (5) Room realmente al completo (due posti vivi).
+    send(ws, { type: "error", message: "La room è al completo." });
+  }
+
+  /** Crea un nuovo slot per un ingresso ex-novo e prova ad avviare la partita. */
+  private createSlot(ws: WebSocket, displayName: string, clientId?: string): void {
     const seat = this.players.length as Seat;
     const newToken = randomUUID();
     const slot: PlayerSlot = {
@@ -209,6 +223,7 @@ export class Room {
       tokenHash: sha256(newToken),
       prevToken: null,
       prevTokenExpiry: null,
+      clientId,
       ws,
       status: "connected",
       graceTimer: null,
@@ -223,25 +238,78 @@ export class Room {
       config: this.config,
       resumed: false, // primo ingresso
     });
+    this.maybeStartMatch();
+  }
 
-    // A7: nessun room_joined ridondante. Il giocatore appena entrato ha già il
-    // suo. Quando la room si completa, aggiorniamo il roster del PRIMO giocatore
-    // (una sola volta) e avviamo la partita. In attesa dell'avversario, invece,
-    // non c'è nessun altro da aggiornare: niente broadcast superfluo.
-    if (this.players.length === 2 && !this.engine) {
-      const first = this.players.find((p) => p.seat !== seat);
-      if (first) {
-        send(first.ws, {
-          type: "room_joined",
-          yourSeat: first.seat,
-          yourToken: first.token, // token invariato: non è una riconnessione
-          players: this.publicPlayers(),
-          config: this.config,
-          resumed: false,
-        });
-      }
-      this.startMatch();
+  /**
+   * Riconnessione/reclaim in uno slot esistente DISCONNESSO. Rebinda il socket,
+   * ruota il token (SEC-10) e, se il token presentato è noto, lo mantiene valido
+   * entro il TTL (NEW-1: no lockout se `room_joined` va perso). Per un reclaim
+   * via clientId/fallback (`presentedToken === null`) non c'è un token precedente
+   * da preservare. Invia lo stato corrente e prova ad avviare la partita (utile
+   * quando il match non è ancora partito e questa riconnessione completa la coppia).
+   */
+  private reconnectInto(
+    slot: PlayerSlot,
+    ws: WebSocket,
+    presentedToken: string | null,
+    _displayName: string,
+    clientId?: string,
+  ): void {
+    if (slot.graceTimer) {
+      clearTimeout(slot.graceTimer);
+      slot.graceTimer = null;
     }
+    slot.ws = ws;
+    slot.status = "connected";
+    // (Ri)aggancia l'identità per-browser, così i reclaim futuri restano possibili.
+    if (clientId) slot.clientId = clientId;
+
+    const rotated = randomUUID();
+    slot.token = rotated;
+    slot.tokenHash = sha256(rotated);
+    if (presentedToken) {
+      slot.prevToken = presentedToken;
+      slot.prevTokenExpiry = Date.now() + this.rotationTtlMs();
+    } else {
+      slot.prevToken = null;
+      slot.prevTokenExpiry = null;
+    }
+
+    send(ws, {
+      type: "room_joined",
+      yourSeat: slot.seat,
+      yourToken: rotated,
+      players: this.publicPlayers(),
+      config: this.config,
+      resumed: true, // riconnessione/reclaim di una sessione esistente
+    });
+    this.notifyOpponent(slot.seat, { type: "opponent_reconnected", seat: slot.seat });
+    this.sendStateTo(slot); // no-op se il match non è ancora avviato
+    this.maybeStartMatch();
+  }
+
+  /**
+   * Avvia la partita SOLO quando entrambi i seat hanno un socket VIVO. Invia il
+   * roster aggiornato ai SOCKET CORRENTI dei due seat (mai a un `ws` morto: era
+   * la causa del "non parte per nessuno"). Se un seat è disconnesso, si resta in
+   * attesa/riconnessione senza avviare partite fantasma.
+   */
+  private maybeStartMatch(): void {
+    if (this.engine) return;
+    if (this.players.length !== 2) return;
+    if (!this.players.every((p) => this.isSeatLive(p))) return;
+    for (const p of this.players) {
+      send(p.ws, {
+        type: "room_joined",
+        yourSeat: p.seat,
+        yourToken: p.token, // token corrente (invariato): non è una riconnessione
+        players: this.publicPlayers(),
+        config: this.config,
+        resumed: false,
+      });
+    }
+    this.startMatch();
   }
 
   private startMatch(): void {
@@ -257,8 +325,8 @@ export class Room {
     );
     void persistence.startHand(this.matchId, this.handId, this.engine.handNumber, this.engine.dealerSeat);
 
-    // A7: il roster è già stato inviato in `join`. Qui basta lo stato iniziale
-    // (che riarma anche il turn timer) e l'evento di turno.
+    // Il roster è già stato inviato ai due socket vivi da `maybeStartMatch`. Qui
+    // basta lo stato iniziale (che riarma anche il turn timer) e l'evento di turno.
     this.broadcastState();
     this.emitTurnChanged();
   }
@@ -270,11 +338,23 @@ export class Room {
       send(ws, { type: "error", message: "Socket non associato a un giocatore." });
       return;
     }
+    if (this.disposed) {
+      send(ws, { type: "error", message: "La partita è conclusa." });
+      return;
+    }
     // NEW-1: qualunque messaggio valido su questo socket conferma la ricezione
     // del token corrente (incluso l'heartbeat periodico del client) → scarta il
     // token precedente. Chiude la finestra di replay del vecchio token (SEC-10).
     this.commitToken(slot);
     if (msg.type === "heartbeat") return; // liveness gestita a livello ws
+
+    // LIFECYCLE: smontaggio esplicito del tavolo. Consentito quando il richiedente
+    // è in ATTESA (nessun avversario) oppure l'avversario è DISCONNESSO; mai con
+    // l'avversario connesso e attivo (in quel caso viene rifiutato in modo leggibile).
+    if (msg.type === "reset_room") {
+      this.handleReset(slot);
+      return;
+    }
 
     if (!this.engine) {
       send(ws, { type: "move_rejected", code: "GAME_NOT_ACTIVE", reason: "In attesa dell'avversario." });
@@ -388,44 +468,56 @@ export class Room {
     slot.status = "disconnected";
     this.notifyOpponent(slot.seat, { type: "opponent_disconnected", seat: slot.seat });
 
-    // SEC-05: alla SCADENZA della grazia, il disconnesso abbandona.
+    // LIFECYCLE: alla SCADENZA della grazia (default 180s) il disconnesso non
+    // rientra più. Decisione di prodotto (sostituisce il forfeit-win di SEC-05):
+    // la partita è ANNULLATA per abbandono, senza vincitore.
     if (slot.graceTimer) clearTimeout(slot.graceTimer);
     slot.graceTimer = setTimeout(() => {
       slot.graceTimer = null;
       if (this.disposed) return;
-      // Riconnesso nel frattempo? Nessun forfeit.
+      // Riconnesso nel frattempo? Nessuna chiusura.
       if (slot.status === "connected") return;
-      // Entrambi disconnessi → room abbandonata: GC senza vincitore.
+      // Entrambi disconnessi → room abbandonata: GC silenzioso senza messaggi.
       if (this.isEmpty()) {
         this.dispose();
         return;
       }
-      // Avversario ancora presente → FORFEIT del disconnesso.
-      this.forfeit(slot.seat);
+      // Avversario ancora presente → partita ANNULLATA per abbandono (no winner).
+      this.closeRoom("abandoned");
     }, this.reconnectGraceMs());
     slot.graceTimer.unref?.();
   }
 
   /**
-   * SEC-05: forfeit del giocatore disconnesso. In 2 giocatori l'avversario
-   * connesso è dichiarato vincitore con motivazione di abbandono. Poi GC.
+   * LIFECYCLE: smonta il tavolo con un esito TERMINALE senza vincitore, distinto
+   * da `game_ended`. "interrupted" = reset esplicito del richiedente; "abandoned"
+   * = avversario non rientrato entro la grazia. Notifica i soli socket vivi e GC.
    */
-  private forfeit(disconnectedSeat: Seat): void {
+  private closeRoom(reason: "interrupted" | "abandoned"): void {
     if (this.disposed) return;
-    const opp = this.players.find((p) => p.seat !== disconnectedSeat);
-    if (this.engine && this.engine.status === "playing" && opp && opp.status === "connected") {
-      this.engine.status = "game_ended";
-      this.engine.winnerSeat = opp.seat;
-      this.engine.turnEndsAt = null;
-      const finalScores: [number, number] = [this.engine.cumulative[0], this.engine.cumulative[1]];
-      this.broadcast({ type: "game_ended", winnerSeat: opp.seat, finalScores, reason: "forfeit" });
-      void persistence.endMatch(this.matchId, opp.seat);
-    }
+    this.broadcast({ type: "room_closed", reason });
     this.dispose();
   }
 
+  /**
+   * LIFECYCLE: gestione di `reset_room`. Consentito solo se non c'è avversario
+   * oppure l'avversario è disconnesso; con l'avversario VIVO viene rifiutato in
+   * modo leggibile (nessuno smontaggio unilaterale di una partita in corso).
+   */
+  private handleReset(slot: PlayerSlot): void {
+    const opp = this.players.find((p) => p.seat !== slot.seat);
+    if (opp && this.isSeatLive(opp)) {
+      send(slot.ws, {
+        type: "error",
+        message: "Non puoi chiudere il tavolo mentre l'avversario è connesso.",
+      });
+      return;
+    }
+    this.closeRoom("interrupted");
+  }
+
   private reconnectGraceMs(): number {
-    return Number(process.env.RECONNECT_GRACE_MS ?? 120_000);
+    return Number(process.env.RECONNECT_GRACE_MS ?? 180_000);
   }
 
   isEmpty(): boolean {
