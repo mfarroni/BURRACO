@@ -43,7 +43,10 @@ come specifica futura.
   (IMPLEMENTATO: solo "italiano"; gli altri sono documentati piu' sotto)
 - punteggio_obiettivo: 505 | 1005 | 2005 (scelto a inizio partita; default 2005)
 - variante_chiusura: "italiana" | "internazionale"
-- limite_calate_prima_del_pozzetto: numero | nessun_limite (default: nessun_limite)
+- limite_calate_prima_del_pozzetto: nessun_limite (default) | numero
+  (Nel Burraco base NON esiste un tetto al numero di giochi calabili prima di
+  prendere il pozzetto: si cala liberamente per svuotare la mano e andare a
+  pozzetto. Un tetto numerico e' una house-rule NON standard, disattivata di default.)
 - presa_pozzetto: "in_diretta_e_differita" | "solo_differita" (default: entrambe)
 
 ## Materiali
