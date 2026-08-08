@@ -394,6 +394,9 @@ export class Room {
       case "discard":
         result = this.engine.discardCard(seat, msg.card);
         break;
+      case "undo_last":
+        result = this.engine.undoLast(seat);
+        break;
       default:
         send(ws, { type: "move_rejected", code: "GAME_NOT_ACTIVE", reason: "Messaggio non gestito." });
         return;

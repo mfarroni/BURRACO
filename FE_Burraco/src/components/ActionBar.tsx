@@ -22,6 +22,7 @@ interface Props {
   onMeldExtend: () => void;
   onPinellaSubstitute: () => void;
   onDiscard: () => void;
+  onUndo: () => void;
 }
 
 export function ActionBar(p: Props) {
@@ -61,6 +62,17 @@ export function ActionBar(p: Props) {
 
       <button type="button" disabled={locked || !mayMeld || nSel < 3} onClick={p.onMeldNew}>
         Cala gioco
+      </button>
+      {/* Abilitazione BANALE (non è validazione di regole): il server è l'unico
+          a decidere. `canUndo` è un flag PRESENTAZIONALE del server (true solo
+          con almeno una calata annullabile). Stile PLACEHOLDER: rifinitura in
+          co-design con ui_ux. */}
+      <button
+        type="button"
+        disabled={locked || !mayMeld || !p.state.canUndo}
+        onClick={p.onUndo}
+      >
+        Annulla ultima mossa
       </button>
       <button
         type="button"

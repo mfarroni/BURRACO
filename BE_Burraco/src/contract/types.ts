@@ -125,6 +125,13 @@ export interface GameStatePublic {
   phase: Phase;
   /** Ho già preso il mio pozzetto? */
   yourPozzettoTaken: boolean;
+  /**
+   * Presentazionale: true solo quando questo destinatario è di mano, in fase
+   * may_meld, con almeno una calata annullabile impilata nel turno corrente. Il
+   * client lo usa per abilitare il pulsante "Annulla ultima mossa". Non divulga
+   * stato nascosto (solo disponibilità dell'azione), coerente con l'anti-leak.
+   */
+  canUndo: boolean;
   /** Il mio seat (comodità per il client). */
   yourSeat: Seat;
   /** Punteggi cumulativi di partita [seat0, seat1]. */
@@ -164,6 +171,9 @@ export type ClientMessage =
   | { type: "meld_extend"; meldId: string; cards: string[]; clientMoveId?: string }
   | { type: "pinella_substitute"; meldId: string; cardInHand: string; clientMoveId?: string }
   | { type: "discard"; card: string; clientMoveId?: string }
+  // ANNULLA l'ultima calata annullabile del proprio turno (nessun payload oltre
+  // al correlation id opzionale). Il server valida turno/fase e stack.
+  | { type: "undo_last"; clientMoveId?: string }
   // LIFECYCLE: smontaggio esplicito del tavolo (nessun payload; room dedotta dal
   // socket). Consentito solo in attesa o con avversario disconnesso.
   | { type: "reset_room" }
@@ -184,6 +194,7 @@ export type RejectCode =
   | "CANNOT_CLOSE_NO_BURRACO"
   | "ILLEGAL_LAST_DISCARD"
   | "NO_PINELLA_TO_SUBSTITUTE"
+  | "NOTHING_TO_UNDO"
   | "GAME_NOT_ACTIVE"
   | "MALFORMED";
 

@@ -32,6 +32,7 @@ export interface RejectResult {
     | "CANNOT_CLOSE_NO_BURRACO"
     | "ILLEGAL_LAST_DISCARD"
     | "NO_PINELLA_TO_SUBSTITUTE"
+    | "NOTHING_TO_UNDO"
     | "GAME_NOT_ACTIVE";
   reason: string;
 }
@@ -55,6 +56,27 @@ export type MoveResult = OkResult | RejectResult;
 interface SeatState {
   hand: Card[];
   pozzettoTaken: boolean;
+}
+
+/**
+ * Snapshot dello stato REVOCABILE di una singola calata nel turno del giocatore
+ * attivo. Serve al giornale di undo (`undoStack`): prima di committare una delle
+ * tre azioni annullabili (meldNew/meldExtend/pinellaSubstitute) si impila lo
+ * stato pre-mutazione, così `undoLast` può ripristinarlo esattamente.
+ *
+ * Le `Card` sono valori immutabili: una copia superficiale degli array basta.
+ * Per `melds` la shallow-copy dell'array preserva i riferimenti agli oggetti
+ * Meld (meldNew fa push; extend/pinella REPLACE creando NUOVI oggetti Meld →
+ * ripristinare l'array riporta i riferimenti precedenti). `pozzetti` è copiato
+ * a due livelli per sicurezza. `phase` è sempre "may_meld" qui, ma lo si salva
+ * e ripristina per coerenza.
+ */
+interface TurnUndoSnapshot {
+  hand: Card[];
+  pozzettoTaken: boolean;
+  melds: Meld[];
+  pozzetti: Card[][];
+  phase: Phase;
 }
 
 const reject = (code: RejectResult["code"], reason: string): RejectResult => ({
@@ -94,6 +116,15 @@ export class GameEngine {
   lastHandScores: HandScoreDetail[] = [];
   winnerSeat: Seat | null = null;
 
+  /**
+   * GIORNALE DI UNDO del turno corrente (in RAM). Pila di snapshot pre-mutazione
+   * delle SOLE azioni annullabili (calate/agganci/sostituzione pinella). Cresce
+   * al più quanto il numero di calate del turno; viene AZZERATO all'ingresso in
+   * may_meld dopo la pesca, a fine turno/mano, a inizio smazzata e al confine col
+   * pozzetto (presa in diretta). La pesca e lo scarto NON sono annullabili.
+   */
+  private undoStack: TurnUndoSnapshot[] = [];
+
   constructor(config: GameConfig, firstDealer: Seat) {
     this.config = config;
     this.dealerSeat = firstDealer;
@@ -117,6 +148,7 @@ export class GameEngine {
     this.phase = "must_draw";
     this.status = "playing";
     this.handNumber += 1;
+    this.undoStack = []; // nuova smazzata: giornale di undo vuoto
     this.startTurnClock();
   }
 
@@ -157,6 +189,10 @@ export class GameEngine {
     }
 
     this.phase = "may_meld";
+    // Ingresso in may_meld dopo la pesca: il giornale di undo riparte VUOTO.
+    // L'undo può quindi tornare a ritroso al più fino a questo stato post-pesca
+    // (la pesca stessa non è annullabile).
+    this.undoStack = [];
     return { ok: true, effects: [{ kind: "turn_changed", seat, phase: this.phase }] };
   }
 
@@ -188,7 +224,8 @@ export class GameEngine {
     const guardEmpty = this.guardHandNotEmptied(seat, handAfter);
     if (guardEmpty) return guardEmpty;
 
-    // Commit
+    // Commit (da qui in poi nessun rifiuto): impila lo snapshot annullabile.
+    this.pushUndoSnapshot(seat);
     this.removeFromHand(seat, cardIds);
     const newMeld = this.buildMeld(interp, seat);
     this.melds.push(newMeld);
@@ -220,8 +257,9 @@ export class GameEngine {
     const guardEmpty = this.guardHandNotEmptied(seat, handAfter);
     if (guardEmpty) return guardEmpty;
 
-    // Commit
+    // Commit (da qui in poi nessun rifiuto): impila lo snapshot annullabile.
     const wasBurraco = meld.isBurraco;
+    this.pushUndoSnapshot(seat);
     this.removeFromHand(seat, cardIds);
     const rebuilt = this.buildMeld(interp, seat, meld.id);
     this.replaceMeld(meld.id, rebuilt);
@@ -261,7 +299,9 @@ export class GameEngine {
       const after = interpretMeld(rebuilt);
       if (after && after.wildCount === before.wildCount - 1) {
         // Commit: la carta esce dalla mano, la pinella rientra in mano.
+        // La mano non si svuota (scambio 1:1) → nessun confine col pozzetto qui.
         const pinellaCard = meld.cards.find((c) => c.id === p.cardId)!;
+        this.pushUndoSnapshot(seat);
         this.removeFromHand(seat, [card.id]);
         this.seats[seat].hand.push(pinellaCard);
         this.replaceMeld(meld.id, this.buildMeld(after, seat, meld.id));
@@ -318,7 +358,65 @@ export class GameEngine {
     return this.endTurn();
   }
 
+  /**
+   * ANNULLA l'ultima calata annullabile del PROPRIO turno (meldNew/meldExtend/
+   * pinellaSubstitute). Server-autoritativo: protetto dal guard di turno/fase
+   * (solo proprio turno, solo may_meld, solo partita in corso) → l'avversario non
+   * annulla mai mosse altrui e, dopo lo scarto (fase non più may_meld), l'undo è
+   * impossibile. Se il giornale è vuoto → NOTHING_TO_UNDO. Altrimenti fa POP e
+   * ripristina ESATTAMENTE lo stato dello snapshot (nuovi riferimenti), senza
+   * cambiare turno né riarmare il turn clock (`turnEndsAt` resta invariato:
+   * anti-stallo — la deadline copre l'intero turno). Ripetibile a ritroso fino
+   * allo stato subito dopo la pesca.
+   */
+  undoLast(seat: Seat): MoveResult {
+    const g = this.guardTurn(seat, "may_meld");
+    if (g) return g;
+
+    const snap = this.undoStack.pop();
+    if (!snap)
+      return reject("NOTHING_TO_UNDO", "Non c'è nessuna calata da annullare in questo turno.");
+
+    // Ripristino: assegna NUOVI riferimenti (le Card sono valori immutabili).
+    // Solo il seat attivo è toccato dalle azioni annullabili; l'avversario no.
+    this.seats[seat] = { hand: snap.hand.slice(), pozzettoTaken: snap.pozzettoTaken };
+    this.melds = snap.melds.slice();
+    this.pozzetti = snap.pozzetti.map((p) => p.slice());
+    this.phase = snap.phase;
+    // Nessun turn_changed (stesso turno, stessa fase) e nessun startTurnClock.
+    return { ok: true, effects: [] };
+  }
+
   /* ─────────────────────────── helper interni ─────────────────────────── */
+
+  /**
+   * Impila lo stato REVOCABILE del turno del seat attivo PRIMA di committare una
+   * calata annullabile. Copie superficiali sufficienti (Card immutabili; la
+   * shallow-copy di `melds` preserva i riferimenti agli oggetti Meld precedenti).
+   */
+  private pushUndoSnapshot(seat: Seat): void {
+    this.undoStack.push({
+      hand: this.seats[seat].hand.slice(),
+      pozzettoTaken: this.seats[seat].pozzettoTaken,
+      melds: this.melds.slice(),
+      pozzetti: this.pozzetti.map((p) => p.slice()),
+      phase: this.phase,
+    });
+  }
+
+  /**
+   * Presentazionale (redact): true solo quando il seat è quello di mano, in fase
+   * may_meld, a partita in corso e con almeno una calata annullabile impilata.
+   * Non divulga stato nascosto: espone solo la disponibilità dell'azione.
+   */
+  canUndo(seat: Seat): boolean {
+    return (
+      this.status === "playing" &&
+      seat === this.currentSeat &&
+      this.phase === "may_meld" &&
+      this.undoStack.length > 0
+    );
+  }
 
   private guardTurn(seat: Seat, phase: Phase): RejectResult | null {
     if (this.status !== "playing")
@@ -353,6 +451,11 @@ export class GameEngine {
     if (handAfter === 0 && !this.seats[seat].pozzettoTaken && this.pozzetti.length > 0) {
       // Pozzetto IN DIRETTA: prende subito il pozzetto e continua lo stesso turno.
       this.takePozzetto(seat);
+      // CONFINE COL POZZETTO: l'undo NON attraversa la presa. La calata che ha
+      // preso il pozzetto e tutte le calate precedenti del turno diventano NON
+      // annullabili; le mosse successive ricostruiscono un nuovo giornale dallo
+      // stato post-pozzetto.
+      this.undoStack = [];
       return [{ kind: "pozzetto_taken", seat }];
     }
     return [];
@@ -376,6 +479,7 @@ export class GameEngine {
   private endTurn(): OkResult {
     this.currentSeat = (1 - this.currentSeat) as Seat;
     this.phase = "must_draw";
+    this.undoStack = []; // fine turno: nulla è più annullabile
     this.startTurnClock(); // nuova deadline per il giocatore entrante
     // Nota (A4 rivista): l'esaurimento del mazzo NON termina qui la smazzata. Il
     // nuovo giocatore può pescare dallo scarto; la fine per esaurimento è decisa
@@ -395,6 +499,7 @@ export class GameEngine {
     const scores = scoreHand(seatStates, this.melds, closerSeat);
     this.lastHandScores = scores;
     this.turnEndsAt = null; // mano conclusa: nessun turno attivo
+    this.undoStack = []; // mano conclusa: nulla è più annullabile
 
     for (const sc of scores) this.cumulative[sc.seat] += sc.totalDelta;
 

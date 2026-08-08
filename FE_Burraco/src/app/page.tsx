@@ -292,6 +292,7 @@ export default function Page() {
           selectedMeldId && selectedCards[0] && g.pinellaSubstitute(selectedMeldId, selectedCards[0])
         }
         onDiscard={() => selectedCards[0] && g.discard(selectedCards[0])}
+        onUndo={g.undoLast}
       />
     </div>
   );

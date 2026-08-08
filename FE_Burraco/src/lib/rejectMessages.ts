@@ -27,10 +27,17 @@ export const REJECT_MESSAGES: Record<RejectCode, string> = {
   MELD_NOT_FOUND: "Il gioco selezionato non esiste più.",
   NOT_MELD_OWNER: "Puoi ampliare solo i tuoi giochi.",
   MELD_LIMIT_REACHED: "Hai raggiunto il limite di calate prima del pozzetto.",
-  MUST_KEEP_CARD_TO_DISCARD: "Devi tenere una carta da scartare per chiudere il turno.",
-  CANNOT_CLOSE_NO_BURRACO: "Per chiudere ti serve almeno un burraco.",
-  ILLEGAL_LAST_DISCARD: "L'ultima carta scartata non può essere una matta.",
+  // I tre rifiuti seguenti sono spesso SBLOCCABILI annullando l'ultima calata del
+  // turno: il testo menziona l'alternativa "Annulla ultima mossa". COPY PLACEHOLDER
+  // FUNZIONALE — la formulazione DEFINITIVA è co-design con ui_ux.
+  MUST_KEEP_CARD_TO_DISCARD:
+    "Devi tenere una carta da scartare per chiudere il turno: annulla l'ultima mossa per liberarne una.",
+  CANNOT_CLOSE_NO_BURRACO:
+    "Per chiudere ti serve almeno un burraco: puoi annullare l'ultima mossa e giocare diversamente.",
+  ILLEGAL_LAST_DISCARD:
+    "L'ultima carta scartata non può essere una matta: annulla l'ultima mossa per tenerne un'altra da scartare.",
   NO_PINELLA_TO_SUBSTITUTE: "In quel gioco non c'è una pinella da sostituire con questa carta.",
+  NOTHING_TO_UNDO: "Non c'è nessuna mossa da annullare in questo turno.",
   GAME_NOT_ACTIVE: "La partita non è in corso in questo momento.",
   MALFORMED: "Qualcosa non ha funzionato: riprova.",
 };

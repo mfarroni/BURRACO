@@ -73,6 +73,12 @@ const discard = z.object({
   clientMoveId,
 });
 
+// ANNULLA l'ultima calata annullabile: nessun payload oltre al correlation id.
+const undoLast = z.object({
+  type: z.literal("undo_last"),
+  clientMoveId,
+});
+
 const heartbeat = z.object({ type: z.literal("heartbeat") });
 
 const clientMessageSchema = z.discriminatedUnion("type", [
@@ -82,6 +88,7 @@ const clientMessageSchema = z.discriminatedUnion("type", [
   meldExtend,
   pinellaSubstitute,
   discard,
+  undoLast,
   resetRoom,
   heartbeat,
 ]);
