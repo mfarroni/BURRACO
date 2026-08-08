@@ -21,6 +21,8 @@ import {
   OpponentStatus,
   TurnBanner,
 } from "@/components/StateBanners";
+import { RulesOverlay } from "@/components/RulesOverlay";
+
 
 export default function Page() {
   const g = useGameSocket();
@@ -28,6 +30,8 @@ export default function Page() {
   // Form della lobby.
   const [roomCode, setRoomCode] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [showRules, setShowRules] = useState(false);
+
 
   // Stato di SELEZIONE locale (nessuna regola: solo UI).
   const [selectedCards, setSelectedCards] = useState<string[]>([]);
@@ -89,6 +93,14 @@ export default function Page() {
         >
           {g.connPhase === "connecting" || g.connPhase === "reconnecting" ? "Connessione…" : "Siediti al tavolo"}
         </button>
+        <button
+          type="button"
+          className="btn-rules-lobby"
+          onClick={() => setShowRules(true)}
+          aria-label="Visualizza regole del gioco"
+        >
+          Visualizza Regolamento
+        </button>
         {(g.connPhase === "connecting" || g.connPhase === "reconnecting") && (
           <p className="muted" role="status" style={{ marginTop: "var(--sp-3)" }}>
             Apertura del tavolo in corso…
@@ -99,7 +111,9 @@ export default function Page() {
             {g.errorMessage}
           </p>
         )}
+        {showRules && <RulesOverlay config={null} onClose={() => setShowRules(false)} />}
       </div>
+
     );
   }
 
@@ -128,10 +142,19 @@ export default function Page() {
         </p>
         <ConnectionBanner connPhase={g.connPhase} resumed={g.resumed} />
         {/* Reset consentito in attesa: nessun avversario da penalizzare. */}
-        <div style={{ display: "flex", justifyContent: "center", marginTop: "var(--sp-4)" }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: "var(--sp-3)", marginTop: "var(--sp-4)" }}>
+          <button
+            type="button"
+            className="btn-rules-lobby"
+            onClick={() => setShowRules(true)}
+          >
+            Regolamento
+          </button>
           <ResetTableButton onReset={g.resetRoom} context="waiting" />
         </div>
+        {showRules && <RulesOverlay config={g.config} onClose={() => setShowRules(false)} />}
       </div>
+
     );
   }
 
@@ -158,6 +181,8 @@ export default function Page() {
       <HandEndedOverlay info={g.handEnded} players={g.players} yourSeat={g.yourSeat} />
       <GameEndedOverlay info={g.gameEnded} players={g.players} yourSeat={g.yourSeat} config={g.config} />
       <RoomClosedOverlay info={g.roomClosed} onLeave={() => window.location.reload()} />
+      {showRules && <RulesOverlay config={g.config} onClose={() => setShowRules(false)} />}
+
 
       {/* Avversario offline: rientro in corso entro la finestra di grazia; nel
           frattempo è possibile terminare il tavolo (annulla la partita). */}
@@ -184,7 +209,17 @@ export default function Page() {
           </span>
           {isMyTurn && turnEndsAt !== null && <Countdown turnEndsAt={turnEndsAt} />}
           <OpponentStatus name={opponentName} handCount={s.opponentHandCount} connected={opponentConnected} />
+          
+          <button
+            type="button"
+            className="btn-rules"
+            onClick={() => setShowRules(true)}
+            aria-label="Leggi regole del tavolo"
+          >
+            Regole
+          </button>
         </div>
+
         <div className="scoreboard">
           <div className="chip you">
             <span className="lbl">Tu</span>

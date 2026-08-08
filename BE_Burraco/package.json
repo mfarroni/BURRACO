@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/**/*.test.ts",
     "audit": "npm audit --omit=dev",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
