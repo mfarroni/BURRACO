@@ -31,6 +31,10 @@ export function redactFor(engine: GameEngine, viewer: Seat): GameStatePublic {
     turnEndsAt: engine.status === "playing" ? engine.turnEndsAt : null,
     phase: engine.phase,
     yourPozzettoTaken: engine.pozzettoTaken(viewer),
+    // Presentazionale: abilita il pulsante "Annulla ultima mossa" solo per il
+    // giocatore di mano in may_meld con almeno una calata annullabile. Non
+    // divulga stato nascosto (solo disponibilità dell'azione).
+    canUndo: engine.canUndo(viewer),
     scores: [engine.cumulative[0], engine.cumulative[1]],
     status: engine.status,
   };

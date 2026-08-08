@@ -22,6 +22,7 @@ interface Props {
   onMeldExtend: () => void;
   onPinellaSubstitute: () => void;
   onDiscard: () => void;
+  onUndo: () => void;
 }
 
 export function ActionBar(p: Props) {
@@ -59,6 +60,8 @@ export function ActionBar(p: Props) {
 
       <span className="sep" aria-hidden="true" />
 
+      {/* GRUPPO COSTRUTTIVO: calata / ampliamento / sostituzione — le azioni con
+          cui si "costruisce" sul tavolo. Stanno insieme per gestalt. */}
       <button type="button" disabled={locked || !mayMeld || nSel < 3} onClick={p.onMeldNew}>
         Cala gioco
       </button>
@@ -76,6 +79,30 @@ export function ActionBar(p: Props) {
       >
         Sostituisci pinella
       </button>
+
+      {/* AZIONE DI CORREZIONE (secondaria): annulla l'ultima calata del turno.
+          Trattamento ghost/muted per NON competere con l'oro/ambra delle azioni
+          primarie: è un "passo indietro", quindi visivamente umile e adiacente al
+          gruppo costruttivo che riavvolge. Abilitazione BANALE (non validazione di
+          regole): il server è l'unico a decidere. `canUndo` è un flag
+          PRESENTAZIONALE del server (true solo con almeno una mossa annullabile).
+          Il cablaggio resta invariato: il click invia `undo_last` via p.onUndo. */}
+      <button
+        type="button"
+        className="btn-undo"
+        disabled={locked || !mayMeld || !p.state.canUndo}
+        onClick={p.onUndo}
+        aria-label="Annulla l'ultima mossa del turno"
+        title="Annulla l'ultima mossa del turno"
+      >
+        <span className="undo-icon" aria-hidden="true">↶</span>
+        Annulla
+      </button>
+
+      <span className="sep" aria-hidden="true" />
+
+      {/* AZIONE TERMINALE della fase may_meld: scartare conclude il turno.
+          Isolata da un separatore e in ambra (.btn-discard) per segnalarne il peso. */}
       <button
         type="button"
         className={mayMeld ? "btn-discard" : ""}

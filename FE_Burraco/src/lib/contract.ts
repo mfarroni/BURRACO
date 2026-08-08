@@ -88,6 +88,12 @@ export interface GameStatePublic {
   turnEndsAt: number | null;
   phase: Phase;
   yourPozzettoTaken: boolean;
+  /**
+   * Presentazionale: true solo quando sono di mano, in fase may_meld, con almeno
+   * una calata annullabile impilata nel turno. Abilita il pulsante "Annulla
+   * ultima mossa". Non divulga stato nascosto (solo disponibilità dell'azione).
+   */
+  canUndo: boolean;
   yourSeat: Seat;
   scores: [number, number];
   status: "playing" | "hand_ended" | "game_ended";
@@ -116,6 +122,7 @@ export type RejectCode =
   | "CANNOT_CLOSE_NO_BURRACO"
   | "ILLEGAL_LAST_DISCARD"
   | "NO_PINELLA_TO_SUBSTITUTE"
+  | "NOTHING_TO_UNDO"
   | "GAME_NOT_ACTIVE"
   | "MALFORMED";
 
@@ -132,6 +139,8 @@ export type ClientMessage =
   | { type: "meld_extend"; meldId: string; cards: string[]; clientMoveId?: string }
   | { type: "pinella_substitute"; meldId: string; cardInHand: string; clientMoveId?: string }
   | { type: "discard"; card: string; clientMoveId?: string }
+  // ANNULLA l'ultima calata annullabile del proprio turno (solo correlation id).
+  | { type: "undo_last"; clientMoveId?: string }
   // Smontaggio esplicito del tavolo (in attesa o con avversario disconnesso).
   | { type: "reset_room" }
   | { type: "heartbeat" };

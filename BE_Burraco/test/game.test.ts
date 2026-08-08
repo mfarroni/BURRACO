@@ -395,7 +395,7 @@ test("redactFor: nessun leak della mano avversaria, pozzetti o mazzo", () => {
   const allowed = new Set([
     "yourHand", "tableMelds", "opponentHandCount", "discardTop", "discardCount",
     "drawPileCount", "pozzettiRemaining", "whoseTurn", "turnEndsAt", "phase",
-    "yourPozzettoTaken", "yourSeat", "scores", "status",
+    "yourPozzettoTaken", "canUndo", "yourSeat", "scores", "status",
   ]);
   for (const k of Object.keys(view0)) assert.ok(allowed.has(k), `chiave inattesa: ${k}`);
   // serializzazione JSON completa: nessun riferimento all'oggetto interno

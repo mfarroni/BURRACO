@@ -250,6 +250,30 @@ button:disabled {
   background: transparent;
   border-color: var(--border);
 }
+/* Pulsante "Annulla ultima mossa" — AZIONE DI CORREZIONE (secondaria).
+   Variante ghost/muted: fondo trasparente, testo attenuato, NESSUN oro/ambra,
+   così NON compete con l'azione primaria della fase (Pesca in must_draw, Scarta
+   in may_meld). Hover NEUTRO (non dorato): resta un "passo indietro" umile.
+   Disabilitato quando non c'è nulla da annullare -> opacità 0.4 ereditata da
+   `button:disabled`. Focus visibile ereditato da :focus-visible (ring d'ottone). */
+.btn-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-muted); /* su feltro: ~8.4:1 AAA */
+  font-weight: 500;
+}
+.btn-undo:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--text-faint);
+  color: var(--text-strong);
+}
+.btn-undo .undo-icon {
+  font-size: 1.15em;
+  line-height: 1;
+}
 /* Pulsante "termina/annulla tavolo" — AZIONE DISTRUTTIVA.
    Variante ghost (bordo/testo rosso su fondo trasparente): resta secondaria e
    NON compete con l'oro delle azioni primarie di gioco. La variante `.solid`
