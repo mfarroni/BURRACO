@@ -61,59 +61,89 @@ export default function Page() {
   /* ── Lobby / schermata d'ingresso ──────────────────────────────────── */
   if (!g.joined) {
     return (
-      <div className="lobby">
-        <div className="brand">
-          <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
-          <h1>Burraco</h1>
-          <p className="tagline">Il tavolo del circolo, uno contro uno.</p>
+      <div className="lobby-screen">
+        {/* Carte decorative ai quattro angoli (ventola) */}
+        <div className="corner-fan top-left" aria-hidden="true">
+          <div className="deco-card back rotate-1" />
+          <div className="deco-card front rotate-2">🂡</div>
+          <div className="deco-card front rotate-3">🂱</div>
         </div>
-        <label htmlFor="room">Codice tavolo</label>
-        <input
-          id="room"
-          value={roomCode}
-          onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-          placeholder="es. TAVOLO1"
-          maxLength={12}
-          autoComplete="off"
-        />
-        <label htmlFor="name">Il tuo nome</label>
-        <input
-          id="name"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="es. Marco"
-          maxLength={40}
-          autoComplete="off"
-        />
-        <button
-          type="button"
-          className="cta btn-primary"
-          disabled={!roomCode.trim() || g.connPhase === "connecting" || g.connPhase === "reconnecting"}
-          onClick={() => g.join(roomCode, displayName)}
-        >
-          {g.connPhase === "connecting" || g.connPhase === "reconnecting" ? "Connessione…" : "Siediti al tavolo"}
-        </button>
-        <button
-          type="button"
-          className="btn-rules-lobby"
-          onClick={() => setShowRules(true)}
-          aria-label="Visualizza regole del gioco"
-        >
-          Visualizza Regolamento
-        </button>
-        {(g.connPhase === "connecting" || g.connPhase === "reconnecting") && (
-          <p className="muted" role="status" style={{ marginTop: "var(--sp-3)" }}>
-            Apertura del tavolo in corso…
-          </p>
-        )}
-        {g.errorMessage && (
-          <p role="alert" style={{ color: "var(--danger-300)", marginTop: "var(--sp-3)" }}>
-            {g.errorMessage}
-          </p>
-        )}
-        {showRules && <RulesOverlay config={null} onClose={() => setShowRules(false)} />}
-      </div>
+        <div className="corner-fan top-right" aria-hidden="true">
+          <div className="deco-card back rotate-1" />
+          <div className="deco-card front rotate-2">🂮</div>
+          <div className="deco-card front rotate-3">🃎</div>
+        </div>
+        <div className="corner-fan bottom-left" aria-hidden="true">
+          <div className="deco-card back rotate-1" />
+          <div className="deco-card front rotate-2">🃁</div>
+          <div className="deco-card front rotate-3">🂱</div>
+        </div>
+        <div className="corner-fan bottom-right" aria-hidden="true">
+          <div className="deco-card back rotate-1" />
+          <div className="deco-card front rotate-2">🂺</div>
+          <div className="deco-card front rotate-3">🃚</div>
+        </div>
 
+        {/* Carte in dissolvenza che sbucano da sotto il pannello */}
+        <div className="scattered-cards" aria-hidden="true">
+          <div className="deco-card front fade-card-1">🂱</div>
+          <div className="deco-card front fade-card-2">🃑</div>
+          <div className="deco-card back fade-card-3" />
+        </div>
+
+        <div className="lobby">
+          <div className="brand">
+            <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
+            <h1 className="baroque-title">BURRACO</h1>
+            <p className="tagline">Il tavolo del circolo, uno contro uno.</p>
+          </div>
+          <label htmlFor="room">Codice tavolo</label>
+          <input
+            id="room"
+            value={roomCode}
+            onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+            placeholder="es. TAVOLO1"
+            maxLength={12}
+            autoComplete="off"
+          />
+          <label htmlFor="name">Il tuo nome</label>
+          <input
+            id="name"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="es. Marco"
+            maxLength={40}
+            autoComplete="off"
+          />
+          <button
+            type="button"
+            className="cta btn-primary"
+            disabled={!roomCode.trim() || g.connPhase === "connecting" || g.connPhase === "reconnecting"}
+            onClick={() => g.join(roomCode, displayName)}
+          >
+            {g.connPhase === "connecting" || g.connPhase === "reconnecting" ? "Connessione…" : "Siediti al tavolo"}
+          </button>
+          <button
+            type="button"
+            className="btn-rules-lobby"
+            onClick={() => setShowRules(true)}
+            aria-label="Visualizza regole del gioco"
+          >
+            Visualizza Regolamento
+          </button>
+          {(g.connPhase === "connecting" || g.connPhase === "reconnecting") && (
+            <p className="muted" role="status" style={{ marginTop: "var(--sp-3)" }}>
+              Apertura del tavolo in corso…
+            </p>
+          )}
+          {g.errorMessage && (
+            <p role="alert" style={{ color: "var(--danger-300)", marginTop: "var(--sp-3)" }}>
+              {g.errorMessage}
+            </p>
+          )}
+          {showRules && <RulesOverlay config={null} onClose={() => setShowRules(false)} />}
+        </div>
+      </div>
     );
   }
 
