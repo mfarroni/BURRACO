@@ -232,10 +232,12 @@ export default function Page() {
         </div>
 
 
+        {/* Titolo Barocco dorato sopra la modale, sul feltro */}
+        <h1 className="baroque-title-fixed">BURRACO</h1>
+
         <div className="lobby">
           <div className="brand">
             <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
-            <h1 className="baroque-title">BURRACO</h1>
             <p className="tagline">Il tavolo del circolo, uno contro uno.</p>
           </div>
           <label htmlFor="room">Codice tavolo</label>
