@@ -232,31 +232,31 @@ export default function Page() {
         </div>
 
 
-        {/* Titolo Barocco dorato sopra la modale, sul feltro */}
-        <h1 className="baroque-title-fixed">BURRACO</h1>
+        {/* Titolo Barocco dorato in emblema sopra la modale */}
+        <div className="baroque-header-container">
+          <div className="baroque-emblem">
+            <h1 className="baroque-title-fixed">BURRACO</h1>
+          </div>
+        </div>
 
         <div className="lobby">
-          <div className="brand">
-            <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
-            <p className="tagline">Il tavolo del circolo, uno contro uno.</p>
-          </div>
-          <label htmlFor="room">Codice tavolo</label>
           <input
             id="room"
             value={roomCode}
             onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-            placeholder="es. TAVOLO1"
+            placeholder="Codice tavolo"
             maxLength={12}
             autoComplete="off"
+            aria-label="Codice tavolo"
           />
-          <label htmlFor="name">Il tuo nome</label>
           <input
             id="name"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="es. Marco"
+            placeholder="Il tuo nome"
             maxLength={40}
             autoComplete="off"
+            aria-label="Il tuo nome"
           />
           <button
             type="button"

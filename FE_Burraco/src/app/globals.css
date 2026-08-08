@@ -299,128 +299,103 @@ button:disabled {
  * Ordine dello sguardo: titolo serif dorato → sottotitolo → campi → CTA.
  * =================================================================== */
 .lobby {
+  width: 90%;
   max-width: 380px;
-  margin: 4vh auto 10vh;
-  padding: var(--sp-4) var(--sp-4) var(--sp-4);
-  background: linear-gradient(135deg, var(--wood-900), var(--wood-800));
-  border: 4px solid var(--wood-700);
-  outline: 2px solid var(--brass-500);
-  outline-offset: -3px;
-  border-radius: var(--r-lg);
-  box-shadow: var(--sh-lift), 0 0 30px rgba(0, 0, 0, 0.6);
-  transition: box-shadow 0.3s ease;
+  margin: 12vh auto 6vh;
+  padding: 28px 24px;
+  background: linear-gradient(180deg, #2b150a 0%, #1c0d06 100%);
+  border: 3px solid #d4a843;
+  outline: 2px solid #5c4217;
+  outline-offset: -5px;
+  border-radius: 20px;
+  box-shadow: 
+    0 15px 35px rgba(0, 0, 0, 0.8),
+    inset 0 0 20px rgba(0, 0, 0, 0.6);
+  transition: all 0.3s ease;
   position: relative;
   z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 .lobby:hover {
-  box-shadow: var(--sh-lift), 0 0 40px rgba(200, 162, 74, 0.15);
-}
-.lobby .brand {
-  text-align: center;
-  margin-bottom: var(--sp-5);
-}
-.lobby .brand .suits {
-  font-size: 1.6rem;
-  letter-spacing: 0.5em;
-  color: var(--brass-300);
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-  margin-bottom: var(--sp-3);
-}
-.lobby h1 {
-  font-size: 2.5rem;
-  margin: 0;
-  font-family: var(--font-serif);
-  color: var(--brass-500);
-  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
-  letter-spacing: 0.05em;
-}
-.lobby .brand .tagline {
-  color: var(--text-muted);
-  font-size: var(--fs-sm);
-  font-style: italic;
-  margin-top: var(--sp-2);
-}
-.lobby label {
-  display: block;
-  margin: var(--sp-4) 0 var(--sp-2);
-  font-size: var(--fs-xs);
-  color: var(--brass-400);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-weight: 600;
+  box-shadow: 
+    0 18px 40px rgba(0, 0, 0, 0.9),
+    0 0 25px rgba(212, 168, 67, 0.2);
 }
 .lobby input {
   width: 100%;
-  padding: var(--sp-3);
-  border-radius: var(--r-md);
-  border: 1px solid var(--wood-600);
-  background: var(--wood-900);
-  color: var(--text-strong);
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid #4d3319;
+  background: #140904;
+  color: #f7eedb;
   font-size: var(--fs-body);
-  box-shadow: var(--sh-inset);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .lobby input:focus {
   outline: none;
-  border-color: var(--brass-500);
-  box-shadow: var(--sh-inset), 0 0 8px rgba(200, 162, 74, 0.3);
+  border-color: #d4a843;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8), 0 0 10px rgba(212, 168, 67, 0.3);
 }
 .lobby input::placeholder {
-  color: var(--text-faint);
+  color: #8c7359;
 }
 .lobby .cta.btn-primary {
-  margin-top: var(--sp-5);
+  margin-top: 6px;
   width: 100%;
-  padding: var(--sp-3) var(--sp-4);
-  font-size: var(--fs-body);
+  padding: 14px 20px;
+  font-size: 1.05rem;
   font-family: var(--font-serif);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--wood-900);
-  background: linear-gradient(135deg, var(--brass-400), var(--brass-500));
-  border: 1px solid var(--brass-600);
-  border-radius: var(--r-sm);
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  font-weight: 700;
+  color: #1f1105;
+  background: linear-gradient(180deg, #f7df8d 0%, #d4a843 50%, #9e751d 100%);
+  border: 1px solid #ffe8a3;
+  border-radius: 999px;
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
   cursor: pointer;
   transition: all var(--dur-fast) var(--ease-out);
 }
 .lobby .cta.btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--brass-300), var(--brass-400));
+  background: linear-gradient(180deg, #fff2be 0%, #e6ba53 50%, #b38627 100%);
   transform: translateY(-2px);
-  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.5), 0 0 10px rgba(231, 208, 151, 0.3);
+  box-shadow: 
+    0 6px 16px rgba(0, 0, 0, 0.6),
+    0 0 15px rgba(247, 223, 141, 0.4);
 }
 .lobby .cta.btn-primary:active:not(:disabled) {
   transform: translateY(1px);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
 }
 .lobby .cta.btn-primary:disabled {
-  background: var(--felt-800);
-  border-color: var(--felt-700);
-  color: var(--text-faint);
+  background: #2b2015;
+  border-color: #3d2e1e;
+  color: #6e5d4c;
   box-shadow: none;
   cursor: not-allowed;
 }
 .lobby .btn-rules-lobby {
   width: 100%;
-  margin-top: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
+  margin-top: 2px;
+  padding: 12px 20px;
   font-size: var(--fs-sm);
   font-family: var(--font-serif);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: transparent;
-  color: var(--brass-500);
-  border: 1px solid var(--brass-600);
-  border-radius: var(--r-sm);
+  font-weight: 600;
+  background: linear-gradient(180deg, #261309 0%, #190a04 100%);
+  color: #d4a843;
+  border: 1.5px solid #8c6a23;
+  border-radius: 999px;
   cursor: pointer;
   transition: all var(--dur-fast) var(--ease-out);
 }
 .lobby .btn-rules-lobby:hover {
-  background: rgba(200, 162, 74, 0.1);
-  color: var(--brass-300);
-  border-color: var(--brass-400);
-  box-shadow: 0 0 10px rgba(231, 208, 151, 0.15);
+  background: linear-gradient(180deg, #361b0c 0%, #240e05 100%);
+  color: #f7df8d;
+  border-color: #d4a843;
+  box-shadow: 0 0 12px rgba(212, 168, 67, 0.25);
 }
 
 
@@ -1701,41 +1676,65 @@ button:disabled {
   z-index: 3;
 }
 
-/* Titolo Barocco Fissato in alto sul feltro */
-.baroque-title-fixed {
-  font-family: var(--font-serif);
-  font-weight: 800;
-  font-size: 3.8rem !important;
-  letter-spacing: 0.2em;
-  background: linear-gradient(
-    135deg,
-    #b38f36 0%,
-    #f7d784 25%,
-    #cfa13c 50%,
-    #fceabb 75%,
-    #a67c1e 100%
-  );
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0px 4px 6px rgba(0, 0, 0, 0.8));
-  text-align: center;
+/* Titolo Barocco dorato in targa arricchita sopra la modale */
+.baroque-header-container {
   position: absolute;
   top: 5vh;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 3;
-  width: 100%;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 90%;
+  max-width: 520px;
 }
 
-.baroque-title-fixed::after {
-  content: "✦  ✦  ✦";
-  display: block;
-  font-size: var(--fs-xs);
-  letter-spacing: 0.5em;
-  color: var(--brass-400);
-  -webkit-text-fill-color: var(--brass-400);
-  margin-top: var(--sp-1);
-  opacity: 0.8;
+.baroque-emblem {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 48px;
+  background: radial-gradient(ellipse at center, #26150b 0%, #120904 100%);
+  border: 3px solid #d4a843;
+  border-radius: 999px;
+  box-shadow: 
+    0 0 0 2px #5c4217,
+    0 8px 25px rgba(0, 0, 0, 0.85),
+    inset 0 0 15px rgba(212, 168, 67, 0.35);
+}
+
+.baroque-emblem::before,
+.baroque-emblem::after {
+  content: "❖";
+  position: absolute;
+  color: #fce599;
+  font-size: 1.4rem;
+  top: 50%;
+  transform: translateY(-50%);
+  text-shadow: 0 0 8px rgba(254, 225, 140, 0.8);
+}
+.baroque-emblem::before { left: 16px; }
+.baroque-emblem::after { right: 16px; }
+
+.baroque-title-fixed {
+  font-family: var(--font-serif);
+  font-weight: 900;
+  font-size: 3rem !important;
+  letter-spacing: 0.18em;
+  margin: 0;
+  background: linear-gradient(
+    180deg,
+    #fff3d1 0%,
+    #fadb82 30%,
+    #d4a73b 60%,
+    #8f6a1c 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0px 3px 4px rgba(0, 0, 0, 0.9));
+  text-align: center;
 }
 
 /* Raggiera di carte sotto il pannello centrale */
