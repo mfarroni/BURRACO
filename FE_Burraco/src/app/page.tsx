@@ -65,31 +65,172 @@ export default function Page() {
         {/* Carte decorative ai quattro angoli (ventola) */}
         <div className="corner-fan top-left" aria-hidden="true">
           <div className="deco-card back rotate-1" />
-          <div className="deco-card front rotate-2">🂡</div>
-          <div className="deco-card front rotate-3">🂱</div>
-        </div>
-        <div className="corner-fan top-right" aria-hidden="true">
-          <div className="deco-card back rotate-1" />
-          <div className="deco-card front rotate-2">🂮</div>
-          <div className="deco-card front rotate-3">🃎</div>
-        </div>
-        <div className="corner-fan bottom-left" aria-hidden="true">
-          <div className="deco-card back rotate-1" />
-          <div className="deco-card front rotate-2">🃁</div>
-          <div className="deco-card front rotate-3">🂱</div>
-        </div>
-        <div className="corner-fan bottom-right" aria-hidden="true">
-          <div className="deco-card back rotate-1" />
-          <div className="deco-card front rotate-2">🂺</div>
-          <div className="deco-card front rotate-3">🃚</div>
+          <div className="deco-card front rotate-2">
+            <div className="card-corner top-left">
+              <span className="card-value">A</span>
+              <span className="card-suit">♠</span>
+            </div>
+            <div className="card-center">♠</div>
+            <div className="card-corner bottom-right">
+              <span className="card-value">A</span>
+              <span className="card-suit">♠</span>
+            </div>
+          </div>
+          <div className="deco-card front red rotate-3">
+            <div className="card-corner top-left">
+              <span className="card-value">K</span>
+              <span className="card-suit">♦</span>
+            </div>
+            <div className="card-center">♦</div>
+            <div className="card-corner bottom-right">
+              <span className="card-value">K</span>
+              <span className="card-suit">♦</span>
+            </div>
+          </div>
         </div>
 
-        {/* Carte in dissolvenza che sbucano da sotto il pannello */}
-        <div className="scattered-cards" aria-hidden="true">
-          <div className="deco-card front fade-card-1">🂱</div>
-          <div className="deco-card front fade-card-2">🃑</div>
-          <div className="deco-card back fade-card-3" />
+        <div className="corner-fan top-right" aria-hidden="true">
+          <div className="deco-card back rotate-1" />
+          <div className="deco-card front red rotate-2">
+            <div className="card-corner top-left">
+              <span className="card-value">Q</span>
+              <span className="card-suit">♥</span>
+            </div>
+            <div className="card-center">♥</div>
+            <div className="card-corner bottom-right">
+              <span className="card-value">Q</span>
+              <span className="card-suit">♥</span>
+            </div>
+          </div>
+          <div className="deco-card front rotate-3">
+            <div className="card-corner top-left">
+              <span className="card-value">J</span>
+              <span className="card-suit">♣</span>
+            </div>
+            <div className="card-center">♣</div>
+            <div className="card-corner bottom-right">
+              <span className="card-value">J</span>
+              <span className="card-suit">♣</span>
+            </div>
+          </div>
         </div>
+
+        <div className="corner-fan bottom-left" aria-hidden="true">
+          <div className="deco-card back rotate-1" />
+          <div className="deco-card front rotate-2">
+            <div className="card-corner top-left">
+              <span className="card-value">A</span>
+              <span className="card-suit">♣</span>
+            </div>
+            <div className="card-center">♣</div>
+            <div className="card-corner bottom-right">
+              <span className="card-value">A</span>
+              <span className="card-suit">♣</span>
+            </div>
+          </div>
+          <div className="deco-card front red rotate-3">
+            <div className="card-corner top-left">
+              <span className="card-value">A</span>
+              <span className="card-suit">♥</span>
+            </div>
+            <div className="card-center">♥</div>
+            <div className="card-corner bottom-right">
+              <span className="card-value">A</span>
+              <span className="card-suit">♥</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="corner-fan bottom-right" aria-hidden="true">
+          <div className="deco-card back rotate-1" />
+          <div className="deco-card front red rotate-2">
+            <div className="card-corner top-left">
+              <span className="card-value">K</span>
+              <span className="card-suit">♦</span>
+            </div>
+            <div className="card-center">♦</div>
+            <div className="card-corner bottom-right">
+              <span className="card-value">K</span>
+              <span className="card-suit">♦</span>
+            </div>
+          </div>
+          <div className="deco-card front rotate-3">
+            <div className="card-corner top-left">
+              <span className="card-value">Q</span>
+              <span className="card-suit">♠</span>
+            </div>
+            <div className="card-center">♠</div>
+            <div className="card-corner bottom-right">
+              <span className="card-value">Q</span>
+              <span className="card-suit">♠</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Raggiera di carte decorative sotto il pannello centrale */}
+        <div className="radial-cards-fan" aria-hidden="true">
+          {/* Sinistra */}
+          <div className="deco-card front rotate-radial-1">
+            <div className="card-corner top-left">
+              <span className="card-value">A</span>
+              <span className="card-suit">♠</span>
+            </div>
+            <div className="card-center">♠</div>
+            <div className="card-corner bottom-right">
+              <span className="card-value">A</span>
+              <span className="card-suit">♠</span>
+            </div>
+          </div>
+          <div className="deco-card front red rotate-radial-2">
+            <div className="card-corner top-left">
+              <span className="card-value">10</span>
+              <span className="card-suit">♦</span>
+            </div>
+            <div className="card-center">♦</div>
+            <div className="card-corner bottom-right">
+              <span className="card-value">10</span>
+              <span className="card-suit">♦</span>
+            </div>
+          </div>
+          {/* Destra */}
+          <div className="deco-card front rotate-radial-3">
+            <div className="card-corner top-left">
+              <span className="card-value">A</span>
+              <span className="card-suit">♣</span>
+            </div>
+            <div className="card-center">♣</div>
+            <div className="card-corner bottom-right">
+              <span className="card-value">A</span>
+              <span className="card-suit">♣</span>
+            </div>
+          </div>
+          <div className="deco-card front red rotate-radial-4">
+            <div className="card-corner top-left">
+              <span className="card-value">A</span>
+              <span className="card-suit">♥</span>
+            </div>
+            <div className="card-center">♥</div>
+            <div className="card-corner bottom-right">
+              <span className="card-value">A</span>
+              <span className="card-suit">♥</span>
+            </div>
+          </div>
+          {/* Basso */}
+          <div className="deco-card front red rotate-radial-5">
+            <div className="card-corner top-left">
+              <span className="card-value">K</span>
+              <span className="card-suit">♦</span>
+            </div>
+            <div className="card-center">♦</div>
+            <div className="card-corner bottom-right">
+              <span className="card-value">K</span>
+              <span className="card-suit">♦</span>
+            </div>
+          </div>
+          {/* Alto (capovolta) */}
+          <div className="deco-card back rotate-radial-6" />
+        </div>
+
 
         <div className="lobby">
           <div className="brand">
