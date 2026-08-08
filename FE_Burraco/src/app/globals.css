@@ -1718,10 +1718,13 @@ button:disabled {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   filter: drop-shadow(0px 4px 6px rgba(0, 0, 0, 0.8));
-  margin: 6vh auto 0;
   text-align: center;
-  position: relative;
+  position: absolute;
+  top: 5vh;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 3;
+  width: 100%;
 }
 
 .baroque-title-fixed::after {
