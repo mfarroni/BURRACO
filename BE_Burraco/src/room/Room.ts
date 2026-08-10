@@ -161,6 +161,7 @@ export class Room {
    */
   join(ws: WebSocket, token: string | undefined, displayName: string, clientId?: string): void {
     if (this.disposed) {
+      this.logJoin("disposed", clientId);
       send(ws, { type: "error", message: "La partita è conclusa." });
       return;
     }
@@ -172,6 +173,7 @@ export class Room {
         // SEC-04: takeover di sessione ATTIVA vietato. Vale anche per il token
         // PRECEDENTE: finché il legittimo è connesso, nessun token dà accesso.
         if (this.isSeatLive(existing)) {
+          this.logJoin("sec04-live-reject", clientId);
           send(ws, { type: "error", message: "Sessione già attiva su un'altra connessione." });
           try {
             ws.close(1008, "Sessione già attiva.");
@@ -182,6 +184,7 @@ export class Room {
         }
         // Riconnessione legittima (slot disconnesso): rebind + rotazione token,
         // mantenendo valido il token presentato entro il TTL (NEW-1/SEC-10).
+        this.logJoin("reconnect-token", clientId);
         this.reconnectInto(existing, ws, token, displayName, clientId);
         return;
       }
@@ -195,6 +198,7 @@ export class Room {
         (p) => p.clientId !== undefined && p.clientId === clientId && !this.isSeatLive(p),
       );
       if (byClient) {
+        this.logJoin("reclaim-clientId", clientId);
         this.reconnectInto(byClient, ws, null, displayName, clientId);
         return;
       }
@@ -202,6 +206,7 @@ export class Room {
 
     // (3) Nuovo posto, se la room non è piena.
     if (!this.isFull()) {
+      this.logJoin("new-slot", clientId);
       this.createSlot(ws, displayName, clientId);
       return;
     }
@@ -215,13 +220,36 @@ export class Room {
     if (!this.engine) {
       const disconnected = this.players.find((p) => !this.isSeatLive(p));
       if (disconnected) {
+        this.logJoin("fallback-opentable", clientId);
         this.reconnectInto(disconnected, ws, null, displayName, clientId);
         return;
       }
     }
 
     // (5) Room al completo (due posti vivi) o partita in corso senza reclaim valido.
+    this.logJoin("full", clientId);
     send(ws, { type: "error", message: "La room è al completo." });
+  }
+
+  /**
+   * DIAG (temporaneo, rimovibile): log di join per diagnosi accesso mobile.
+   * Emette una riga greppabile con il RAMO scelto e lo stato dei posti al momento
+   * della decisione. NON logga MAI segreti (token/clientId in chiaro): solo
+   * booleani e conteggi. `clientIdMatch` confronta l'id in arrivo con quello dei
+   * posti senza rivelarne il valore. Rimuovere l'intero metodo e le sue chiamate
+   * al termine della diagnosi.
+   */
+  private logJoin(branch: string, incomingClientId?: string): void {
+    const slots = this.players.map((p) => ({
+      seat: p.seat,
+      live: this.isSeatLive(p),
+      hasClientId: p.clientId !== undefined,
+      clientIdMatch: incomingClientId !== undefined && p.clientId === incomingClientId,
+    }));
+    console.log(
+      `[join] room=${this.code} branch=${branch} players=${this.players.length} ` +
+        `slots=${JSON.stringify(slots)} engine=${this.engine !== null}`,
+    );
   }
 
   /** Crea un nuovo slot per un ingresso ex-novo e prova ad avviare la partita. */
