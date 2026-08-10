@@ -12,6 +12,7 @@ import type {
   ServerMessage,
 } from "./contract";
 import type { CelebrationInfo } from "@/components/StateBanners";
+import { getClientId, saveToken, storedToken } from "./sessionIdentity";
 
 /**
  * Hook che possiede la connessione WebSocket e lo STATO CLIENT (architettura FE
@@ -102,30 +103,15 @@ interface InFlight {
   cardIds: string[];
 }
 
-function tokenKey(room: string): string {
-  return `burraco_token_${room.toUpperCase()}`;
-}
-
-/** Chiave dell'identità di sessione STABILE per-browser (non per-room). */
-const CLIENT_ID_KEY = "burraco_client_id";
-
 /**
- * Ritorna il clientId per-browser, generandolo e persistendolo al primo uso.
- * È inviato in `join_room` per consentire il RECLAIM del posto quando il token
- * di room è perso. Se localStorage non è disponibile, ripiega su un id volatile
- * (la riconnessione userà comunque token/sessione viva quando possibile).
+ * L'identità di sessione (clientId per-browser stabile in-memory + token di
+ * room per-scheda con fallback in-memory) vive nel modulo FRAMEWORK-FREE
+ * `sessionIdentity`. È RESILIENTE agli errori di storage tipici di Safari
+ * mobile in Navigazione privata / con ITP: il clientId non viene mai
+ * rigenerato per un errore di storage, così la riconnessione dopo la sospensione
+ * della scheda in background presenta un'identità stabile e il server la
+ * riconosce (reclaim del posto) invece di aprire slot fantasma.
  */
-function getClientId(): string {
-  try {
-    const existing = localStorage.getItem(CLIENT_ID_KEY);
-    if (existing) return existing;
-    const fresh = genMoveId();
-    localStorage.setItem(CLIENT_ID_KEY, fresh);
-    return fresh;
-  } catch {
-    return genMoveId();
-  }
-}
 
 /** correlation id opaco per correlare mossa ↔ ack `move_applied`. */
 function genMoveId(): string {
@@ -166,14 +152,6 @@ export function useGameSocket(): GameSocketApi {
   const inFlightRef = useRef<InFlight | null>(null);
   /** contatore per la chiave univoca delle celebrazioni. */
   const celebIdRef = useRef(0);
-
-  const storedToken = useCallback((room: string): string | undefined => {
-    try {
-      return localStorage.getItem(tokenKey(room)) ?? undefined;
-    } catch {
-      return undefined;
-    }
-  }, []);
 
   const sendRaw = useCallback((msg: ClientMessage): boolean => {
     const ws = wsRef.current;
@@ -221,11 +199,9 @@ export function useGameSocket(): GameSocketApi {
           yourSeatRef.current = msg.yourSeat;
           setPlayers(msg.players);
           setConfig(msg.config);
-          try {
-            if (roomRef.current) localStorage.setItem(tokenKey(roomRef.current), msg.yourToken);
-          } catch {
-            /* storage non disponibile: la riconnessione userà comunque la sessione viva */
-          }
+          // Token per-scheda (sessionStorage) + fallback in-memory: la scrittura
+          // è best-effort e non lancia mai (gestita dentro saveToken).
+          if (roomRef.current) saveToken(roomRef.current, msg.yourToken);
           break;
         }
         case "state": {
@@ -357,7 +333,7 @@ export function useGameSocket(): GameSocketApi {
     ws.onerror = () => {
       ws.close();
     };
-  }, [handleMessage, sendRaw, storedToken]);
+  }, [handleMessage, sendRaw]);
 
   const join = useCallback(
     (roomCode: string, displayName: string) => {
