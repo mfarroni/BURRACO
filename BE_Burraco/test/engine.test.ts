@@ -87,11 +87,10 @@ test("gruppo: due matte (jolly + 2) -> INVALIDO (max una matta)", () => {
   assert.equal(m, null);
 });
 
-test("gruppo di soli 2 (tris di pinelle) -> pulito (2 al posto naturale)", () => {
+test("gruppo di sole matte (tris di 2) -> INVALIDO (le sole matte non formano gioco)", () => {
+  // Skill riga 81: non sono ammessi giochi di 3+ pinelle né di 3+ jolly.
   const m = interpretMeld([card("2", "clubs"), card("2", "diamonds"), card("2", "hearts")]);
-  assert.ok(m);
-  assert.equal(m!.clean, true, "i 2 nel gruppo di 2 sono naturali, non matte");
-  assert.equal(m!.wildCount, 0);
+  assert.equal(m, null, "un gruppo di soli 2 (matte) non è un gioco valido");
 });
 
 test("gruppo con SEMI DUPLICATI (due 9 di cuori) -> comportamento attuale", () => {

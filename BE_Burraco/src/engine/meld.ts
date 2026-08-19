@@ -6,7 +6,9 @@ import { orderToRank, rankOrder } from "./cards.js";
  * gioco valido di Burraco e, in caso positivo, ne fornisce l'interpretazione.
  *
  * Regole applicate (dalla skill):
- *  - GRUPPO: stesso valore. Le matte contano max UNA (jolly o 2 usato come matta).
+ *  - GRUPPO: stesso valore. Richiede almeno una carta naturale di rango normale
+ *    (non-2, non-jolly): le sole matte NON formano gioco. Max UNA matta (jolly o
+ *    2 usato come matta).
  *  - SEQUENZA: stesso seme in ordine; asso basso (A-2-3) o alto (Q-K-A), non "gira".
  *    Max UNA matta, TRANNE il 2 al suo posto naturale (che è naturale, non matta).
  *  - BURRACO: >= 7 carte. Pulito = nessuna matta (salvo 2 naturale) -> clean.
@@ -46,21 +48,14 @@ function solveGroup(cards: Card[]): MeldInterpretation | null {
   const twos = cards.filter(isTwo);
   const others = cards.filter((c) => !isJoker(c) && !isTwo(c));
 
-  let groupRank: Rank;
-  let wildCards: Card[];
+  // Un gruppo richiede almeno una carta NATURALE di rango normale (non-2,
+  // non-jolly): le sole matte (2 e/o jolly) NON formano gioco (skill, riga 81).
+  if (others.length === 0) return null;
 
-  if (others.length > 0) {
-    // Il rank del gruppo è quello dei naturali non-2; i 2 diventano matte.
-    groupRank = others[0]!.rank;
-    if (others.some((c) => c.rank !== groupRank)) return null;
-    wildCards = [...jokers, ...twos];
-  } else if (twos.length > 0) {
-    // Gruppo di 2: i 2 sono naturali, solo i jolly sono matte.
-    groupRank = "2";
-    wildCards = [...jokers];
-  } else {
-    return null; // solo jolly: impossibile
-  }
+  // Il rank del gruppo è quello dei naturali non-2; i 2 diventano matte.
+  const groupRank: Rank = others[0]!.rank;
+  if (others.some((c) => c.rank !== groupRank)) return null;
+  const wildCards: Card[] = [...jokers, ...twos];
 
   if (wildCards.length > 1) return null; // max UNA matta
 
