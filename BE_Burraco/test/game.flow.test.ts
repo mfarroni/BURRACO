@@ -137,10 +137,9 @@ test("wildIndices: gruppo con pinella marca solo la matta", () => {
   assert.equal(m.clean, false);
 });
 
-test("wildIndices: gruppo di 2 (naturali) -> vuoto, clean", () => {
-  const m = buildMeld([card("2", "clubs"), card("2", "diamonds"), card("2", "hearts")], 0);
-  assert.deepEqual(m.wildIndices, []);
-  assert.equal(m.clean, true);
+test("gruppo di sole matte (tris di 2) -> INVALIDO (le sole matte non formano gioco)", () => {
+  // Skill riga 81: non sono ammessi giochi di 3+ pinelle. interpretMeld -> null.
+  assert.equal(interpretMeld([card("2", "clubs"), card("2", "diamonds"), card("2", "hearts")]), null);
 });
 
 test("wildIndices: sequenza 2 naturale + jolly marca solo il jolly", () => {
