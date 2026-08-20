@@ -28,14 +28,20 @@ export interface RateLimitOptions {
 }
 
 /**
- * IP del client. Dietro il proxy di Render, `X-Forwarded-For` contiene l'IP reale
- * (il primo elemento). Con `app.set("trust proxy", ...)` Express popola `req.ip`
- * coerentemente; qui ripieghiamo su `req.ip`/socket per robustezza in locale.
+ * Chiave del rate-limiter = IP reale del client + nome del limiter.
+ *
+ * SEC-A1: NON leggiamo `X-Forwarded-For` a mano. Il PRIMO elemento di quell'header
+ * è controllato dal client e ruotarlo a ogni richiesta creerebbe un bucket nuovo
+ * ogni volta, annullando il rate-limit. Con `app.set("trust proxy", 1)` (impostato
+ * in createHttpApp) Express calcola `req.ip` fidandosi di UN solo hop (il proxy di
+ * Render, che riscrive XFF): `req.ip` è quindi l'IP reale a valle del proxy e NON
+ * è falsificabile dal client. Usiamo esclusivamente `req.ip`.
+ *
+ * Fallback prudente solo se `req.ip` fosse undefined (es. contesti senza socket):
+ * si ripiega sull'IP del socket, mai sull'header controllabile dal client.
  */
 function clientKey(req: Request, name: string): string {
-  const fwd = req.headers["x-forwarded-for"];
-  const ipFromFwd = Array.isArray(fwd) ? fwd[0] : fwd?.split(",")[0]?.trim();
-  const ip = ipFromFwd || req.ip || req.socket.remoteAddress || "unknown";
+  const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
   return `${name}:${ip}`;
 }
 

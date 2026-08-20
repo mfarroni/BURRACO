@@ -79,6 +79,10 @@ export class AuthService {
     const normEmail = email.trim().toLowerCase();
     const existing = await this.store.getUserByEmail(normEmail);
     if (existing) {
+      // SEC-A2 (rischio residuo ACCETTATO per v1, opzione (a) approvata dal lead):
+      // il 409 EMAIL_TAKEN è distinguibile e consente user-enumeration mirata. Lo
+      // manteniamo per l'UX di registrazione; l'enumerazione DI MASSA è impraticabile
+      // grazie al rate-limit per IP reale (SEC-A1). Da rivalutare in una v. successiva.
       throw new AuthError("EMAIL_TAKEN", "Email già registrata.");
     }
     const passwordHash = await hashPassword(password);

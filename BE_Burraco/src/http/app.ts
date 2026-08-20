@@ -111,12 +111,17 @@ export function createHttpApp(auth: AuthService): Express {
   });
 
   // Rate limiter per gli endpoint sensibili (finestra 15 min).
-  const authLimiter = rateLimit({ name: "auth", windowMs: 15 * 60 * 1000, max: 50 });
+  // SEC-A3a: register e guest hanno budget INDIPENDENTI (limiter distinti). Prima
+  // condividevano lo stesso bucket 'auth', così un flood di ospiti erodeva il
+  // budget delle registrazioni legittime dello stesso IP. Ora un abuso su uno dei
+  // due non consuma il budget dell'altro. Login resta col suo limiter dedicato.
+  const registerLimiter = rateLimit({ name: "register", windowMs: 15 * 60 * 1000, max: 50 });
+  const guestLimiter = rateLimit({ name: "guest", windowMs: 15 * 60 * 1000, max: 50 });
   const loginLimiter = rateLimit({ name: "login", windowMs: 15 * 60 * 1000, max: 20 });
 
   app.post(
     "/auth/register",
-    authLimiter,
+    registerLimiter,
     handler(async (req, res) => {
       const parsed = registerBody.safeParse(req.body);
       if (!parsed.success) {
@@ -124,6 +129,12 @@ export function createHttpApp(auth: AuthService): Express {
         return;
       }
       const { email, password, displayName } = parsed.data;
+      // SEC-A2 (rischio residuo ACCETTATO per v1, opzione (a) approvata dal lead):
+      // register può rispondere 409 EMAIL_TAKEN, quindi un client può dedurre se
+      // un'email è già registrata (user-enumeration). Manteniamo il 409 per l'UX di
+      // registrazione. Il rischio è mitigato dalla correzione di SEC-A1 (rate-limit
+      // per IP reale, non aggirabile via X-Forwarded-For), che rende impraticabile
+      // l'enumerazione di MASSA. Da rivalutare in una versione successiva.
       const result = await auth.register(email, password, displayName ?? "");
       res.status(201).json({ token: result.sessionToken, user: result.user });
     }),
@@ -147,7 +158,7 @@ export function createHttpApp(auth: AuthService): Express {
 
   app.post(
     "/auth/guest",
-    authLimiter,
+    guestLimiter,
     handler(async (req, res) => {
       const parsed = guestBody.safeParse(req.body ?? {});
       const displayName = parsed.success ? parsed.data.displayName : undefined;
