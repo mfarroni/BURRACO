@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import type { Card } from "@/lib/contract";
 import { useGameSocket } from "@/lib/useGameSocket";
+import { useAuth } from "@/lib/useAuth";
+import { AuthPanel } from "@/components/AuthPanel";
+import { BottomHand } from "@/components/BottomHand";
 import { CardView } from "@/components/CardView";
 import { Melds } from "@/components/Melds";
 import { ActionBar } from "@/components/ActionBar";
@@ -24,10 +27,10 @@ import {
 
 export default function Page() {
   const g = useGameSocket();
+  const auth = useAuth();
 
   // Form della lobby.
   const [roomCode, setRoomCode] = useState("");
-  const [displayName, setDisplayName] = useState("");
 
   // Stato di SELEZIONE locale (nessuna regola: solo UI).
   const [selectedCards, setSelectedCards] = useState<string[]>([]);
@@ -54,8 +57,27 @@ export default function Page() {
     setSelectedMeldId((prev) => (prev === meldId ? null : meldId));
   };
 
-  /* ── Lobby / schermata d'ingresso ──────────────────────────────────── */
+  /* ── Ripristino sessione in corso ──────────────────────────────────── */
+  if (auth.status === "initializing") {
+    return (
+      <div className="lobby">
+        <div className="brand">
+          <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
+          <h1>Burraco</h1>
+          <p className="tagline" role="status">Ripristino della sessione…</p>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Non autenticato → schermata d'ingresso (Accedi/Registrati/Ospite) ─ */
+  if (auth.status === "anonymous") {
+    return <AuthPanel auth={auth} />;
+  }
+
+  /* ── Autenticato ma non ancora al tavolo → codice tavolo + Entra ────── */
   if (!g.joined) {
+    const connecting = g.connPhase === "connecting" || g.connPhase === "reconnecting";
     return (
       <div className="lobby">
         <div className="brand">
@@ -63,6 +85,18 @@ export default function Page() {
           <h1>Burraco</h1>
           <p className="tagline">Il tavolo del circolo, uno contro uno.</p>
         </div>
+
+        {/* Identità corrente + logout. */}
+        <div className="whoami">
+          <span className="muted">
+            Sei entrato come <strong>{auth.user?.displayName}</strong>
+            {auth.user?.isGuest ? " (ospite)" : ""}
+          </span>
+          <button type="button" className="btn-ghost" onClick={() => auth.logout()} disabled={auth.busy}>
+            Esci
+          </button>
+        </div>
+
         <label htmlFor="room">Codice tavolo</label>
         <input
           id="room"
@@ -72,26 +106,28 @@ export default function Page() {
           maxLength={12}
           autoComplete="off"
         />
-        <label htmlFor="name">Il tuo nome</label>
-        <input
-          id="name"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="es. Marco"
-          maxLength={40}
-          autoComplete="off"
-        />
         <button
           type="button"
           className="cta btn-primary"
-          disabled={!roomCode.trim() || g.connPhase === "connecting" || g.connPhase === "reconnecting"}
-          onClick={() => g.join(roomCode, displayName)}
+          disabled={!roomCode.trim() || connecting}
+          onClick={() => {
+            g.dismissJoinRejected();
+            g.join(roomCode, auth.user?.displayName ?? "");
+          }}
         >
-          {g.connPhase === "connecting" || g.connPhase === "reconnecting" ? "Connessione…" : "Siediti al tavolo"}
+          {connecting ? "Connessione…" : "Entra"}
         </button>
-        {(g.connPhase === "connecting" || g.connPhase === "reconnecting") && (
+        {connecting && (
           <p className="muted" role="status" style={{ marginTop: "var(--sp-3)" }}>
             Apertura del tavolo in corso…
+          </p>
+        )}
+        {/* SEC-08: ingresso negato per autenticazione (token mancante/scaduto). */}
+        {g.joinRejected && (
+          <p role="alert" style={{ color: "var(--danger-300)", marginTop: "var(--sp-3)" }}>
+            {g.joinRejected.code === "AUTH_INVALID"
+              ? "La tua sessione è scaduta: esci e accedi di nuovo."
+              : g.joinRejected.reason}
           </p>
         )}
         {g.errorMessage && (
@@ -258,25 +294,16 @@ export default function Page() {
         onSelectMeld={toggleMeld}
       />
 
-      {/* ── La tua mano ───────────────────────────────────────────────── */}
-      <div className="hand-zone">
-        <h4>La tua mano · {s.yourHand.length} carte</h4>
-        <div className="hand">
-          {s.yourHand.length === 0 ? (
-            <p className="faint">Mano vuota — sei andato a pozzetto!</p>
-          ) : (
-            s.yourHand.map((c) => (
-              <CardView
-                key={c.id}
-                card={c}
-                selected={selectedCards.includes(c.id)}
-                pending={g.inFlightCardId === c.id}
-                onClick={isMyTurn && !g.pending ? toggleCard : undefined}
-              />
-            ))
-          )}
-        </div>
-      </div>
+      {/* ── La tua mano (ancorata in basso, a ventaglio, riordinabile) ──── */}
+      <BottomHand
+        room={roomCode.toUpperCase() || null}
+        hand={s.yourHand}
+        selectedCards={selectedCards}
+        isMyTurn={isMyTurn}
+        pending={g.pending}
+        inFlightCardId={g.inFlightCardId}
+        onToggleCard={toggleCard}
+      />
 
       <ActionBar
         state={s}

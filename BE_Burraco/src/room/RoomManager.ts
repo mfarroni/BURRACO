@@ -2,14 +2,29 @@ import type { WebSocket } from "ws";
 import type { ClientMessage, GameConfig } from "../contract/types.js";
 import { defaultGameConfig } from "../config.js";
 import { Room } from "./Room.js";
+import type { AuthService } from "../auth/service.js";
 
 /**
  * Orchestratore in-RAM di tutte le room attive (v1 single-instance).
  * Mappa i socket alla loro room e instrada join/messaggi/disconnessioni.
+ *
+ * Macro-ciclo 1 — Auth: quando `authService` è presente e `requireAuth` è true,
+ * `join_room` è gated su un authToken VALIDO (SEC-08): senza principale risolto
+ * non si occupa alcun posto. Il `display_name` usato è quello AUTORITATIVO del
+ * principale (mai il displayName arbitrario del client). Se `requireAuth` è false
+ * (dev/test), vale il comportamento legacy col displayName del client, così le
+ * suite d'integrazione preesistenti restano valide.
  */
 export class RoomManager {
   private rooms = new Map<string, Room>();
   private socketRoom = new WeakMap<WebSocket, Room>();
+  private readonly authService: AuthService | undefined;
+  private readonly requireAuth: boolean;
+
+  constructor(opts?: { authService?: AuthService; requireAuth?: boolean }) {
+    this.authService = opts?.authService;
+    this.requireAuth = opts?.requireAuth ?? false;
+  }
 
   private normalizeCode(code: string): string {
     return code.trim().toUpperCase().slice(0, 12);
@@ -36,20 +51,74 @@ export class RoomManager {
     return this.rooms.size;
   }
 
-  handleJoin(ws: WebSocket, msg: Extract<ClientMessage, { type: "join_room" }>): void {
+  /**
+   * Gestione di `join_room`. È ASINCRONA perché la risoluzione dell'authToken
+   * richiede l'AuthService (store DB o in-memory). Gli errori vengono gestiti qui
+   * (nessuna promise non catturata risale al chiamante sincrono in `server.ts`).
+   */
+  private async handleJoin(
+    ws: WebSocket,
+    msg: Extract<ClientMessage, { type: "join_room" }>,
+  ): Promise<void> {
     const code = this.normalizeCode(msg.roomCode);
     if (!code) {
       ws.send(JSON.stringify({ type: "error", message: "Codice room mancante." }));
       return;
     }
+
+    // SEC-08 (Auth): con gating attivo, servono un AuthService e un authToken
+    // VALIDO per entrare. Il displayName usato è quello autoritativo del principale.
+    let authoritativeName = msg.displayName ?? "";
+    if (this.requireAuth && this.authService) {
+      if (!msg.authToken) {
+        ws.send(
+          JSON.stringify({
+            type: "join_rejected",
+            code: "AUTH_REQUIRED",
+            reason: "Devi accedere prima di entrare in un tavolo.",
+          }),
+        );
+        return;
+      }
+      const principal = await this.authService.getPrincipalByToken(msg.authToken);
+      if (!principal) {
+        ws.send(
+          JSON.stringify({
+            type: "join_rejected",
+            code: "AUTH_INVALID",
+            reason: "Sessione non valida o scaduta: accedi di nuovo.",
+          }),
+        );
+        return;
+      }
+      // Nome autoritativo dal server: IGNORA qualsiasi displayName del client.
+      authoritativeName = principal.displayName;
+    } else if (this.authService && msg.authToken) {
+      // Gating disattivato ma authToken presente e valido → usa comunque il nome
+      // autoritativo se risolvibile (nessun rifiuto se assente/non valido in dev).
+      const principal = await this.authService.getPrincipalByToken(msg.authToken);
+      if (principal) authoritativeName = principal.displayName;
+    }
+
     const room = this.getOrCreate(code, defaultGameConfig());
     this.socketRoom.set(ws, room);
-    room.join(ws, msg.playerToken, msg.displayName ?? "", msg.clientId);
+    // playerToken/clientId restano il meccanismo di riconnessione del POSTO
+    // (SEC-04/10/11), non toccato: authToken aggiunge identità, non la sostituisce.
+    room.join(ws, msg.playerToken, authoritativeName, msg.clientId);
   }
 
   handleMessage(ws: WebSocket, msg: ClientMessage): void {
     if (msg.type === "join_room") {
-      this.handleJoin(ws, msg);
+      // Fire-and-forget con cattura interna degli errori: il join può awaitare la
+      // risoluzione del token, ma il chiamante (server.ts) resta sincrono.
+      void this.handleJoin(ws, msg).catch((err) => {
+        console.error("[ws] errore join_room:", (err as Error).message);
+        try {
+          ws.send(JSON.stringify({ type: "error", message: "Errore interno durante l'ingresso." }));
+        } catch {
+          /* socket in chiusura */
+        }
+      });
       return;
     }
     const room = this.socketRoom.get(ws);

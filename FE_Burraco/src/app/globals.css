@@ -1291,3 +1291,158 @@ button:disabled {
   white-space: nowrap;
   border: 0;
 }
+
+/* ===================================================================
+ * MACRO-CICLO 1 — AUTH + BOTTOM HAND
+ * Stili FUNZIONALI di base. La direzione visiva finale (curve del ventaglio,
+ * palette dei tab, motion, spaziature fini) è di competenza di agente_ui_ux:
+ * qui si garantisce solo che tutto sia usabile, leggibile e accessibile.
+ * =================================================================== */
+
+/* ── Schermata d'ingresso: selettore Accedi/Registrati/Ospite ──────── */
+.auth-tabs {
+  display: flex;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-4);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: var(--sp-1);
+}
+.auth-tab {
+  flex: 1;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--dur-base), color var(--dur-base);
+}
+.auth-tab[data-active="true"] {
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  box-shadow: var(--sh-card);
+}
+.auth-tab:focus-visible {
+  outline: 2px solid var(--brass-400);
+  outline-offset: 2px;
+}
+.auth-error {
+  color: var(--danger-300);
+  margin: var(--sp-3) 0 0;
+}
+.auth-hint {
+  margin-top: var(--sp-4);
+  text-align: center;
+  font-size: var(--fs-sm, 0.9rem);
+}
+
+/* ── Identità corrente + logout nella lobby ────────────────────────── */
+.whoami {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.btn-ghost {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-sm);
+  font: inherit;
+  cursor: pointer;
+}
+.btn-ghost:hover {
+  border-color: var(--brass-600);
+  color: var(--text-strong);
+}
+.btn-ghost:focus-visible {
+  outline: 2px solid var(--brass-400);
+  outline-offset: 2px;
+}
+
+/* ── BOTTOM HAND: mano ancorata in basso, a ventaglio ──────────────── */
+.bottom-hand {
+  position: sticky;
+  bottom: 88px; /* sopra la action-bar sticky */
+  margin-top: var(--sp-5);
+  padding: var(--sp-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.bottom-hand-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-2);
+}
+.bottom-hand-head h4 {
+  margin: 0;
+  font-size: var(--fs-h2);
+  color: var(--text-strong);
+}
+.bottom-hand-hint {
+  font-size: var(--fs-xs);
+}
+
+/* Ventaglio: le carte si sovrappongono leggermente e restano tutte visibili.
+ * Il gap negativo crea la sovrapposizione; su hover/focus la carta emerge. */
+.fan {
+  list-style: none;
+  margin: 0;
+  padding: var(--sp-3) var(--sp-2) var(--sp-2);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-height: 96px;
+}
+.fan-slot {
+  position: relative;
+  transition: transform var(--dur-base), opacity var(--dur-base);
+  /* Sovrapposizione morbida: ogni carta rientra sulla precedente. */
+  margin-left: -10px;
+}
+.fan-slot:first-child {
+  margin-left: 0;
+}
+.fan-slot:hover,
+.fan-slot:focus-within {
+  transform: translateY(-8px);
+  z-index: 2;
+}
+.fan-slot[data-dragging="true"] {
+  opacity: 0.4;
+}
+.fan-slot[data-over="true"] {
+  transform: translateY(-4px);
+}
+.fan-slot[data-over="true"]::before {
+  /* Indicatore del punto di inserimento durante il drag. */
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--brass-400);
+}
+/* Il drag è un'interazione a puntatore: su touch resta la selezione al tocco e
+ * il riordino da tastiera (Ctrl+frecce). Nessuna dipendenza dal solo puntatore. */
+@media (max-width: 640px) {
+  .fan-slot {
+    margin-left: -14px;
+  }
+}

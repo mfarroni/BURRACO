@@ -1,5 +1,5 @@
 import type { AuthPrincipal, AuthStore, AuthUser, StoredUser } from "./types.js";
-import { hashPassword, verifyPassword } from "./password.js";
+import { hashPassword, verifyPassword, verifyDummy } from "./password.js";
 import { generateSessionToken, hashToken } from "./tokens.js";
 
 /**
@@ -99,6 +99,9 @@ export class AuthService {
     // "password errata". Se l'utente non esiste (o è un ospite senza hash),
     // si esegue comunque il ramo di fallimento senza rivelare quale.
     if (!user || user.passwordHash === null) {
+      // Difesa timing oracle: esegui comunque una verifica argon2id fittizia, così
+      // la durata non rivela se l'email è registrata (risposta già identica).
+      await verifyDummy(password);
       throw new AuthError("INVALID_CREDENTIALS", "Credenziali non valide.");
     }
     const ok = await verifyPassword(user.passwordHash, password);

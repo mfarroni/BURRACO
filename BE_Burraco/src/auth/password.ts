@@ -28,3 +28,24 @@ export async function verifyPassword(hash: string, plain: string): Promise<boole
     return false;
   }
 }
+
+/**
+ * Hash "civetta" per equalizzare i TEMPI del login (difesa contro timing oracle):
+ * quando l'email non esiste (o l'utente è un ospite senza hash) il servizio
+ * esegue comunque una verifica argon2id fittizia, così la durata della risposta
+ * non rivela se l'email è registrata. Calcolato UNA volta e memoizzato.
+ */
+let dummyHash: Promise<string> | null = null;
+function getDummyHash(): Promise<string> {
+  if (!dummyHash) dummyHash = argon2.hash("dummy-password-for-timing-equalization", { type: argon2.argon2id });
+  return dummyHash;
+}
+
+/** Esegue una verifica fittizia (esito ignorato): serve solo a bruciare tempo CPU. */
+export async function verifyDummy(plain: string): Promise<void> {
+  try {
+    await argon2.verify(await getDummyHash(), plain);
+  } catch {
+    /* esito irrilevante: l'unico scopo è equalizzare i tempi */
+  }
+}

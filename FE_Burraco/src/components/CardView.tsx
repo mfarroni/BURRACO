@@ -39,6 +39,8 @@ interface Props {
   card: Card;
   selected?: boolean;
   onClick?: (card: Card) => void;
+  /** Passthrough tastiera (es. riordino accessibile nella mano). Solo variante button. */
+  onKeyDown?: (e: React.KeyboardEvent) => void;
   small?: boolean;
   /** true tra invio dell'intenzione e ack del server, agganciato a QUESTA carta. */
   pending?: boolean;
@@ -52,6 +54,7 @@ export function CardView({
   card,
   selected,
   onClick,
+  onKeyDown,
   small,
   pending,
   faceDown,
@@ -107,9 +110,18 @@ export function CardView({
     }${pending ? ", in attesa di conferma" : ""}`,
   } as const;
 
-  if (clickable) {
+  // Con onKeyDown la carta è interattiva (riordino da tastiera) anche quando la
+  // selezione è disabilitata (non è il tuo turno): resta focalizzabile e operabile.
+  const interactive = clickable || Boolean(onKeyDown);
+  if (interactive) {
     return (
-      <button type="button" {...common} aria-pressed={selected ? true : undefined} onClick={() => onClick?.(card)}>
+      <button
+        type="button"
+        {...common}
+        aria-pressed={clickable ? (selected ? true : undefined) : undefined}
+        onClick={clickable ? () => onClick?.(card) : undefined}
+        onKeyDown={onKeyDown}
+      >
         {content}
       </button>
     );

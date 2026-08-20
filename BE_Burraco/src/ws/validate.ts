@@ -22,6 +22,9 @@ const MAX_NAME = 64; // displayName
 // Cap difensivo generoso sul roomCode: il RoomManager lo normalizza/tronca già a
 // 12, quindi qui bastano limitare gli input patologici senza cambiarne la semantica.
 const MAX_ROOM = 64;
+// authToken: token opaco base64url (~43 char). Cap ampio ma limitato per non
+// bufferizzare input patologici (la validità reale la decide l'AuthService).
+const MAX_AUTH_TOKEN = 512;
 const MAX_CARDS = 20; // carte per singola azione (upper bound largo sul dominio)
 
 const cardId = z.string().max(MAX_ID);
@@ -36,6 +39,9 @@ const joinRoom = z.object({
   // LIFECYCLE: identità di sessione per-browser per il reclaim del posto. Cap
   // difensivo coerente con gli altri id (è un UUID lato client).
   clientId: z.string().max(MAX_ID).optional(),
+  // AUTH: token di sessione opaco per identità e gating SEC-08 (validato dal
+  // servizio, non qui). Solo controllo di FORMA/lunghezza al bordo.
+  authToken: z.string().max(MAX_AUTH_TOKEN).optional(),
 });
 
 // LIFECYCLE: smontaggio esplicito del tavolo. Nessun payload oltre al tipo.

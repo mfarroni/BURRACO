@@ -23,6 +23,19 @@ export const env = {
     .filter(Boolean),
   reconnectGraceMs: Number(process.env.RECONNECT_GRACE_MS ?? 180_000),
   turnTimeoutMs: Number(process.env.TURN_TIMEOUT_MS ?? 90_000),
+  /**
+   * Macro-ciclo 1 — Auth (SEC-08): quando true, `join_room` richiede un authToken
+   * VALIDO (niente ingresso col solo codice tavolo). Default: ON in produzione,
+   * OFF in sviluppo/test (così le suite d'integrazione preesistenti — che entrano
+   * senza authToken — restano verdi). Override esplicito via REQUIRE_AUTH_JOIN
+   * ("true"/"false"). I test del gating passano il flag esplicito al server.
+   */
+  requireAuthOnJoin:
+    process.env.REQUIRE_AUTH_JOIN !== undefined
+      ? process.env.REQUIRE_AUTH_JOIN === "true"
+      : isProd,
+  /** TTL di sessione auth in ms (default 7 giorni). */
+  sessionTtlMs: Number(process.env.SESSION_TTL_MS ?? 7 * 24 * 60 * 60 * 1000),
 };
 
 /**

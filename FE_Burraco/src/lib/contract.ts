@@ -133,7 +133,20 @@ export type RejectCode =
 export type ClientMessage =
   // `clientId`: identità di sessione STABILE per-browser (non per-room), per il
   // RECLAIM del posto quando il token di room è perso. Opaca lato server.
-  | { type: "join_room"; roomCode: string; playerToken?: string; displayName: string; clientId?: string }
+  //
+  // `authToken`: token di sessione opaco rilasciato dagli endpoint HTTP /auth/*.
+  // Il server lo valida e ne ricava il PRINCIPALE: usa il suo display_name
+  // AUTORITATIVO e IGNORA il `displayName` del client (anti-spoof). Con auth
+  // attiva, un join SENZA authToken valido è rifiutato (join_rejected, SEC-08).
+  // `playerToken`/`clientId` restano per la riconnessione del POSTO, non sostituiti.
+  | {
+      type: "join_room";
+      roomCode: string;
+      playerToken?: string;
+      displayName: string;
+      clientId?: string;
+      authToken?: string;
+    }
   | { type: "draw"; source: "deck" | "discard"; clientMoveId?: string }
   | { type: "meld_new"; cards: string[]; clientMoveId?: string }
   | { type: "meld_extend"; meldId: string; cards: string[]; clientMoveId?: string }
@@ -163,4 +176,33 @@ export type ServerMessage =
   | { type: "room_closed"; reason: "interrupted" | "abandoned" }
   | { type: "opponent_disconnected"; seat: Seat }
   | { type: "opponent_reconnected"; seat: Seat }
+  // Rifiuto di join_room PRIMA di occupare un posto (SEC-08), distinto da `error`
+  // e da `move_rejected`. "AUTH_REQUIRED" = manca l'authToken; "AUTH_INVALID" =
+  // token scaduto/revocato/sconosciuto. Il client riporta alla schermata d'ingresso.
+  | { type: "join_rejected"; code: "AUTH_REQUIRED" | "AUTH_INVALID"; reason: string }
   | { type: "error"; message: string };
+
+/* ───────────────────────────── CONTRATTO AUTH (HTTP) ─────────────────────────
+ * DTO degli endpoint REST /auth/* del backend. COPIA allineata a mano (nessun
+ * package condiviso): se il BE cambia il contratto auth, aggiornare qui. Il FE
+ * non contiene logica di hashing/token: detiene solo il token opaco ricevuto. */
+
+/** Vista pubblica dell'utente (mai hash/segreti). Specchio di AuthUser (BE). */
+export interface AuthUser {
+  id: string;
+  email: string | null;
+  displayName: string;
+  isGuest: boolean;
+}
+
+/** Risposta di register/login/guest. */
+export interface AuthSuccess {
+  token: string;
+  user: AuthUser;
+}
+
+/** Corpo d'errore standard degli endpoint auth (status via HTTP code). */
+export interface AuthErrorBody {
+  error: string;
+  message: string;
+}
