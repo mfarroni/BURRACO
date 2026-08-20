@@ -32,6 +32,9 @@
 /** Chiave dell'identità di sessione STABILE per-browser (non per-room). */
 const CLIENT_ID_KEY = "burraco_client_id";
 
+/** Chiave del token di AUTENTICAZIONE (account/ospite), per-scheda. */
+const AUTH_TOKEN_KEY = "burraco_auth_token";
+
 /** Chiave per-room del token di sessione (per-scheda su sessionStorage). */
 function tokenKey(room: string): string {
   return `burraco_token_${room.toUpperCase()}`;
@@ -114,8 +117,56 @@ export function storedToken(room: string): string | undefined {
   return memoryTokens.get(key);
 }
 
+/* ─────────────────────────── token di AUTENTICAZIONE ────────────────────────
+ * Token opaco di sessione auth (account/ospite) rilasciato da /auth/*. Stessa
+ * strategia resiliente del token di room: autorevole IN MEMORIA per la vita della
+ * scheda, persistito best-effort su `sessionStorage` (per-scheda, così due schede
+ * dello stesso browser possono avere identità auth distinte e il refresh nella
+ * stessa scheda mantiene la sessione). Un errore di storage non è mai fatale.
+ *
+ * Scelta sessionStorage (non localStorage): il token è un credential; limitarne
+ * la persistenza alla scheda riduce la superficie rispetto a una condivisione
+ * cross-scheda persistente. In caso di storage indisponibile vince l'in-memory. */
+let memoryAuthToken: string | null = null;
+
+/** Legge il token auth: prova sessionStorage, ripiega sull'in-memory. */
+export function getAuthToken(): string | null {
+  if (memoryAuthToken) return memoryAuthToken;
+  try {
+    const v = sessionStorage.getItem(AUTH_TOKEN_KEY);
+    if (v) {
+      memoryAuthToken = v;
+      return v;
+    }
+  } catch {
+    /* storage indisponibile: resta null finché non si effettua login */
+  }
+  return null;
+}
+
+/** Salva il token auth (memoria + sessionStorage best-effort). */
+export function saveAuthToken(token: string): void {
+  memoryAuthToken = token;
+  try {
+    sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+  } catch {
+    /* per-scheda indisponibile: resta il fallback in-memory */
+  }
+}
+
+/** Cancella il token auth (logout): memoria + sessionStorage. */
+export function clearAuthToken(): void {
+  memoryAuthToken = null;
+  try {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  } catch {
+    /* nulla da fare: l'in-memory è già stato azzerato */
+  }
+}
+
 /** Solo per test: azzera lo stato in-memory tra i casi. Non usato in produzione. */
 export function __resetSessionIdentityForTests(): void {
   memoryClientId = null;
   memoryTokens.clear();
+  memoryAuthToken = null;
 }

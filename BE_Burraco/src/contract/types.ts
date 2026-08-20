@@ -165,7 +165,22 @@ export type ClientMessage =
   // `clientId` (LIFECYCLE): identità di sessione STABILE per-browser (non
   // per-room), usata per il RECLAIM di un posto disconnesso quando il token di
   // room è perso. Opaca per il server; non concede mai accesso a un posto vivo.
-  | { type: "join_room"; roomCode: string; playerToken?: string; displayName: string; clientId?: string }
+  //
+  // `authToken` (Macro-ciclo 1 — Auth): token di sessione OPACO rilasciato dagli
+  // endpoint HTTP /auth/*. Il server lo valida (sessione viva, non scaduta/revocata)
+  // e ne ricava il PRINCIPALE: usa il suo `display_name` AUTORITATIVO e IGNORA il
+  // `displayName` inviato dal client (anti-spoof). Con auth attiva (produzione),
+  // un join SENZA authToken valido è RIFIUTATO (SEC-08: niente ingresso col solo
+  // codice tavolo). `playerToken`/`clientId` restano per la riconnessione del POSTO
+  // (SEC-04/10/11) e NON sono sostituiti: authToken AGGIUNGE identità sopra di essi.
+  | {
+      type: "join_room";
+      roomCode: string;
+      playerToken?: string;
+      displayName: string;
+      clientId?: string;
+      authToken?: string;
+    }
   | { type: "draw"; source: "deck" | "discard"; clientMoveId?: string }
   | { type: "meld_new"; cards: string[]; clientMoveId?: string } // CardId[]
   | { type: "meld_extend"; meldId: string; cards: string[]; clientMoveId?: string }
@@ -249,4 +264,13 @@ export type ServerMessage =
   | { type: "room_closed"; reason: "interrupted" | "abandoned" }
   | { type: "opponent_disconnected"; seat: Seat }
   | { type: "opponent_reconnected"; seat: Seat }
+  /**
+   * Macro-ciclo 1 — Auth: rifiuto di `join_room` PRIMA di occupare un posto,
+   * distinto da `error` (generico) e da `move_rejected` (mossa di gioco). Chiude
+   * SEC-08: senza authToken valido non si entra col solo codice tavolo.
+   *  - "AUTH_REQUIRED" → authToken assente quando l'auth è obbligatoria;
+   *  - "AUTH_INVALID"  → authToken presente ma scaduto/revocato/sconosciuto.
+   * Il client mostra un messaggio leggibile e riporta alla schermata d'ingresso.
+   */
+  | { type: "join_rejected"; code: "AUTH_REQUIRED" | "AUTH_INVALID"; reason: string }
   | { type: "error"; message: string };

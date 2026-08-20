@@ -13,6 +13,7 @@ import type {
 } from "./contract";
 import type { CelebrationInfo } from "@/components/StateBanners";
 import { getClientId, saveToken, storedToken } from "./sessionIdentity";
+import { getAuthToken } from "./auth";
 
 /**
  * Hook che possiede la connessione WebSocket e lo STATO CLIENT (architettura FE
@@ -60,6 +61,16 @@ export interface RoomClosedInfo {
   reason: "interrupted" | "abandoned";
 }
 
+/**
+ * Rifiuto di join per motivi di AUTENTICazione (SEC-08): "AUTH_REQUIRED" =
+ * manca l'authToken; "AUTH_INVALID" = token scaduto/revocato. Il client interrompe
+ * i tentativi di riconnessione e riporta alla schermata d'ingresso/login.
+ */
+export interface JoinRejectedInfo {
+  code: "AUTH_REQUIRED" | "AUTH_INVALID";
+  reason: string;
+}
+
 export interface GameSocketApi {
   connPhase: ConnPhase;
   joined: boolean;
@@ -74,6 +85,8 @@ export interface GameSocketApi {
   gameEnded: GameEndedInfo | null;
   /** tavolo chiuso senza vincitore (reset/abbandono); terminale. */
   roomClosed: RoomClosedInfo | null;
+  /** join rifiutato per autenticazione (SEC-08); riporta alla schermata d'ingresso. */
+  joinRejected: JoinRejectedInfo | null;
   /** true tra l'invio di una mossa e la risposta del server (globale). */
   pending: boolean;
   /** cardIds coinvolti nella mossa in volo (per il pending PER-CARTA). */
@@ -85,6 +98,8 @@ export interface GameSocketApi {
   errorMessage: string | null;
 
   join: (roomCode: string, displayName: string) => void;
+  /** Reset del rifiuto di join (per riprovare dopo un nuovo login). */
+  dismissJoinRejected: () => void;
   /** Smonta il tavolo (invia reset_room): valido in attesa o con avversario offline. */
   resetRoom: () => void;
   drawDeck: () => void;
@@ -134,6 +149,7 @@ export function useGameSocket(): GameSocketApi {
   const [handEnded, setHandEnded] = useState<HandEndedInfo | null>(null);
   const [gameEnded, setGameEnded] = useState<GameEndedInfo | null>(null);
   const [roomClosed, setRoomClosed] = useState<RoomClosedInfo | null>(null);
+  const [joinRejected, setJoinRejected] = useState<JoinRejectedInfo | null>(null);
   const [pending, setPending] = useState(false);
   const [pendingCardIds, setPendingCardIds] = useState<string[]>([]);
   const [inFlightCardId, setInFlightCardId] = useState<string | null>(null);
@@ -258,6 +274,14 @@ export function useGameSocket(): GameSocketApi {
           if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
           clearInFlight();
           break;
+        case "join_rejected":
+          // SEC-08: il server ha negato l'ingresso per autenticazione. Interrompe
+          // la riconnessione automatica e segnala all'UI di riportare al login.
+          setJoinRejected({ code: msg.code, reason: msg.reason });
+          wantConnectedRef.current = false;
+          if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+          wsRef.current?.close();
+          break;
         case "opponent_disconnected":
         case "opponent_reconnected":
           setPlayers((prev) =>
@@ -302,9 +326,13 @@ export function useGameSocket(): GameSocketApi {
       sendRaw({
         type: "join_room",
         roomCode: room,
+        // Il server usa il display_name AUTORITATIVO dell'account: questo è solo
+        // un fallback per la modalità dev senza auth (server lo ignora se auth ON).
         displayName: nameRef.current,
         playerToken: storedToken(room),
         clientId: getClientId(),
+        // authToken dell'account/ospite: identità + gating SEC-08 lato server.
+        authToken: getAuthToken() ?? undefined,
       });
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
       heartbeatTimer.current = setInterval(() => sendRaw({ type: "heartbeat" }), HEARTBEAT_MS);
@@ -375,12 +403,14 @@ export function useGameSocket(): GameSocketApi {
     handEnded,
     gameEnded,
     roomClosed,
+    joinRejected,
     pending,
     pendingCardIds,
     inFlightCardId,
     celebration,
     errorMessage,
     join,
+    dismissJoinRejected: () => setJoinRejected(null),
     resetRoom: () => sendRaw({ type: "reset_room" }),
     drawDeck: () => sendMove({ type: "draw", source: "deck" }),
     drawDiscard: () => sendMove({ type: "draw", source: "discard" }),

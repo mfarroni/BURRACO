@@ -3,6 +3,10 @@ import { WebSocketServer, WebSocket } from "ws";
 import { RoomManager } from "../room/RoomManager.js";
 import { env } from "../config.js";
 import { parseClientMessage } from "./validate.js";
+import { isOriginAllowed } from "../net/originPolicy.js";
+import { AuthService } from "../auth/service.js";
+import { createAuthStore } from "../auth/store.js";
+import { createHttpApp } from "../http/app.js";
 
 /**
  * Layer di trasporto WebSocket (lib `ws`). NESSUNA logica di regole qui: solo
@@ -51,36 +55,34 @@ interface LiveSocket extends WebSocket {
 }
 
 /**
- * SEC-09: policy origin fail-closed in produzione.
- *  - prod: allowlist esplicita obbligatoria; mai "*"; origin mancante = rifiuto.
- *  - dev: permissivo (consente "*" e client non-browser senza origin).
+ * SEC-09: policy origin fail-closed condivisa (WS + CORS). Vedi net/originPolicy.
  */
 function originAllowed(origin: string | undefined): boolean {
-  const list = env.allowedOrigins;
-  if (env.isProd) {
-    if (list.length === 0 || list.includes("*")) return false; // misconfig → fail-closed
-    if (!origin) return false; // in prod un origin mancante non è "consentito"
-    return list.includes(origin);
-  }
-  // Sviluppo locale: comportamento permissivo per test/curl.
-  if (list.includes("*")) return true;
-  if (!origin) return true;
-  return list.includes(origin);
+  return isOriginAllowed(origin);
 }
 
-export function createServer(): http.Server {
-  const manager = new RoomManager();
+/**
+ * Opzioni di composizione del server. In produzione (`index.ts`) si passano un
+ * AuthService reale e `requireAuthOnJoin=true`; i test possono iniettare uno
+ * store in-memory o disattivare il gating per esercitare la sola meccanica room.
+ */
+export interface CreateServerOptions {
+  authService?: AuthService;
+  requireAuthOnJoin?: boolean;
+}
 
-  const httpServer = http.createServer((req, res) => {
-    // Health check per Render (e per il warm-up dal FE).
-    if (req.url === "/health" || req.url === "/") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", service: "be-burraco" }));
-      return;
-    }
-    res.writeHead(404);
-    res.end();
-  });
+export function createServer(opts: CreateServerOptions = {}): http.Server {
+  // AuthService: iniettato dai test o costruito qui (store Neon/in-memory secondo
+  // DATABASE_URL). È l'unica autorità su registrazione/sessioni.
+  const authService = opts.authService ?? new AuthService(createAuthStore(), { sessionTtlMs: env.sessionTtlMs });
+  const requireAuthOnJoin = opts.requireAuthOnJoin ?? env.requireAuthOnJoin;
+
+  const manager = new RoomManager({ authService, requireAuth: requireAuthOnJoin });
+
+  // App Express: /health + /auth/* (register/login/guest/logout/me) con CORS
+  // allowlist, rate-limit e validazione zod. Vive sullo STESSO http.Server del WS.
+  const app = createHttpApp(authService);
+  const httpServer = http.createServer(app);
 
   // SEC-02: `maxPayload` fa sì che `ws` rifiuti (1009) e non bufferizzi né
   // consegni frame oltre il limite: nessun parse di payload oversize.
