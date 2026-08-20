@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { Card } from "@/lib/contract";
-import { CardView } from "./CardView";
+import { CardView, cardLabel } from "./CardView";
 import { useHandOrder } from "@/lib/useHandOrder";
 
 /**
@@ -51,7 +51,10 @@ export function BottomHand({
 
   const doMoveTo = (id: string, toIndex: number) => {
     moveTo(id, toIndex);
-    setAnnounce(`Carta spostata in posizione ${toIndex + 1} di ${count}.`);
+    const card = orderedHand.find((c) => c.id === id);
+    setAnnounce(
+      `${card ? cardLabel(card) : "Carta"} spostata in posizione ${toIndex + 1} di ${count}.`,
+    );
   };
 
   const onKeyDownCard = (e: React.KeyboardEvent, card: Card, index: number) => {
@@ -61,8 +64,25 @@ export function BottomHand({
       const delta = e.key === "ArrowLeft" ? -1 : 1;
       moveBy(card.id, delta);
       const to = Math.max(0, Math.min(count - 1, index + delta));
-      setAnnounce(`${cardName(card)} spostata in posizione ${to + 1} di ${count}.`);
+      setAnnounce(`${cardLabel(card)} spostata in posizione ${to + 1} di ${count}.`);
     }
+  };
+
+  // Geometria del VENTAGLIO (pura presentazione): ogni carta ruota attorno al
+  // proprio bordo inferiore e si abbassa allontanandosi dal centro, disegnando un
+  // arco morbido. Angolo e curvatura si riducono con l'aumentare delle carte per
+  // non compromettere la leggibilità degli indici. Nessuna regola di gioco qui.
+  const mid = (count - 1) / 2;
+  const stepDeg = count > 1 ? Math.min(3, 26 / (count - 1)) : 0; // spread contenuto
+  const fanStyle = (index: number): React.CSSProperties => {
+    const offset = index - mid;
+    const rot = offset * stepDeg;
+    const lift = Math.abs(offset) ** 2 * (count > 9 ? 0.9 : 1.3); // px verso il basso ai bordi
+    return {
+      ["--i" as string]: String(index),
+      ["--rot" as string]: `${rot.toFixed(2)}deg`,
+      ["--ty" as string]: `${lift.toFixed(1)}px`,
+    };
   };
 
   return (
@@ -70,7 +90,7 @@ export function BottomHand({
       <div className="bottom-hand-head">
         <h4>La tua mano · {count} carte</h4>
         <span className="bottom-hand-hint muted">
-          Trascina per riordinare · tocca per selezionare · Ctrl+← → da tastiera
+          Tocca per selezionare · trascina per riordinare · da tastiera Ctrl/⌘ + ← →
         </span>
       </div>
 
@@ -90,9 +110,10 @@ export function BottomHand({
               <li
                 key={card.id}
                 className="fan-slot"
-                style={{ ["--i" as string]: String(index) }}
+                style={fanStyle(index)}
                 data-dragging={isDragging ? "true" : "false"}
                 data-over={isOver ? "true" : "false"}
+                data-selected={selected ? "true" : "false"}
                 draggable
                 onDragStart={(e) => {
                   setDragId(card.id);
@@ -140,9 +161,4 @@ export function BottomHand({
       </div>
     </section>
   );
-}
-
-function cardName(card: Card): string {
-  if (card.rank === "JOKER") return "Jolly";
-  return card.suit ? `${card.rank}` : card.rank;
 }

@@ -105,7 +105,11 @@ export default function Page() {
           placeholder="es. TAVOLO1"
           maxLength={12}
           autoComplete="off"
+          aria-describedby="room-hint"
         />
+        <p id="room-hint" className="field-hint">
+          Chi apre il tavolo sceglie un codice; l&apos;avversario digita lo stesso per sedersi.
+        </p>
         <button
           type="button"
           className="cta btn-primary"
@@ -122,17 +126,35 @@ export default function Page() {
             Apertura del tavolo in corso…
           </p>
         )}
-        {/* SEC-08: ingresso negato per autenticazione (token mancante/scaduto). */}
+        {/* SEC-08: ingresso negato per autenticazione (token mancante/scaduto).
+            Tono AMBRA (non rosso): non è una colpa dell'utente. Per la sessione
+            scaduta offriamo l'azione diretta riusando il logout già cablato. */}
         {g.joinRejected && (
-          <p role="alert" style={{ color: "var(--danger-300)", marginTop: "var(--sp-3)" }}>
-            {g.joinRejected.code === "AUTH_INVALID"
-              ? "La tua sessione è scaduta: esci e accedi di nuovo."
-              : g.joinRejected.reason}
-          </p>
+          g.joinRejected.code === "AUTH_INVALID" ? (
+            <div className="banner auth-notice" data-tone="warn" role="alert">
+              <span className="banner-icon" aria-hidden="true">⏱</span>
+              <span className="banner-body">
+                <span className="banner-title">La sessione è scaduta</span>
+                <span className="banner-sub">
+                  Per sicurezza le sessioni non durano all&apos;infinito. Rientra e sei subito
+                  di nuovo al tavolo.
+                </span>
+              </span>
+              <button type="button" className="btn-ghost" onClick={() => auth.logout()} disabled={auth.busy}>
+                Esci e accedi
+              </button>
+            </div>
+          ) : (
+            <p role="alert" className="auth-error">
+              <span className="auth-error-icon" aria-hidden="true">!</span>
+              <span>{g.joinRejected.reason}</span>
+            </p>
+          )
         )}
         {g.errorMessage && (
-          <p role="alert" style={{ color: "var(--danger-300)", marginTop: "var(--sp-3)" }}>
-            {g.errorMessage}
+          <p role="alert" className="auth-error">
+            <span className="auth-error-icon" aria-hidden="true">!</span>
+            <span>{g.errorMessage}</span>
           </p>
         )}
       </div>

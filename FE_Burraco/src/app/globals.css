@@ -692,6 +692,19 @@ button:disabled {
   transform: translateY(-6px);
 }
 
+/* FOCUS DA TASTIERA sulle carte — regola dedicata: la carta imposta un proprio
+ * `outline` di base (usato per selezione/matta) che, a parità di specificità,
+ * coprirebbe il focus-ring globale rendendolo invisibile. Qui lo ripristiniamo
+ * con specificità maggiore. Anello d'oro chiaro (alto contrasto sul feltro) con
+ * ALONE scuro esterno: garantisce ≥3:1 anche quando l'anello sfiora l'avorio o
+ * una carta adiacente. */
+.card:focus-visible {
+  outline: 3px solid var(--brass-300);
+  outline-offset: 2px;
+  box-shadow: var(--sh-lift), 0 0 0 5px rgba(11, 36, 29, 0.92);
+  z-index: var(--z-badges);
+}
+
 /* Carta "in volo" / attendo conferma (pending per-carta). */
 .card[data-pending="true"] {
   animation: card-pending 1s var(--ease-in-out) infinite;
@@ -1299,7 +1312,10 @@ button:disabled {
  * qui si garantisce solo che tutto sia usabile, leggibile e accessibile.
  * =================================================================== */
 
-/* ── Schermata d'ingresso: selettore Accedi/Registrati/Ospite ──────── */
+/* ── Schermata d'ingresso: selettore Accedi/Registrati/Ospite ────────
+ * Segmented control (pulsanti con aria-pressed, non tab ARIA): tre scelte
+ * di pari peso. La voce attiva emerge con superficie sollevata + FILO d'oro,
+ * distinguibile anche senza colore grazie al peso del testo. */
 .auth-tabs {
   display: flex;
   gap: var(--sp-1);
@@ -1311,32 +1327,100 @@ button:disabled {
 }
 .auth-tab {
   flex: 1;
+  min-height: 44px; /* target tattile WCAG 2.5.8 */
   padding: var(--sp-2) var(--sp-3);
-  border: 0;
+  border: 1px solid transparent;
   border-radius: var(--r-pill);
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-muted); /* su feltro: ~8.4:1 */
   font: inherit;
   cursor: pointer;
-  transition: background var(--dur-base), color var(--dur-base);
+  transition: background var(--dur-base), color var(--dur-base), border-color var(--dur-base);
+}
+.auth-tab:not(:disabled):hover {
+  color: var(--text-strong);
 }
 .auth-tab[data-active="true"] {
   background: var(--surface-raised);
   color: var(--text-strong);
+  border-color: var(--brass-600);
   box-shadow: var(--sh-card);
+  font-weight: 600;
+}
+.auth-tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 .auth-tab:focus-visible {
-  outline: 2px solid var(--brass-400);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
+
+/* Il submit d'oro è a flex per centrare spinner + testo nello stato busy. */
+.lobby .cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 48px;
+}
+.cta-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(26, 23, 18, 0.35); /* su oro: scuro */
+  border-top-color: var(--ink-900);
+  animation: spin 0.8s linear infinite;
+  flex: none;
+}
+
+/* Errore auth: NON colpevolizzante — pannello contenuto, icona neutra,
+ * bordo/testo rossi solo quanto basta per l'attenzione (AA su feltro). */
 .auth-error {
-  color: var(--danger-300);
-  margin: var(--sp-3) 0 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin: var(--sp-4) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  background: rgba(224, 87, 75, 0.1);
+  border: 1px solid var(--danger-500);
+  color: var(--danger-300); /* ~6.7:1 su feltro */
+}
+.auth-error-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--danger-500);
+  color: #2a0d0a;
+  font-weight: 800;
+  font-size: 0.8rem;
+  line-height: 1;
 }
 .auth-hint {
   margin-top: var(--sp-4);
   text-align: center;
-  font-size: var(--fs-sm, 0.9rem);
+  font-size: var(--fs-sm);
+}
+
+/* Aiuto sotto un campo (es. spiegazione del codice tavolo). */
+.field-hint {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+/* Avviso "sessione scaduta" nella lobby: banner ambra con azione a destra. */
+.auth-notice {
+  margin-top: var(--sp-4);
+}
+.auth-notice .btn-ghost {
+  margin-left: auto;
+  align-self: center;
+  flex: none;
 }
 
 /* ── Identità corrente + logout nella lobby ────────────────────────── */
@@ -1396,53 +1480,93 @@ button:disabled {
   font-size: var(--fs-xs);
 }
 
-/* Ventaglio: le carte si sovrappongono leggermente e restano tutte visibili.
- * Il gap negativo crea la sovrapposizione; su hover/focus la carta emerge. */
+/* Ventaglio ad ARCO: ogni carta è ruotata (--rot) attorno al proprio bordo
+ * inferiore e abbassata (--ty) allontanandosi dal centro, così le carte
+ * disegnano una curva morbida come una mano reale. La sovrapposizione (margin
+ * negativo) tiene compatto il ventaglio lasciando SEMPRE scoperto l'indice in
+ * alto a sinistra (rank+seme): leggibilità prima di tutto.
+ * Le variabili --rot/--ty arrivano calcolate dal componente (pura presentazione).
+ * padding-top ampio: lascia respiro alla carta sollevata su hover/focus. */
 .fan {
   list-style: none;
   margin: 0;
-  padding: var(--sp-3) var(--sp-2) var(--sp-2);
+  padding: var(--sp-6) var(--sp-4) var(--sp-2);
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
-  gap: var(--sp-1);
-  min-height: 96px;
+  min-height: 116px;
 }
 .fan-slot {
   position: relative;
-  transition: transform var(--dur-base), opacity var(--dur-base);
+  transform-origin: bottom center;
+  transform: translateY(var(--ty, 0px)) rotate(var(--rot, 0deg));
+  transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-base);
   /* Sovrapposizione morbida: ogni carta rientra sulla precedente. */
-  margin-left: -10px;
+  margin-left: -18px;
 }
 .fan-slot:first-child {
   margin-left: 0;
 }
+/* Carta a fuoco / sotto il puntatore: si RADDRIZZA e sale, indici ben leggibili. */
 .fan-slot:hover,
 .fan-slot:focus-within {
-  transform: translateY(-8px);
-  z-index: 2;
+  transform: translateY(-12px) rotate(0deg);
+  z-index: 3;
+}
+/* Carta SELEZIONATA (per calare/scartare): raddrizzata e in evidenza; il
+ * sollevamento fine viene dalla .card[data-selected]. */
+.fan-slot[data-selected="true"] {
+  transform: translateY(-4px) rotate(0deg);
+  z-index: 3;
 }
 .fan-slot[data-dragging="true"] {
   opacity: 0.4;
+  transform: translateY(-14px) rotate(0deg) scale(1.02);
+  z-index: 4;
 }
 .fan-slot[data-over="true"] {
-  transform: translateY(-4px);
+  transform: translateY(-6px) rotate(0deg);
 }
 .fan-slot[data-over="true"]::before {
-  /* Indicatore del punto di inserimento durante il drag. */
+  /* Indicatore del punto di inserimento durante il drag: filo d'oro luminoso. */
   content: "";
   position: absolute;
-  left: -6px;
-  top: 4px;
-  bottom: 4px;
+  left: -9px;
+  top: -2px;
+  bottom: 2px;
   width: 3px;
   border-radius: 2px;
-  background: var(--brass-400);
+  background: var(--brass-300);
+  box-shadow: 0 0 8px rgba(231, 208, 151, 0.7);
+  z-index: 5;
 }
 /* Il drag è un'interazione a puntatore: su touch resta la selezione al tocco e
- * il riordino da tastiera (Ctrl+frecce). Nessuna dipendenza dal solo puntatore. */
+ * il riordino da tastiera (Ctrl/⌘+frecce). Nessuna dipendenza dal solo puntatore. */
 @media (max-width: 640px) {
+  /* Carte leggermente più compatte così una mano piena (11+) sta in una sola
+   * riga senza overflow; l'indice in alto a sinistra resta scoperto e leggibile. */
+  .fan .card {
+    width: 46px;
+    height: 66px;
+  }
   .fan-slot {
-    margin-left: -14px;
+    margin-left: -20px;
+  }
+  .fan {
+    padding-inline: var(--sp-2);
+  }
+}
+
+/* Riduzione del movimento: il ventaglio si APPIATTISCE (nessuna rotazione né
+ * arco) per la massima leggibilità; la selezione resta comunicata dal
+ * sollevamento statico della carta. */
+@media (prefers-reduced-motion: reduce) {
+  .fan-slot {
+    --rot: 0deg;
+    --ty: 0px;
+  }
+  .fan {
+    padding-top: var(--sp-4);
+    min-height: 100px;
   }
 }
