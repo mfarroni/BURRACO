@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../db/schema.js";
 import type { AuthStore, StoredSession, StoredUser } from "./types.js";
@@ -103,6 +103,67 @@ export class DrizzleAuthStore implements AuthStore {
       .update(schema.sessions)
       .set({ revokedAt: new Date() })
       .where(and(eq(schema.sessions.tokenHash, tokenHash), isNull(schema.sessions.revokedAt)));
+  }
+
+  async revokeAllForUser(userId: string): Promise<number> {
+    const rows = await this.db
+      .update(schema.sessions)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(schema.sessions.userId, userId), isNull(schema.sessions.revokedAt)))
+      .returning({ id: schema.sessions.id });
+    return rows.length;
+  }
+
+  async enforceSessionCap(userId: string, max: number, now: Date): Promise<void> {
+    // Sessioni ATTIVE dell'utente (non revocate, non scadute), più recenti prima.
+    const active = await this.db
+      .select({ id: schema.sessions.id })
+      .from(schema.sessions)
+      .where(
+        and(
+          eq(schema.sessions.userId, userId),
+          isNull(schema.sessions.revokedAt),
+          gt(schema.sessions.expiresAt, now),
+        ),
+      )
+      .orderBy(sql`${schema.sessions.createdAt} desc`);
+    const toRevoke = active.slice(max).map((r) => r.id);
+    if (toRevoke.length === 0) return;
+    await this.db
+      .update(schema.sessions)
+      .set({ revokedAt: now })
+      .where(inArray(schema.sessions.id, toRevoke));
+  }
+
+  async pruneSessions(now: Date, revokedGraceMs: number): Promise<number> {
+    const revokedCutoff = new Date(now.getTime() - revokedGraceMs);
+    const rows = await this.db
+      .delete(schema.sessions)
+      .where(
+        or(
+          lte(schema.sessions.expiresAt, now),
+          and(isNotNull(schema.sessions.revokedAt), lte(schema.sessions.revokedAt, revokedCutoff)),
+        ),
+      )
+      .returning({ id: schema.sessions.id });
+    return rows.length;
+  }
+
+  async pruneInactiveGuests(cutoff: Date): Promise<number> {
+    // Elimina gli OSPITI inattivi (last_seen_at o, se null, created_at < cutoff) che
+    // NON hanno più sessioni e NON sono referenziati da match_players (vincolo FK).
+    const rows = await this.db
+      .delete(schema.users)
+      .where(
+        and(
+          eq(schema.users.isGuest, true),
+          lte(sql`coalesce(${schema.users.lastSeenAt}, ${schema.users.createdAt})`, cutoff),
+          sql`not exists (select 1 from ${schema.sessions} s where s.user_id = ${schema.users.id})`,
+          sql`not exists (select 1 from ${schema.matchPlayers} mp where mp.user_id = ${schema.users.id})`,
+        ),
+      )
+      .returning({ id: schema.users.id });
+    return rows.length;
   }
 
   async touchLastSeen(userId: string): Promise<void> {

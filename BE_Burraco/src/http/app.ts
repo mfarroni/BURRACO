@@ -4,6 +4,7 @@ import { z } from "zod";
 import { AuthService, AuthError, type AuthErrorCode } from "../auth/service.js";
 import { isOriginAllowed } from "../net/originPolicy.js";
 import { rateLimit } from "./rateLimit.js";
+import { env } from "../config.js";
 
 /**
  * APP HTTP del backend auth (Express) montata sullo STESSO http.Server del WS
@@ -12,9 +13,11 @@ import { rateLimit } from "./rateLimit.js";
  *   POST /auth/login     { email, password }               → { token, user }
  *   POST /auth/guest     { displayName? }                   → { token, user }
  *   POST /auth/logout    (Bearer)                           → { ok: true }
+ *   POST /auth/logout-all(Bearer)                           → { ok: true, revoked }
  *   GET  /auth/me        (Bearer)                           → { user }
  *
  * Sicurezza:
+ *  - security header HTTP (SEC-A5): nosniff, frame-deny, no-referrer, HSTS in prod.
  *  - CORS allowlist FAIL-CLOSED, specchio dell'origin del WS (net/originPolicy).
  *  - rate-limit in-RAM su login/register/guest (anti brute-force / abuso ospiti).
  *  - body validati con zod; corpi oltre 8kb rifiutati.
@@ -87,6 +90,25 @@ export function createHttpApp(auth: AuthService): Express {
   app.set("trust proxy", 1);
   // Nessun header rivelatore dello stack.
   app.disable("x-powered-by");
+
+  // SEC-A5: security header su OGNI risposta HTTP. Il BE serve solo JSON di
+  // servizio/auth (nessuna pagina), quindi una policy restrittiva non rompe nulla:
+  //  - X-Content-Type-Options: nosniff → niente MIME sniffing.
+  //  - X-Frame-Options: DENY + CSP frame-ancestors 'none' → no clickjacking/embedding.
+  //  - Referrer-Policy: no-referrer → non trapela l'URL del BE a terzi.
+  //  - HSTS SOLO in produzione (richiede https): forza wss/https, no downgrade.
+  // Applicato PRIMA di CORS così vale anche sulle preflight OPTIONS. `x-powered-by`
+  // resta disabilitato (sopra). Nessun header qui interferisce con CORS.
+  app.use((_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
+    if (env.isProd) {
+      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
+    next();
+  });
 
   // CORS: riflette l'origin SOLO se in allowlist (fail-closed come il WS). Le
   // richieste same-origin/non-browser (senza Origin) sono ammesse in dev; in prod
@@ -174,6 +196,17 @@ export function createHttpApp(auth: AuthService): Express {
       // Logout idempotente: anche senza token valido rispondiamo ok (nessun oracolo).
       if (token) await auth.logout(token);
       res.json({ ok: true });
+    }),
+  );
+
+  app.post(
+    "/auth/logout-all",
+    handler(async (req, res) => {
+      // SEC-A4: revoca TUTTE le sessioni del principale. A differenza di /logout
+      // (idempotente), richiede un Bearer VALIDO: token assente/scaduto → 401
+      // (auth.logoutAll solleva UNAUTHORIZED).
+      const revoked = await auth.logoutAll(bearer(req));
+      res.json({ ok: true, revoked });
     }),
   );
 

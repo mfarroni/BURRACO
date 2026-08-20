@@ -240,6 +240,9 @@ export class Room {
    * al termine della diagnosi.
    */
   private logJoin(branch: string, incomingClientId?: string): void {
+    // IGIENE (ciclo 2): diagnostica di join disattivata di default. Riattivabile
+    // impostando DIAG_JOIN=true (nessun segreto loggato: solo booleani/conteggi).
+    if (process.env.DIAG_JOIN !== "true") return;
     const slots = this.players.map((p) => ({
       seat: p.seat,
       live: this.isSeatLive(p),

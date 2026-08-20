@@ -35,6 +35,23 @@ export class AuthError extends Error {
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 200; // evita DoS su argon2 con input enormi
 
+/**
+ * SEC-A4 — cap di sessioni attive per utente. 10 = margine ampio per più
+ * dispositivi/browser dello stesso utente, ma limita la crescita illimitata dei
+ * token (login ripetuti). Al superamento, le sessioni più VECCHIE vengono revocate.
+ */
+const MAX_SESSIONS_PER_USER = 10;
+
+/**
+ * SEC-A3b — parametri del pruning periodico.
+ *  - PRUNE_REVOKED_GRACE_MS (24h): le sessioni revocate restano un giorno per
+ *    audit/diagnosi, poi vengono eliminate. Le scadute si eliminano subito.
+ *  - GUEST_INACTIVITY_MS (7g): un ospite inattivo da oltre il TTL di sessione è
+ *    comunque irraggiungibile (token già scaduto): si può eliminare senza impatto.
+ */
+const PRUNE_REVOKED_GRACE_MS = 24 * 60 * 60 * 1000;
+const GUEST_INACTIVITY_MS = 7 * 24 * 60 * 60 * 1000;
+
 export interface AuthResult {
   sessionToken: string;
   user: AuthUser;
@@ -58,8 +75,12 @@ export class AuthService {
   /** Emette un token opaco, ne persiste SOLO l'hash e lo restituisce in chiaro. */
   private async issueSession(userId: string): Promise<string> {
     const token = generateSessionToken();
-    const expiresAt = new Date(Date.now() + this.sessionTtlMs);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + this.sessionTtlMs);
     await this.store.createSession({ userId, tokenHash: hashToken(token), expiresAt });
+    // SEC-A4: subito dopo la creazione, pota le sessioni attive oltre il cap
+    // (revoca le più vecchie). La nuova sessione è la più recente: resta valida.
+    await this.store.enforceSessionCap(userId, MAX_SESSIONS_PER_USER, now);
     return token;
   }
 
@@ -131,6 +152,30 @@ export class AuthService {
   /** Revoca idempotente della sessione associata al token (logout). */
   async logout(token: string): Promise<void> {
     await this.store.revokeSessionByTokenHash(hashToken(token));
+  }
+
+  /**
+   * SEC-A4 — "Esci da tutti i dispositivi": revoca TUTTE le sessioni del
+   * principale del token corrente (inclusa quella in uso). Richiede un token
+   * VALIDO (non idempotente su token ignoto): se non risolve un principale,
+   * solleva UNAUTHORIZED, così l'endpoint risponde 401. Ritorna il numero di
+   * sessioni revocate.
+   */
+  async logoutAll(token: string | undefined | null): Promise<number> {
+    const principal = await this.getPrincipalByToken(token);
+    if (!principal) throw new AuthError("UNAUTHORIZED", "Sessione non valida.");
+    return this.store.revokeAllForUser(principal.userId);
+  }
+
+  /**
+   * SEC-A3b — manutenzione periodica (v1 single-instance): pota sessioni
+   * scadute/revocate e ospiti inattivi. Best-effort: un errore viene loggato ma
+   * non propagato (nessun impatto sul gioco). Ritorna un piccolo report per i log.
+   */
+  async runMaintenance(now: Date = new Date()): Promise<{ sessions: number; guests: number }> {
+    const sessions = await this.store.pruneSessions(now, PRUNE_REVOKED_GRACE_MS);
+    const guests = await this.store.pruneInactiveGuests(new Date(now.getTime() - GUEST_INACTIVITY_MS));
+    return { sessions, guests };
   }
 
   /**

@@ -84,6 +84,35 @@ export interface AuthStore {
   /** Revoca idempotente: imposta `revoked_at` se non già revocata. */
   revokeSessionByTokenHash(tokenHash: string): Promise<void>;
 
+  /**
+   * SEC-A4: revoca TUTTE le sessioni ATTIVE del principale ("esci da tutti i
+   * dispositivi"). Idempotente. Ritorna il numero di sessioni effettivamente
+   * revocate (utile ai test; il chiamante può ignorarlo).
+   */
+  revokeAllForUser(userId: string): Promise<number>;
+
+  /**
+   * SEC-A4: mantiene al massimo `max` sessioni ATTIVE (non revocate, non scadute a
+   * `now`) per utente, revocando le più VECCHIE in eccesso. Chiamato alla
+   * creazione di ogni sessione: limita la crescita illimitata dei token.
+   */
+  enforceSessionCap(userId: string, max: number, now: Date): Promise<void>;
+
+  /**
+   * SEC-A3b (pruning): elimina DEFINITIVAMENTE le sessioni SCADUTE (`expires_at`
+   * ≤ `now`) o REVOCATE da oltre `revokedGraceMs` (finestra d'audit). Ritorna il
+   * numero di righe eliminate. Nessun impatto sul gioco.
+   */
+  pruneSessions(now: Date, revokedGraceMs: number): Promise<number>;
+
+  /**
+   * SEC-A3b (pruning): elimina gli utenti OSPITI inattivi da prima di `cutoff`
+   * (per `last_seen_at`, o `created_at` se mai visti) che NON hanno più sessioni
+   * attive e non sono referenziati da partite. Ritorna il numero di righe
+   * eliminate. Gli account registrati non vengono mai eliminati.
+   */
+  pruneInactiveGuests(cutoff: Date): Promise<number>;
+
   /** Best-effort: aggiorna `last_seen_at`. Un fallimento non è mai fatale. */
   touchLastSeen(userId: string): Promise<void>;
 }
