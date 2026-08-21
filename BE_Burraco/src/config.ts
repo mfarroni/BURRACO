@@ -36,6 +36,18 @@ export const env = {
       : isProd,
   /** TTL di sessione auth in ms (default 7 giorni). */
   sessionTtlMs: Number(process.env.SESSION_TTL_MS ?? 7 * 24 * 60 * 60 * 1000),
+  /**
+   * Slug del PROGETTO Vercel del frontend, usato dallo strato (b) della policy
+   * origin (`net/originPolicy.ts`) per ammettere gli URL generati da Vercel
+   * (produzione, branch, preview). Default "burraco"; override su Render.
+   */
+  vercelProject: (process.env.VERCEL_PROJECT ?? "burraco").trim(),
+  /**
+   * Slug del TEAM/scope Vercel, presente nelle forme branch/preview
+   * (`<progetto>-git-<branch>-<team>.vercel.app`). Default "groupgames";
+   * override su Render.
+   */
+  vercelTeamSlug: (process.env.VERCEL_TEAM_SLUG ?? "groupgames").trim(),
 };
 
 /**
