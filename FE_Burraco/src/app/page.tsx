@@ -176,13 +176,13 @@ export default function Page() {
       <div className="lobby">
         <div className="brand">
           <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
-          <h1>In attesa dell'avversario</h1>
+          <h1>In attesa dell&apos;avversario</h1>
           <p className="tagline">
             Codice tavolo: <strong>{roomCode.toUpperCase() || "—"}</strong>
           </p>
         </div>
         <p className="muted" style={{ textAlign: "center" }}>
-          Condividi il codice con l'altro giocatore: la partita inizia appena si siede al tavolo.
+          Condividi il codice con l&apos;altro giocatore: la partita inizia appena si siede al tavolo.
         </p>
         <ConnectionBanner connPhase={g.connPhase} resumed={g.resumed} />
         {/* Reset consentito in attesa: nessun avversario da penalizzare. */}

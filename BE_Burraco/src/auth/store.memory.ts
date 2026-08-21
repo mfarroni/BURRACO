@@ -72,6 +72,56 @@ export class MemoryAuthStore implements AuthStore {
     if (s && s.revokedAt === null) s.revokedAt = new Date();
   }
 
+  async revokeAllForUser(userId: string): Promise<number> {
+    const now = new Date();
+    let revoked = 0;
+    for (const s of this.sessionsByTokenHash.values()) {
+      if (s.userId === userId && s.revokedAt === null) {
+        s.revokedAt = now;
+        revoked += 1;
+      }
+    }
+    return revoked;
+  }
+
+  async enforceSessionCap(userId: string, max: number, now: Date): Promise<void> {
+    // Raccoglie le sessioni ATTIVE (non revocate, non scadute) dell'utente, dalla
+    // più recente alla più vecchia, e revoca quelle oltre le `max` più recenti.
+    const active = [...this.sessionsByTokenHash.values()]
+      .filter((s) => s.userId === userId && s.revokedAt === null && s.expiresAt.getTime() > now.getTime())
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    for (const s of active.slice(max)) s.revokedAt = now;
+  }
+
+  async pruneSessions(now: Date, revokedGraceMs: number): Promise<number> {
+    let removed = 0;
+    for (const [hash, s] of this.sessionsByTokenHash) {
+      const expired = s.expiresAt.getTime() <= now.getTime();
+      const revokedStale = s.revokedAt !== null && s.revokedAt.getTime() + revokedGraceMs <= now.getTime();
+      if (expired || revokedStale) {
+        this.sessionsByTokenHash.delete(hash);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
+  async pruneInactiveGuests(cutoff: Date): Promise<number> {
+    let removed = 0;
+    for (const u of [...this.usersById.values()]) {
+      if (!u.isGuest) continue;
+      const lastActive = (u.lastSeenAt ?? u.createdAt).getTime();
+      if (lastActive >= cutoff.getTime()) continue;
+      // Non eliminare un ospite che ha ancora una sessione (attiva o non ancora potata).
+      const hasSession = [...this.sessionsByTokenHash.values()].some((s) => s.userId === u.id);
+      if (hasSession) continue;
+      this.usersById.delete(u.id);
+      if (u.email) this.usersByEmail.delete(u.email.toLowerCase());
+      removed += 1;
+    }
+    return removed;
+  }
+
   async touchLastSeen(userId: string): Promise<void> {
     const u = this.usersById.get(userId);
     if (u) u.lastSeenAt = new Date();

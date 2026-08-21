@@ -16,6 +16,14 @@ import { createHttpApp } from "../http/app.js";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
+/**
+ * SEC-A3b: intervallo dello sweep di manutenzione auth (pruning sessioni
+ * scadute/revocate + ospiti inattivi). 6h è un compromesso tra prontezza e costo:
+ * i dati potati sono comunque inerti (token già inutilizzabili), quindi non serve
+ * frequenza alta. Coerente v1 single-instance (nessun coordinamento multi-istanza).
+ */
+const AUTH_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
 /** SEC-02: tetto massimo di un singolo frame WS (payload oversize → 1009). */
 const MAX_PAYLOAD_BYTES = 16 * 1024;
 
@@ -153,11 +161,29 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
   // Non tenere vivo il processo solo per l'heartbeat.
   heartbeat.unref?.();
 
-  // A4: ferma l'intervallo sia alla chiusura del WSS sia dell'http server, così
+  // SEC-A3b: sweep periodico di manutenzione auth. Best-effort e non bloccante:
+  // un errore viene loggato ma non propaga (nessun impatto sul gioco). `unref` per
+  // non tenere vivo il processo solo per lo sweep.
+  const authSweep = setInterval(() => {
+    authService
+      .runMaintenance()
+      .then(({ sessions, guests }) => {
+        if (sessions > 0 || guests > 0) {
+          console.log(`[auth] pruning: sessioni=${sessions}, ospiti=${guests}`);
+        }
+      })
+      .catch((err) => console.error("[auth] pruning fallito:", (err as Error).message));
+  }, AUTH_SWEEP_INTERVAL_MS);
+  authSweep.unref?.();
+
+  // A4: ferma gli intervalli sia alla chiusura del WSS sia dell'http server, così
   // lo shutdown termina pulito senza handle attivi che impediscano l'uscita.
-  const stopHeartbeat = () => clearInterval(heartbeat);
-  wss.on("close", stopHeartbeat);
-  httpServer.on("close", stopHeartbeat);
+  const stopTimers = () => {
+    clearInterval(heartbeat);
+    clearInterval(authSweep);
+  };
+  wss.on("close", stopTimers);
+  httpServer.on("close", stopTimers);
 
   return httpServer;
 }
