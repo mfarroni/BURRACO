@@ -5,6 +5,7 @@ import { AuthService, AuthError, type AuthErrorCode } from "../auth/service.js";
 import { isOriginAllowed } from "../net/originPolicy.js";
 import { rateLimit } from "./rateLimit.js";
 import { env } from "../config.js";
+import type { StatsStore } from "../stats/types.js";
 
 /**
  * APP HTTP del backend auth (Express) montata sullo STESSO http.Server del WS
@@ -45,6 +46,13 @@ const loginBody = z.object({
 });
 const guestBody = z.object({ displayName: displayNameSchema });
 
+// Storico partite paginato: cap ragionevoli anti-abuso. Coercizione da querystring.
+// limit ∈ [1,50] (default 10); offset ≥ 0 con tetto anti-DoS (default 0).
+const matchesQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+  offset: z.coerce.number().int().min(0).max(100_000).default(0),
+});
+
 /* ─────────────────────────────── helper ──────────────────────────────────── */
 
 /** Mappa i codici d'errore stabili del servizio agli status HTTP. */
@@ -82,7 +90,7 @@ function handler(fn: (req: Request, res: Response) => Promise<void>) {
 
 /* ─────────────────────────────── app ─────────────────────────────────────── */
 
-export function createHttpApp(auth: AuthService): Express {
+export function createHttpApp(auth: AuthService, stats?: StatsStore): Express {
   const app = express();
 
   // Dietro il proxy di Render: fidati del primo hop per un req.ip coerente
@@ -217,6 +225,64 @@ export function createHttpApp(auth: AuthService): Express {
       res.json({ user });
     }),
   );
+
+  /* ───────────────────── STATISTICHE & PROFILO (macro-ciclo 3) ─────────────────
+   * GET /users/me/stats            (Bearer) → UserStats del principale.
+   * GET /users/me/matches?limit&offset (Bearer) → MatchSummary[] paginato.
+   *
+   * Sicurezza:
+   *  - l'utente è derivato SOLO dal token (getPrincipalByToken), MAI da un id nel
+   *    client → nessun IDOR: ogni risposta contiene SOLO i dati del principale.
+   *  - decisione B: profilo consultabile SOLO per utenti REGISTRATI. Un OSPITE
+   *    autenticato riceve 403 (le sue partite si registrano, ma niente profilo).
+   *  - header di sicurezza/CORS/rate-limit del blocco sopra restano invariati.
+   * Le rotte sono montate solo quando uno StatsStore è iniettato (in test-solo-auth
+   * può mancare: in tal caso non esistono e cadono nel 404).
+   */
+  if (stats) {
+    // Risolve il principale dal Bearer, applicando il gate "solo registrati".
+    // Ritorna null e INVIA GIÀ la risposta d'errore (401/403) quando non ammesso.
+    const requireRegistered = async (req: Request, res: Response) => {
+      const principal = await auth.getPrincipalByToken(bearer(req));
+      if (!principal) {
+        res.status(401).json({ error: "UNAUTHORIZED", message: "Sessione non valida." });
+        return null;
+      }
+      if (principal.isGuest) {
+        res.status(403).json({
+          error: "GUEST_NO_PROFILE",
+          message: "Registrati per salvare e consultare le statistiche.",
+        });
+        return null;
+      }
+      return principal;
+    };
+
+    app.get(
+      "/users/me/stats",
+      handler(async (req, res) => {
+        const principal = await requireRegistered(req, res);
+        if (!principal) return;
+        const result = await stats.getStats(principal.userId);
+        res.json(result);
+      }),
+    );
+
+    app.get(
+      "/users/me/matches",
+      handler(async (req, res) => {
+        const principal = await requireRegistered(req, res);
+        if (!principal) return;
+        const parsed = matchesQuery.safeParse(req.query);
+        if (!parsed.success) {
+          res.status(400).json({ error: "INVALID_QUERY", message: "Parametri di paginazione non validi." });
+          return;
+        }
+        const items = await stats.getRecentMatches(principal.userId, parsed.data);
+        res.json({ items, limit: parsed.data.limit, offset: parsed.data.offset });
+      }),
+    );
+  }
 
   // 404 JSON per rotte sconosciute (nessuna pagina HTML/stack trace).
   app.use((_req: Request, res: Response) => {

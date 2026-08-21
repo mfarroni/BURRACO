@@ -5,6 +5,7 @@ import type { Card } from "@/lib/contract";
 import { useGameSocket } from "@/lib/useGameSocket";
 import { useAuth } from "@/lib/useAuth";
 import { AuthPanel } from "@/components/AuthPanel";
+import { ProfilePanel } from "@/components/ProfilePanel";
 import { BottomHand } from "@/components/BottomHand";
 import { CardView } from "@/components/CardView";
 import { Melds } from "@/components/Melds";
@@ -31,6 +32,8 @@ export default function Page() {
 
   // Form della lobby.
   const [roomCode, setRoomCode] = useState("");
+  // Vista Profilo (sola lettura) sovrapposta alla lobby autenticata.
+  const [showProfile, setShowProfile] = useState(false);
 
   // Stato di SELEZIONE locale (nessuna regola: solo UI).
   const [selectedCards, setSelectedCards] = useState<string[]>([]);
@@ -75,6 +78,11 @@ export default function Page() {
     return <AuthPanel auth={auth} />;
   }
 
+  /* ── Profilo (sola lettura), raggiungibile dalla lobby autenticata ──── */
+  if (!g.joined && showProfile && auth.user) {
+    return <ProfilePanel user={auth.user} onBack={() => setShowProfile(false)} />;
+  }
+
   /* ── Autenticato ma non ancora al tavolo → codice tavolo + Entra ────── */
   if (!g.joined) {
     const connecting = g.connPhase === "connecting" || g.connPhase === "reconnecting";
@@ -92,6 +100,9 @@ export default function Page() {
             Sei entrato come <strong>{auth.user?.displayName}</strong>
             {auth.user?.isGuest ? " (ospite)" : ""}
           </span>
+          <button type="button" className="btn-ghost" onClick={() => setShowProfile(true)}>
+            Profilo
+          </button>
           <button type="button" className="btn-ghost" onClick={() => auth.logout()} disabled={auth.busy}>
             Esci
           </button>

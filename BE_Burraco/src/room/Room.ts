@@ -33,6 +33,15 @@ interface PlayerSlot {
    */
   clientId?: string;
   /**
+   * Macro-ciclo 3 (WIRING statistiche): identità (account o ospite) che occupa il
+   * posto, risolta dall'authToken in `join_room` (mai dal displayName del client).
+   * Serve SOLO a collegare la partita all'utente in `match_players.user_id` per le
+   * statistiche. È ORTOGONALE al meccanismo del posto (playerToken/clientId,
+   * SEC-04/10/11), che resta l'unica autorità sull'accesso allo slot. `null` per i
+   * join senza principale risolto (dev/test o gating disattivato).
+   */
+  userId: string | null;
+  /**
    * NEW-1: token PRECEDENTE ancora accettato durante la transizione di
    * riconnessione. Alla riconnessione ruotiamo il token, ma teniamo valido
    * ANCHE quello appena presentato dal client finché il client non conferma il
@@ -159,7 +168,13 @@ export class Room {
    * Il reclaim (2)/(4) vale SOLO per posti disconnessi: un posto VIVO non è mai
    * reclamabile né via token né via clientId (SEC-04). Mai più di 2 slot.
    */
-  join(ws: WebSocket, token: string | undefined, displayName: string, clientId?: string): void {
+  join(
+    ws: WebSocket,
+    token: string | undefined,
+    displayName: string,
+    clientId?: string,
+    userId?: string | null,
+  ): void {
     if (this.disposed) {
       this.logJoin("disposed", clientId);
       send(ws, { type: "error", message: "La partita è conclusa." });
@@ -185,7 +200,7 @@ export class Room {
         // Riconnessione legittima (slot disconnesso): rebind + rotazione token,
         // mantenendo valido il token presentato entro il TTL (NEW-1/SEC-10).
         this.logJoin("reconnect-token", clientId);
-        this.reconnectInto(existing, ws, token, displayName, clientId);
+        this.reconnectInto(existing, ws, token, displayName, clientId, userId);
         return;
       }
       // Token non riconosciuto: si prova il reclaim per clientId, poi nuovo ingresso.
@@ -199,7 +214,7 @@ export class Room {
       );
       if (byClient) {
         this.logJoin("reclaim-clientId", clientId);
-        this.reconnectInto(byClient, ws, null, displayName, clientId);
+        this.reconnectInto(byClient, ws, null, displayName, clientId, userId);
         return;
       }
     }
@@ -207,7 +222,7 @@ export class Room {
     // (3) Nuovo posto, se la room non è piena.
     if (!this.isFull()) {
       this.logJoin("new-slot", clientId);
-      this.createSlot(ws, displayName, clientId);
+      this.createSlot(ws, displayName, clientId, userId);
       return;
     }
 
@@ -221,7 +236,7 @@ export class Room {
       const disconnected = this.players.find((p) => !this.isSeatLive(p));
       if (disconnected) {
         this.logJoin("fallback-opentable", clientId);
-        this.reconnectInto(disconnected, ws, null, displayName, clientId);
+        this.reconnectInto(disconnected, ws, null, displayName, clientId, userId);
         return;
       }
     }
@@ -256,7 +271,7 @@ export class Room {
   }
 
   /** Crea un nuovo slot per un ingresso ex-novo e prova ad avviare la partita. */
-  private createSlot(ws: WebSocket, displayName: string, clientId?: string): void {
+  private createSlot(ws: WebSocket, displayName: string, clientId?: string, userId?: string | null): void {
     const seat = this.players.length as Seat;
     const newToken = randomUUID();
     const slot: PlayerSlot = {
@@ -267,6 +282,7 @@ export class Room {
       prevToken: null,
       prevTokenExpiry: null,
       clientId,
+      userId: userId ?? null,
       ws,
       status: "connected",
       graceTimer: null,
@@ -298,6 +314,7 @@ export class Room {
     presentedToken: string | null,
     _displayName: string,
     clientId?: string,
+    userId?: string | null,
   ): void {
     if (slot.graceTimer) {
       clearTimeout(slot.graceTimer);
@@ -307,6 +324,10 @@ export class Room {
     slot.status = "connected";
     // (Ri)aggancia l'identità per-browser, così i reclaim futuri restano possibili.
     if (clientId) slot.clientId = clientId;
+    // Aggiorna l'identità del posto se il rientro porta un principale risolto.
+    // Non azzera un userId già noto quando il rientro non ne porta uno (es. reclaim
+    // via clientId in dev senza authToken): l'aggancio all'account resta stabile.
+    if (userId != null) slot.userId = userId;
 
     const rotated = randomUUID();
     slot.token = rotated;
@@ -364,7 +385,12 @@ export class Room {
     void persistence.createMatch(this.matchId, this.config);
     void persistence.addPlayers(
       this.matchId,
-      this.players.map((p) => ({ seat: p.seat, displayName: p.displayName, tokenHash: p.tokenHash })),
+      this.players.map((p) => ({
+        seat: p.seat,
+        displayName: p.displayName,
+        tokenHash: p.tokenHash,
+        userId: p.userId,
+      })),
     );
     void persistence.startHand(this.matchId, this.handId, this.engine.handNumber, this.engine.dealerSeat);
 
