@@ -1570,3 +1570,400 @@ button:disabled {
     min-height: 100px;
   }
 }
+
+/* ===================================================================
+ * MACRO-CICLO 3 — SCHERMATA PROFILO (sola lettura)
+ * Riusa la "targa" della lobby (feltro sollevato + filo d'oro), allargata
+ * per far respirare la griglia statistiche e lo storico. Gerarchia dello
+ * sguardo: titolo serif → identità (nome + badge) → 2 metriche CHIAVE in oro
+ * → conteggi di supporto → storico partite. Accento d'oro con parsimonia.
+ * =================================================================== */
+.profile-panel {
+  max-width: 560px;
+}
+
+/* ── Identità: nome grande + badge stato account ─────────────────────── */
+.profile-identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-5);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+.profile-name {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h1);
+  color: var(--text-strong);
+  font-weight: 600;
+  word-break: break-word;
+}
+/* Badge: distinguibile ANCHE senza colore (icona + parola diverse).
+   Registrato = filo/accento d'ottone (identità "di pregio"); Ospite = neutro. */
+.profile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  flex: none;
+}
+.profile-badge-icon {
+  font-size: 0.9em;
+  line-height: 1;
+}
+.profile-badge[data-guest="false"] {
+  background: linear-gradient(180deg, var(--brass-400), var(--brass-600));
+  color: var(--ink-900); /* su oro pieno: alto contrasto, come btn-primary */
+  border-color: var(--brass-300);
+}
+.profile-badge[data-guest="true"] {
+  background: var(--surface-sunken);
+  color: var(--text-muted); /* su feltro: ~8.4:1 */
+  border-color: var(--border);
+}
+
+/* ── Ospite: invito a registrarsi (valorizzante, non colpevolizzante) ── */
+.profile-guest-note {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  padding: var(--sp-4);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brass-500);
+  border-radius: var(--r-md);
+}
+.profile-guest-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--brass-400);
+  flex: none;
+}
+.profile-guest-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.profile-guest-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.profile-guest-text {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  line-height: var(--lh-body);
+}
+
+/* ── Griglia statistiche (5 metriche) ────────────────────────────────
+   6 colonne proporzionali: le 2 metriche CHIAVE occupano mezza riga
+   ciascuna (span 3), i 3 conteggi un terzo ciascuno (span 2). */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+.stat-card {
+  grid-column: span 2; /* conteggi: 3 per riga */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-4) var(--sp-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  text-align: center;
+}
+.stat-card[data-highlight="true"] {
+  grid-column: span 3; /* metriche chiave: 2 per riga, in alto */
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  border-top: 2px solid var(--brass-500);
+  box-shadow: var(--sh-card);
+}
+.stat-value {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  line-height: 1.1;
+}
+.stat-card[data-highlight="true"] .stat-value {
+  font-size: 2rem;
+  color: var(--brass-300); /* oro chiaro su superficie scura: alto contrasto */
+}
+.stat-label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.stat-card[data-highlight="true"] .stat-label {
+  color: var(--text-muted);
+}
+
+/* Mobile: la griglia collassa a 2 colonne; le chiave restano a piena
+   larghezza in alto per mantenere la gerarchia. */
+@media (max-width: 520px) {
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .stat-card {
+    grid-column: span 1;
+  }
+  .stat-card[data-highlight="true"] {
+    grid-column: span 2;
+  }
+}
+
+/* ── Titolo di sezione (storico) ─────────────────────────────────────── */
+.profile-section-title {
+  font-size: var(--fs-h2);
+  color: var(--text-strong);
+  margin: 0 0 var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Storico partite: lista di righe esito/avversario/punteggio/data ──── */
+.match-history {
+  list-style: none;
+  margin: 0 0 var(--sp-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.match-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+/* Filo laterale semantico (rinforza l'esito oltre alla pill). */
+.match-row[data-result="won"] {
+  border-left: 3px solid var(--success-500);
+}
+.match-row[data-result="lost"] {
+  border-left: 3px solid var(--danger-500);
+}
+/* Pill esito: colore + icona (▲/▼) + parola → mai solo colore. */
+.match-result {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.match-result-icon {
+  font-size: 0.8em;
+  line-height: 1;
+}
+.match-result[data-result="won"] {
+  background: rgba(62, 164, 107, 0.16);
+  color: var(--success-300); /* su feltro: AA */
+  border-color: var(--success-500);
+}
+.match-result[data-result="lost"] {
+  background: rgba(224, 87, 75, 0.12);
+  color: var(--danger-300); /* su feltro: ~6.7:1 AA */
+  border-color: var(--danger-500);
+}
+.match-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* consente il troncamento del nome */
+}
+.match-opponent {
+  color: var(--text-strong);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.match-vs {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+.match-date {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+.match-score {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h2);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  white-space: nowrap;
+  justify-self: end;
+}
+.match-score .ms-you {
+  color: var(--text-strong); /* il TUO punteggio in evidenza */
+  font-weight: 600;
+}
+.match-score .ms-sep {
+  color: var(--text-faint);
+  margin: 0 var(--sp-1);
+}
+
+/* Storico su schermi molto stretti: la data scende sotto, il punteggio resta
+   allineato a destra e leggibile. */
+@media (max-width: 420px) {
+  .match-row {
+    gap: var(--sp-2);
+  }
+  .match-result {
+    padding: var(--sp-1) var(--sp-2);
+  }
+}
+
+/* ── "Carica altre" / "Riprova": target comodo, coerente coi ghost ────── */
+.match-more {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--sp-4);
+}
+.profile-more,
+.profile-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px; /* target tattile comodo (AAA), oltre l'AA */
+  padding: var(--sp-2) var(--sp-5);
+}
+
+/* ── Stato ERRORE: pannello con azione di recupero ───────────────────── */
+.profile-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+.profile-error .auth-error {
+  margin: 0;
+  width: 100%;
+}
+
+/* ── Stato VUOTO: invito a giocare la prima partita ──────────────────── */
+.profile-empty {
+  text-align: center;
+  padding: var(--sp-5) var(--sp-4);
+  background: var(--surface-sunken);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  margin-bottom: var(--sp-4);
+}
+.profile-empty-icon {
+  font-size: 1.4rem;
+  letter-spacing: 0.35em;
+  color: var(--brass-400);
+  display: block;
+  margin-bottom: var(--sp-2);
+}
+.profile-empty-title {
+  margin: 0 0 var(--sp-1);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.profile-empty-text {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+/* ── Stato LOADING: skeleton coerente col mood (feltro sollevato) ─────── */
+.profile-loading-text {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-4);
+  font-size: var(--fs-sm);
+}
+.spinner-inline {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--brass-400);
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+  flex: none;
+  display: inline-block;
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    var(--surface-raised) 37%,
+    var(--surface) 63%
+  );
+  background-size: 400% 100%;
+  border-radius: var(--r-sm);
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-card {
+  /* eredita layout da .stat-card; qui solo i placeholder interni */
+  min-height: 84px;
+  justify-content: center;
+}
+.skeleton-value {
+  width: 60%;
+  height: 1.6rem;
+}
+.skeleton-label {
+  width: 45%;
+  height: 0.7rem;
+}
+.match-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.skeleton-row {
+  height: 56px;
+  border-radius: var(--r-md);
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+/* ── Azioni del profilo ──────────────────────────────────────────────── */
+.profile-actions {
+  margin-top: var(--sp-5);
+}
+.profile-actions .cta {
+  margin-top: 0;
+}
+
+/* Riduzione del movimento: niente shimmer/spin, lo skeleton resta come blocco
+   STATICO (superficie sollevata) e lo stato è comunque annunciato via aria-live. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--surface-raised);
+  }
+  .spinner-inline {
+    animation: none;
+  }
+}
