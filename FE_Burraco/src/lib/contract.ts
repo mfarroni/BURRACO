@@ -206,3 +206,36 @@ export interface AuthErrorBody {
   error: string;
   message: string;
 }
+
+/* ─────────────────────── CONTRATTO STATISTICHE & PROFILO (HTTP) ──────────────
+ * DTO degli endpoint REST /users/me/* del backend (macro-ciclo 3). COPIA
+ * allineata a mano (decisione #4/#8): specchio di BE contract/types.ts. L'utente
+ * è SEMPRE derivato dal token lato server (mai un id nel client): nessun IDOR. */
+
+/** Statistiche aggregate CORE di un utente. Specchio di UserStats (BE). */
+export interface UserStats {
+  matchesPlayed: number;
+  matchesWon: number;
+  matchesLost: number;
+  /** won/played in [0,1]; 0 quando played = 0. */
+  winRate: number;
+  totalPoints: number;
+}
+
+/** Sintesi di una partita conclusa nello storico. Specchio di MatchSummary (BE). */
+export interface MatchSummary {
+  matchId: string;
+  /** Epoch millis di fine partita (best-effort); può essere null. */
+  endedAt: number | null;
+  result: "won" | "lost";
+  opponentName: string;
+  yourScore: number;
+  opponentScore: number;
+}
+
+/** Risposta paginata di GET /users/me/matches. */
+export interface MatchesPage {
+  items: MatchSummary[];
+  limit: number;
+  offset: number;
+}

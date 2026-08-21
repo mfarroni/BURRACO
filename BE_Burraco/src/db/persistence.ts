@@ -32,7 +32,7 @@ export const persistence = {
 
   async addPlayers(
     matchId: string,
-    players: { seat: Seat; displayName: string; tokenHash: string }[],
+    players: { seat: Seat; displayName: string; tokenHash: string; userId?: string | null }[],
   ): Promise<void> {
     await safe("addPlayers", () =>
       db!.insert(schema.matchPlayers).values(
@@ -41,6 +41,10 @@ export const persistence = {
           seat: p.seat,
           displayName: p.displayName,
           playerTokenHash: p.tokenHash,
+          // Macro-ciclo 3: collega il posto all'identità (account o ospite) che lo
+          // occupa. Nullable: partite pre-auth/senza principale restano valide. Il
+          // meccanismo del POSTO (playerToken/clientId, SEC-04/10/11) è INVARIATO.
+          userId: p.userId ?? null,
         })),
       ),
     );

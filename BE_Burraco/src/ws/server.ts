@@ -6,7 +6,9 @@ import { parseClientMessage } from "./validate.js";
 import { isOriginAllowed } from "../net/originPolicy.js";
 import { AuthService } from "../auth/service.js";
 import { createAuthStore } from "../auth/store.js";
+import { createStatsStore } from "../stats/store.js";
 import { createHttpApp } from "../http/app.js";
+import type { StatsStore } from "../stats/types.js";
 
 /**
  * Layer di trasporto WebSocket (lib `ws`). NESSUNA logica di regole qui: solo
@@ -77,6 +79,8 @@ function originAllowed(origin: string | undefined): boolean {
 export interface CreateServerOptions {
   authService?: AuthService;
   requireAuthOnJoin?: boolean;
+  /** StatsStore per gli endpoint /users/me/* (macro-ciclo 3). Default: factory su DATABASE_URL. */
+  statsStore?: StatsStore;
 }
 
 export function createServer(opts: CreateServerOptions = {}): http.Server {
@@ -87,9 +91,12 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
 
   const manager = new RoomManager({ authService, requireAuth: requireAuthOnJoin });
 
-  // App Express: /health + /auth/* (register/login/guest/logout/me) con CORS
+  // StatsStore: Drizzle/Neon con DATABASE_URL, altrimenti in-memory (macro-ciclo 3).
+  const statsStore = opts.statsStore ?? createStatsStore();
+
+  // App Express: /health + /auth/* + /users/me/* (stats/storico) con CORS
   // allowlist, rate-limit e validazione zod. Vive sullo STESSO http.Server del WS.
-  const app = createHttpApp(authService);
+  const app = createHttpApp(authService, statsStore);
   const httpServer = http.createServer(app);
 
   // SEC-02: `maxPayload` fa sì che `ws` rifiuti (1009) e non bufferizzi né

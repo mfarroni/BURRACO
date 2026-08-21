@@ -69,6 +69,10 @@ export class RoomManager {
     // SEC-08 (Auth): con gating attivo, servono un AuthService e un authToken
     // VALIDO per entrare. Il displayName usato è quello autoritativo del principale.
     let authoritativeName = msg.displayName ?? "";
+    // Macro-ciclo 3 (WIRING): identità che occupa il posto, per collegare la
+    // partita all'utente in match_players.user_id. Risolta SOLO dal token (mai dal
+    // client). `null` finché non c'è un principale (dev/test o gating off senza token).
+    let userId: string | null = null;
     if (this.requireAuth && this.authService) {
       if (!msg.authToken) {
         ws.send(
@@ -93,18 +97,22 @@ export class RoomManager {
       }
       // Nome autoritativo dal server: IGNORA qualsiasi displayName del client.
       authoritativeName = principal.displayName;
+      userId = principal.userId;
     } else if (this.authService && msg.authToken) {
       // Gating disattivato ma authToken presente e valido → usa comunque il nome
       // autoritativo se risolvibile (nessun rifiuto se assente/non valido in dev).
       const principal = await this.authService.getPrincipalByToken(msg.authToken);
-      if (principal) authoritativeName = principal.displayName;
+      if (principal) {
+        authoritativeName = principal.displayName;
+        userId = principal.userId;
+      }
     }
 
     const room = this.getOrCreate(code, defaultGameConfig());
     this.socketRoom.set(ws, room);
     // playerToken/clientId restano il meccanismo di riconnessione del POSTO
     // (SEC-04/10/11), non toccato: authToken aggiunge identità, non la sostituisce.
-    room.join(ws, msg.playerToken, authoritativeName, msg.clientId);
+    room.join(ws, msg.playerToken, authoritativeName, msg.clientId, userId);
   }
 
   handleMessage(ws: WebSocket, msg: ClientMessage): void {

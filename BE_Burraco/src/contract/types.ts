@@ -150,6 +150,37 @@ export interface HandScoreDetail {
   totalDelta: number; // somma dei precedenti
 }
 
+/* ───────────────────────── STATISTICHE & PROFILO (HTTP) ─────────────────────
+ * Macro-ciclo 3. DTO di RISPOSTA degli endpoint REST /users/me/* (sotto Bearer).
+ * Sono di proprietà del BACKEND: il FE ne tiene una COPIA allineata a mano
+ * (decisione #4/#8, nessun package condiviso). Le statistiche sono calcolate
+ * ON-THE-FLY (decisione A) dallo StatsStore; qui viaggiano solo i numeri finali,
+ * mai lo stato di gioco. L'utente è SEMPRE derivato dal token (mai da un id nel
+ * client): nessun IDOR possibile.
+ */
+
+/** Statistiche aggregate CORE di un utente (decisione C). */
+export interface UserStats {
+  matchesPlayed: number;
+  matchesWon: number;
+  matchesLost: number;
+  /** won/played in [0,1]; 0 quando played = 0. */
+  winRate: number;
+  /** Somma dei delta di punteggio delle mani per il posto dell'utente. */
+  totalPoints: number;
+}
+
+/** Sintesi di una partita conclusa per lo storico paginato (decisione E). */
+export interface MatchSummary {
+  matchId: string;
+  /** Epoch millis di fine partita (best-effort: ultima mano conclusa). Può essere null. */
+  endedAt: number | null;
+  result: "won" | "lost";
+  opponentName: string;
+  yourScore: number;
+  opponentScore: number;
+}
+
 /* ─────────────────────────── EVENTI WEBSOCKET ─────────────────────────── */
 
 /**
