@@ -45,20 +45,48 @@ function assertSecureBase(): void {
   }
 }
 
+/**
+ * Timeout massimo (ms) di una chiamata auth: oltre questo la richiesta viene
+ * abortita e mappata a un errore TIMEOUT dedicato ("tempo scaduto").
+ */
+const REQUEST_TIMEOUT_MS = 15_000;
+
 async function call<T>(path: string, init: RequestInit): Promise<T> {
   assertSecureBase();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let res: Response;
   try {
     res = await fetch(API_URL + path, {
       ...init,
+      signal: controller.signal,
       headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
     });
-  } catch {
-    // Rete assente / server irraggiungibile: messaggio neutro, nessun dettaglio.
-    throw new AuthClientError("NETWORK", "Impossibile contattare il server. Riprova.", 0);
+  } catch (err) {
+    // Il browser NON espone al JS il motivo di un fetch fallito senza risposta:
+    // una preflight CORS bloccata è indistinguibile da rete assente o server giù.
+    // Quindi NON affermiamo "server offline": diciamo la verità, cioè che la
+    // richiesta non ha ricevuto risposta, e distinguiamo il solo caso certo (timeout).
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new AuthClientError(
+        "TIMEOUT",
+        "Tempo scaduto: il server non ha risposto entro il tempo previsto. Riprova.",
+        0,
+      );
+    }
+    throw new AuthClientError(
+      "NETWORK",
+      "Nessuna risposta dal server: possibile problema di rete, timeout o richiesta bloccata dal browser. Riprova.",
+      0,
+    );
+  } finally {
+    clearTimeout(timer);
   }
   const body = (await res.json().catch(() => ({}))) as Partial<AuthErrorBody> & Record<string, unknown>;
   if (!res.ok) {
+    // Errore APPLICATIVO del backend: si usa il messaggio mappato dal server
+    // (es. 409 email duplicata). Il login resta 401 generico (anti-enumeration):
+    // il server NON differenzia "email inesistente" da "password errata".
     throw new AuthClientError(
       typeof body.error === "string" ? body.error : "ERROR",
       typeof body.message === "string" ? body.message : "Operazione non riuscita.",
