@@ -544,7 +544,11 @@ button:disabled {
   padding: var(--sp-3);
   border: 2px solid var(--wood-700);
   border-radius: var(--r-lg);
+  /* Feltro con VIGNETTATURA (angoli in ombra → profondità da tavolo reale) +
+     luce radiale calda al centro. La vignetta è un layer di background, quindi
+     resta DIETRO le postazioni: dà profondità senza velare i contenuti. */
   background:
+    radial-gradient(135% 105% at 50% 42%, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, 0.42) 100%),
     radial-gradient(120% 90% at 50% 40%, var(--felt-700), var(--felt-900)),
     linear-gradient(0deg, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.25));
   box-shadow: var(--sh-inset), 0 0 0 4px var(--wood-800) inset;
@@ -635,9 +639,17 @@ button:disabled {
 .seat-plate[data-team="them"] .team-tag {
   color: var(--info-300);
 }
-/* Postazione ATTIVA (di turno): glow d'oro "a colpo d'occhio". */
+/* Postazione ATTIVA (di turno): glow d'oro "a colpo d'occhio" + superficie
+   sollevata così la targa di turno EMERGE sulle altre anche in periferia visiva. */
 .seat-plate[data-active="true"] {
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
   box-shadow: var(--glow-turn);
+}
+.seat-plate[data-active="true"] .seat-name {
+  color: var(--text-strong);
+}
+.seat-plate[data-active="true"] .seat-hand {
+  color: var(--text);
 }
 
 /* Isola centrale: la vecchia .tableau, ora fissa nell'area "center". */
@@ -1628,15 +1640,22 @@ button:disabled {
   bottom: 88px; /* sopra la action-bar sticky */
   margin-top: var(--sp-5);
   padding: var(--sp-3);
-  background: var(--surface-sunken);
+  /* Zona-mano FLOTTANTE: velo caldo sottile dal basso (luce del giocatore) su
+     feltro incassato, così la mano legge come il piano più vicino/vivo. L'oro
+     acceso resta riservato allo stato di turno (data-active-turn). */
+  background:
+    radial-gradient(120% 140% at 50% 118%, rgba(200, 162, 74, 0.1), rgba(0, 0, 0, 0) 62%),
+    var(--surface-sunken);
   border: 1px solid var(--border);
+  border-top-color: var(--border-strong);
   border-radius: var(--r-md);
   isolation: isolate;
+  box-shadow: var(--sh-panel);
   transition: box-shadow var(--dur-base), border-color var(--dur-base);
 }
 .bottom-hand[data-active-turn="true"] {
   border-color: var(--brass-500);
-  box-shadow: var(--glow-turn);
+  box-shadow: var(--sh-panel), var(--glow-turn);
 }
 .bottom-hand-head {
   display: flex;
@@ -1729,6 +1748,27 @@ button:disabled {
   max-height: 220px; /* ~2 file di 64px + gap; oltre → scroll verticale (3ª fila) */
   overflow-y: auto;
   overflow-x: hidden;
+  /* Nota F (develop): con `touch-action:none` sulle carte lo scroll verticale
+     (>2 file) parte dalle AREE NON-CARTA. Non tocchiamo la logica del drag; qui
+     rendiamo lo scroll un AFFORDANCE: gutter stabile a destra = una striscia
+     non-carta sempre pannabile, + scrollbar tematizzata (ottone su feltro)
+     così l'utente vede che c'è dell'altro sotto. */
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--brass-600) transparent;
+}
+.fan[data-layout="rows"]::-webkit-scrollbar {
+  width: 10px;
+}
+.fan[data-layout="rows"]::-webkit-scrollbar-thumb {
+  background: var(--brass-600);
+  border-radius: var(--r-pill);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.fan[data-layout="rows"]::-webkit-scrollbar-thumb:hover {
+  background: var(--brass-500);
+  background-clip: padding-box;
 }
 .fan[data-layout="rows"] .fan-slot {
   transform: none;
@@ -1737,6 +1777,19 @@ button:disabled {
 .fan[data-layout="rows"] .card {
   width: 44px;
   height: 64px;
+  padding: 3px 4px;
+}
+/* Tipografia calibrata sul formato 44×64 (come le carte `small`, già validate):
+   indice ~0.72rem ≈ 11.5px e pip ~1.15rem restano leggibili senza affollare la
+   faccia. La striscia esposta ≥30px mostra l'indice alto-sinistra ben nitido. */
+.fan[data-layout="rows"] .card .index {
+  font-size: 0.72rem;
+}
+.fan[data-layout="rows"] .card .pip {
+  font-size: 1.15rem;
+}
+.fan[data-layout="rows"] .card .jolly {
+  font-size: 1.1rem;
 }
 /* Schermi molto stretti (<340px): strip esposto ≥28px, mai meno. */
 @media (max-width: 340px) {
@@ -1797,9 +1850,25 @@ button:disabled {
   z-index: 25; /* filo d'inserimento: locale alla .bottom-hand, sotto il drag */
 }
 
+/* SELEZIONE nel layout a FILE — marcatore d'oro PERSISTENTE sulla striscia
+   esposta. Con l'overlap (30px visibili) il solo lift non basta: una carta
+   sollevata può essere in parte coperta dalla vicina. Un filo d'oro sul bordo
+   SINISTRO (che cade dentro la striscia sempre visibile) rende la selezione
+   inequivocabile anche a colpo d'occhio su una fila fitta, indipendentemente dal
+   sollevamento. Coerente col linguaggio "oro = scelto/prezioso". */
+.fan[data-layout="rows"] .fan-slot[data-selected="true"] .card {
+  box-shadow: var(--sh-lift), inset 3px 0 0 0 var(--brass-400);
+}
+/* Rinforzo del contrasto dell'anello di selezione (≥3:1 anche se sfiora l'avorio
+   di una carta adiacente): anello d'oro chiaro con alone scuro esterno. */
+.fan-slot[data-selected="true"] .card[data-selected="true"] {
+  outline-color: var(--brass-300);
+}
+
 /* Riduzione del movimento: nessun lift/scala/dim/arco animati. La modalità
  * riordino resta comunicata da BORDO d'oro statico + VARCO + annuncio SR; la
- * selezione dal sollevamento statico della carta. */
+ * selezione dal sollevamento statico della carta. In assenza di movimento il
+ * filo d'oro sul bordo sinistro (regola sopra) diventa il segnale primario. */
 @media (prefers-reduced-motion: reduce) {
   .fan[data-layout="arc"] .fan-slot {
     --rot: 0deg;
