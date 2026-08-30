@@ -129,10 +129,16 @@
   --glow-turn: 0 0 0 2px var(--brass-300), 0 0 18px rgba(231, 208, 151, 0.35);
   --glow-danger: 0 0 0 2px var(--danger-500), 0 0 16px rgba(224, 87, 75, 0.3);
 
-  /* Z-INDEX del tavolo (scala esplicita) */
-  --z-table: 0;
-  --z-cards: 10;
-  --z-badges: 20;
+  /* Z-INDEX del tavolo — SCALA ESPLICITA (ladder). Risolve l'incoerenza storica
+     slot(3–4) ↔ carte(10). La zona-mano (.bottom-hand) è un contesto di
+     impilamento LOCALE (isolation:isolate): al suo interno active=15,
+     filo-inserimento=25, drag=30 non competono con i livelli globali. */
+  --z-table: 0; /* feltro / superficie */
+  --z-melds: 5; /* giochi calati (sollevati sul feltro) */
+  --z-cards: 10; /* carte a riposo */
+  --z-hand-card-active: 15; /* hover / selezione / press-preview */
+  --z-badges: 20; /* badge, focus ring */
+  --z-hand-drag: 30; /* carta trascinata: flotta sopra, mai clippata */
   --z-banner: 40;
   --z-toast: 60;
   --z-overlay: 80;
@@ -527,15 +533,135 @@ button:disabled {
 /* ===================================================================
  * TAVOLO CENTRALE — mazzo, monte scarti, pozzetti, contatori
  * =================================================================== */
-.tableau {
+/* TAVOLO A GRIGLIA con POSTAZIONI — commutato da data-seats. L'ISOLA CENTRALE
+   (board-center) NON si sposta tra 2 e 4 postazioni: sono le postazioni a
+   disporsi attorno. Locale sempre a Sud. Cornice a doghe di legno per
+   incorniciare l'area come un tavolo da circolo. */
+.table-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: var(--sp-4);
+  gap: var(--sp-3);
   margin: var(--sp-4) 0;
-  padding: var(--sp-4);
-  background: radial-gradient(120% 120% at 50% 0%, var(--felt-700), var(--felt-900));
-  border: 1px solid var(--border);
+  padding: var(--sp-3);
+  border: 2px solid var(--wood-700);
   border-radius: var(--r-lg);
+  /* Feltro con VIGNETTATURA (angoli in ombra → profondità da tavolo reale) +
+     luce radiale calda al centro. La vignetta è un layer di background, quindi
+     resta DIETRO le postazioni: dà profondità senza velare i contenuti. */
+  background:
+    radial-gradient(135% 105% at 50% 42%, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, 0.42) 100%),
+    radial-gradient(120% 90% at 50% 40%, var(--felt-700), var(--felt-900)),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.25));
+  box-shadow: var(--sh-inset), 0 0 0 4px var(--wood-800) inset;
+}
+/* 2 postazioni (1v1): loro a Nord, isola al centro, giochi, tu a Sud. */
+.table-grid[data-seats="2"] {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "north"
+    "center"
+    "melds"
+    "south";
+}
+/* 4 postazioni (PREDISPOSIZIONE, non attiva in v1): compagno a Nord, avversari a
+   Est/Ovest, isola FERMA al centro, tu a Sud. Solo layout: nessuna regola 2v2. */
+.table-grid[data-seats="4"] {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-areas:
+    "north  north  north"
+    "west   center east"
+    "melds  melds  melds"
+    "south  south  south";
+}
+.seat-west { grid-area: west; }
+.seat-east { grid-area: east; }
+.seat-north { grid-area: north; }
+.seat-south { grid-area: south; }
+
+/* Targa di postazione — nome + tag squadra + crest + conteggio mano + turno.
+   Tre canali di distinzione squadra: posizione (area) + colore (data-team) +
+   etichetta/crest. Il glow d'oro segnala la postazione ATTIVA (di turno). */
+.seat-plate {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+.seat-plate .seat-name {
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.seat-plate .seat-hand {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+.seat-plate .crest {
+  font-size: 1rem;
+  line-height: 1;
+}
+.seat-plate .team-tag {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-pill);
+  border: 1px solid currentColor;
+}
+.seat-plate .seat-off {
+  font-size: var(--fs-xs);
+  color: var(--warn-500);
+}
+.seat-plate .turn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brass-300);
+  box-shadow: 0 0 8px var(--brass-300);
+  animation: pulse-dot 1.4s var(--ease-in-out) infinite;
+}
+/* Colore semantico di squadra (cieco-sicuro: oro vs blu). */
+.seat-plate[data-team="us"] {
+  border-color: var(--brass-500);
+}
+.seat-plate[data-team="us"] .crest,
+.seat-plate[data-team="us"] .team-tag {
+  color: var(--brass-300);
+}
+.seat-plate[data-team="them"] {
+  border-color: var(--info-500);
+}
+.seat-plate[data-team="them"] .crest,
+.seat-plate[data-team="them"] .team-tag {
+  color: var(--info-300);
+}
+/* Postazione ATTIVA (di turno): glow d'oro "a colpo d'occhio" + superficie
+   sollevata così la targa di turno EMERGE sulle altre anche in periferia visiva. */
+.seat-plate[data-active="true"] {
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  box-shadow: var(--glow-turn);
+}
+.seat-plate[data-active="true"] .seat-name {
+  color: var(--text-strong);
+}
+.seat-plate[data-active="true"] .seat-hand {
+  color: var(--text);
+}
+
+/* Isola centrale: la vecchia .tableau, ora fissa nell'area "center". */
+.board-center {
+  grid-area: center;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  background: radial-gradient(120% 120% at 50% 0%, rgba(23, 74, 56, 0.6), rgba(14, 42, 34, 0.6));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
   box-shadow: var(--sh-inset);
 }
 .pile {
@@ -687,9 +813,19 @@ button:disabled {
   transform: translateY(-12px);
   box-shadow: var(--sh-lift);
   outline-color: var(--brass-400);
+  z-index: var(--z-hand-card-active);
 }
 .card.clickable:hover {
   transform: translateY(-6px);
+  z-index: var(--z-hand-card-active);
+}
+/* PRESS-PREVIEW (touch): la carta bersaglio si evidenzia PRIMA del commit; il
+   toggle avviene al rilascio (si può scorrere il dito per correggere). */
+.card[data-pressed="true"] {
+  transform: translateY(-8px);
+  box-shadow: var(--sh-lift);
+  outline-color: var(--brass-300);
+  z-index: var(--z-hand-card-active);
 }
 
 /* FOCUS DA TASTIERA sulle carte — regola dedicata: la carta imposta un proprio
@@ -803,25 +939,64 @@ button:disabled {
  * GIOCHI CALATI (MELDS) — con badge burraco pulito/sporco
  * =================================================================== */
 .melds {
+  grid-area: melds;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--sp-4);
-  margin: var(--sp-4) 0;
+  margin: 0;
 }
 @media (max-width: 640px) {
   .melds {
     grid-template-columns: 1fr;
   }
 }
+/* Gruppo giochi PER SQUADRA: bordo/accento colorato per data-team (oro Noi,
+   acciaio Loro), oltre a crest + etichetta nell'intestazione. */
 .meld-group {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
   border-radius: var(--r-md);
   padding: var(--sp-3);
+}
+.meld-group[data-team="us"] {
+  border-left-color: var(--brass-500);
+}
+.meld-group[data-team="them"] {
+  border-left-color: var(--info-500);
+}
+/* Al tuo turno, il gruppo "Noi" si accende (coerente con la zona-mano). */
+.meld-group[data-active="true"] {
+  box-shadow: var(--glow-turn);
 }
 .meld-group h4 {
   margin: 0 0 var(--sp-2);
   font-size: var(--fs-body);
+  color: var(--text-muted);
+}
+.meld-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.meld-group-head .crest {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.meld-group[data-team="us"] .crest {
+  color: var(--brass-300);
+}
+.meld-group[data-team="them"] .crest {
+  color: var(--info-300);
+}
+.meld-group-head .team-tag {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
   color: var(--text-muted);
 }
 .meld-list {
@@ -830,6 +1005,8 @@ button:disabled {
   gap: var(--sp-2);
 }
 .meld {
+  position: relative;
+  z-index: var(--z-melds); /* giochi calati: sollevati sul feltro, sotto le carte in mano */
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -1453,15 +1630,32 @@ button:disabled {
   outline-offset: 2px;
 }
 
-/* ── BOTTOM HAND: mano ancorata in basso, a ventaglio ──────────────── */
+/* ── BOTTOM HAND: mano ancorata in basso (postazione Sud) ──────────────
+   `isolation: isolate` ⇒ contesto di impilamento LOCALE: gli z della mano
+   (active 15, filo-inserimento 25, drag 30) non competono con i livelli
+   globali. Al proprio turno la zona-mano si ACCENDE (bordo oro): mano + turno
+   DOMINano lo sguardo. */
 .bottom-hand {
   position: sticky;
   bottom: 88px; /* sopra la action-bar sticky */
   margin-top: var(--sp-5);
   padding: var(--sp-3);
-  background: var(--surface-sunken);
+  /* Zona-mano FLOTTANTE: velo caldo sottile dal basso (luce del giocatore) su
+     feltro incassato, così la mano legge come il piano più vicino/vivo. L'oro
+     acceso resta riservato allo stato di turno (data-active-turn). */
+  background:
+    radial-gradient(120% 140% at 50% 118%, rgba(200, 162, 74, 0.1), rgba(0, 0, 0, 0) 62%),
+    var(--surface-sunken);
   border: 1px solid var(--border);
+  border-top-color: var(--border-strong);
   border-radius: var(--r-md);
+  isolation: isolate;
+  box-shadow: var(--sh-panel);
+  transition: box-shadow var(--dur-base), border-color var(--dur-base);
+}
+.bottom-hand[data-active-turn="true"] {
+  border-color: var(--brass-500);
+  box-shadow: var(--sh-panel), var(--glow-turn);
 }
 .bottom-hand-head {
   display: flex;
@@ -1476,59 +1670,174 @@ button:disabled {
   font-size: var(--fs-h2);
   color: var(--text-strong);
 }
+.bottom-hand-head-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
 .bottom-hand-hint {
   font-size: var(--fs-xs);
 }
+/* Contatore selezione: appare con N ≥ 1, azzera in una toccata (≥44px hit). */
+.selection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: 32px;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--brass-500);
+  background: linear-gradient(180deg, var(--brass-400), var(--brass-600));
+  color: var(--ink-900);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+.selection-chip:focus-visible {
+  outline: 2px solid var(--brass-300);
+  outline-offset: 2px;
+}
 
-/* Ventaglio ad ARCO: ogni carta è ruotata (--rot) attorno al proprio bordo
- * inferiore e abbassata (--ty) allontanandosi dal centro, così le carte
- * disegnano una curva morbida come una mano reale. La sovrapposizione (margin
- * negativo) tiene compatto il ventaglio lasciando SEMPRE scoperto l'indice in
- * alto a sinistra (rank+seme): leggibilità prima di tutto.
- * Le variabili --rot/--ty arrivano calcolate dal componente (pura presentazione).
- * padding-top ampio: lascia respiro alla carta sollevata su hover/focus. */
+/* MANO — DUE LAYOUT commutati da data-layout (calcolato nel componente):
+ *  - "arc"  = ventaglio ad arco (desktop, ≤15 carte): ogni carta ruota (--rot)
+ *    attorno al bordo inferiore e scende (--ty) verso i bordi; leggibilità prima
+ *    di tutto (indice alto-sinistra sempre scoperto).
+ *  - "rows" = GRIGLIA A FILE con wrap (smartphone e mani grandi): niente scroll
+ *    orizzontale, carte min 44×64, striscia esposta ≥30px, oltre ~2 file scroll
+ *    VERTICALE. È il layout che garantisce la PRECISIONE DEL TOCCO.
+ * `touch-action: none` sulle carte: controlliamo noi tap/drag (Pointer Events),
+ * evitando che il pan del browser sposti le carte durante la selezione. */
 .fan {
   list-style: none;
   margin: 0;
   padding: var(--sp-6) var(--sp-4) var(--sp-2);
   display: flex;
-  flex-wrap: nowrap;
   justify-content: center;
   min-height: 116px;
 }
 .fan-slot {
   position: relative;
   transform-origin: bottom center;
-  transform: translateY(var(--ty, 0px)) rotate(var(--rot, 0deg));
   transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-base);
-  /* Sovrapposizione morbida: ogni carta rientra sulla precedente. */
+  touch-action: none;
+}
+.fan-slot .card {
+  touch-action: none;
+}
+
+/* ── Layout ARCO (desktop, poche carte) ── */
+.fan[data-layout="arc"] {
+  flex-wrap: nowrap;
+}
+.fan[data-layout="arc"] .fan-slot {
+  transform: translateY(var(--ty, 0px)) rotate(var(--rot, 0deg));
   margin-left: -18px;
 }
-.fan-slot:first-child {
+.fan[data-layout="arc"] .fan-slot:first-child {
   margin-left: 0;
 }
+
+/* ── Layout A FILE (smartphone / mani grandi) ── carta 44×64, strip ≥30px. */
+.fan[data-layout="rows"] {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-content: flex-start;
+  gap: var(--sp-3) 0;
+  padding: var(--sp-4) var(--sp-3) var(--sp-3) calc(var(--sp-3) + 14px);
+  max-height: 220px; /* ~2 file di 64px + gap; oltre → scroll verticale (3ª fila) */
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Nota F (develop): con `touch-action:none` sulle carte lo scroll verticale
+     (>2 file) parte dalle AREE NON-CARTA. Non tocchiamo la logica del drag; qui
+     rendiamo lo scroll un AFFORDANCE: gutter stabile a destra = una striscia
+     non-carta sempre pannabile, + scrollbar tematizzata (ottone su feltro)
+     così l'utente vede che c'è dell'altro sotto. */
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--brass-600) transparent;
+}
+.fan[data-layout="rows"]::-webkit-scrollbar {
+  width: 10px;
+}
+.fan[data-layout="rows"]::-webkit-scrollbar-thumb {
+  background: var(--brass-600);
+  border-radius: var(--r-pill);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.fan[data-layout="rows"]::-webkit-scrollbar-thumb:hover {
+  background: var(--brass-500);
+  background-clip: padding-box;
+}
+.fan[data-layout="rows"] .fan-slot {
+  transform: none;
+  margin-left: -14px; /* 44 − 14 = 30px esposti */
+}
+.fan[data-layout="rows"] .card {
+  width: 44px;
+  height: 64px;
+  padding: 3px 4px;
+}
+/* Tipografia calibrata sul formato 44×64 (come le carte `small`, già validate):
+   indice ~0.72rem ≈ 11.5px e pip ~1.15rem restano leggibili senza affollare la
+   faccia. La striscia esposta ≥30px mostra l'indice alto-sinistra ben nitido. */
+.fan[data-layout="rows"] .card .index {
+  font-size: 0.72rem;
+}
+.fan[data-layout="rows"] .card .pip {
+  font-size: 1.15rem;
+}
+.fan[data-layout="rows"] .card .jolly {
+  font-size: 1.1rem;
+}
+/* Schermi molto stretti (<340px): strip esposto ≥28px, mai meno. */
+@media (max-width: 340px) {
+  .fan[data-layout="rows"] {
+    padding-left: calc(var(--sp-3) + 16px);
+  }
+  .fan[data-layout="rows"] .fan-slot {
+    margin-left: -16px; /* 44 − 16 = 28px esposti */
+  }
+}
+
 /* Carta a fuoco / sotto il puntatore: si RADDRIZZA e sale, indici ben leggibili. */
 .fan-slot:hover,
 .fan-slot:focus-within {
   transform: translateY(-12px) rotate(0deg);
-  z-index: 3;
+  z-index: var(--z-hand-card-active);
 }
-/* Carta SELEZIONATA (per calare/scartare): raddrizzata e in evidenza; il
- * sollevamento fine viene dalla .card[data-selected]. */
+.fan[data-layout="rows"] .fan-slot:hover,
+.fan[data-layout="rows"] .fan-slot:focus-within {
+  transform: translateY(-8px);
+}
+/* Carta SELEZIONATA / in PRESS-PREVIEW: in evidenza sopra le vicine. */
 .fan-slot[data-selected="true"] {
   transform: translateY(-4px) rotate(0deg);
-  z-index: 3;
+  z-index: var(--z-hand-card-active);
 }
+.fan[data-layout="rows"] .fan-slot[data-selected="true"] {
+  transform: translateY(-4px);
+}
+/* RIORDINO: la carta trascinata si stacca (lift/scala), sopra tutto, mai clippata. */
 .fan-slot[data-dragging="true"] {
-  opacity: 0.4;
-  transform: translateY(-14px) rotate(0deg) scale(1.02);
-  z-index: 4;
+  transform: translateY(-14px) rotate(0deg) scale(1.06);
+  opacity: 0.95;
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.5));
+  z-index: var(--z-hand-drag);
+  /* NB: niente pointer-events:none qui: interromperebbe il pointer capture su
+     alcuni browser. Il drop individua la carta sotto via elementsFromPoint. */
 }
+/* Il resto della mano si attenua mentre si riordina. */
+.fan[data-layout] .fan-slot[data-dragging="true"] ~ .fan-slot,
+.fan:has(.fan-slot[data-dragging="true"]) .fan-slot:not([data-dragging="true"]) {
+  opacity: 0.7;
+}
+/* VARCO nella posizione d'origine + filo d'oro d'inserimento sul gap bersaglio. */
 .fan-slot[data-over="true"] {
   transform: translateY(-6px) rotate(0deg);
 }
 .fan-slot[data-over="true"]::before {
-  /* Indicatore del punto di inserimento durante il drag: filo d'oro luminoso. */
   content: "";
   position: absolute;
   left: -9px;
@@ -1538,36 +1847,47 @@ button:disabled {
   border-radius: 2px;
   background: var(--brass-300);
   box-shadow: 0 0 8px rgba(231, 208, 151, 0.7);
-  z-index: 5;
-}
-/* Il drag è un'interazione a puntatore: su touch resta la selezione al tocco e
- * il riordino da tastiera (Ctrl/⌘+frecce). Nessuna dipendenza dal solo puntatore. */
-@media (max-width: 640px) {
-  /* Carte leggermente più compatte così una mano piena (11+) sta in una sola
-   * riga senza overflow; l'indice in alto a sinistra resta scoperto e leggibile. */
-  .fan .card {
-    width: 46px;
-    height: 66px;
-  }
-  .fan-slot {
-    margin-left: -20px;
-  }
-  .fan {
-    padding-inline: var(--sp-2);
-  }
+  z-index: 25; /* filo d'inserimento: locale alla .bottom-hand, sotto il drag */
 }
 
-/* Riduzione del movimento: il ventaglio si APPIATTISCE (nessuna rotazione né
- * arco) per la massima leggibilità; la selezione resta comunicata dal
- * sollevamento statico della carta. */
+/* SELEZIONE nel layout a FILE — marcatore d'oro PERSISTENTE sulla striscia
+   esposta. Con l'overlap (30px visibili) il solo lift non basta: una carta
+   sollevata può essere in parte coperta dalla vicina. Un filo d'oro sul bordo
+   SINISTRO (che cade dentro la striscia sempre visibile) rende la selezione
+   inequivocabile anche a colpo d'occhio su una fila fitta, indipendentemente dal
+   sollevamento. Coerente col linguaggio "oro = scelto/prezioso". */
+.fan[data-layout="rows"] .fan-slot[data-selected="true"] .card {
+  box-shadow: var(--sh-lift), inset 3px 0 0 0 var(--brass-400);
+}
+/* Rinforzo del contrasto dell'anello di selezione (≥3:1 anche se sfiora l'avorio
+   di una carta adiacente): anello d'oro chiaro con alone scuro esterno. */
+.fan-slot[data-selected="true"] .card[data-selected="true"] {
+  outline-color: var(--brass-300);
+}
+
+/* Riduzione del movimento: nessun lift/scala/dim/arco animati. La modalità
+ * riordino resta comunicata da BORDO d'oro statico + VARCO + annuncio SR; la
+ * selezione dal sollevamento statico della carta. In assenza di movimento il
+ * filo d'oro sul bordo sinistro (regola sopra) diventa il segnale primario. */
 @media (prefers-reduced-motion: reduce) {
-  .fan-slot {
+  .fan[data-layout="arc"] .fan-slot {
     --rot: 0deg;
     --ty: 0px;
+    transform: none;
   }
   .fan {
     padding-top: var(--sp-4);
     min-height: 100px;
+  }
+  .fan-slot[data-dragging="true"] {
+    transform: none;
+    scale: 1;
+    filter: none;
+    outline: 2px solid var(--brass-300);
+    outline-offset: 2px;
+  }
+  .fan:has(.fan-slot[data-dragging="true"]) .fan-slot:not([data-dragging="true"]) {
+    opacity: 1;
   }
 }
 

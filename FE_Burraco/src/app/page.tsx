@@ -39,13 +39,30 @@ export default function Page() {
   const [selectedCards, setSelectedCards] = useState<string[]>([]);
   const [selectedMeldId, setSelectedMeldId] = useState<string | null>(null);
 
-  // Ogni nuovo stato dal server azzera la selezione (le carte potrebbero non
-  // essere più in mano). Su una mossa rifiutata NON arriva stato -> la
-  // selezione resta, così l'utente può correggere.
+  // RICONCILIAZIONE della selezione a ogni nuovo stato del server (non azzeramento).
+  // Le carte che restano in mano conservano la selezione; quelle uscite
+  // (scartate/calate/cambio mano) la perdono. Il meld selezionato è riconciliato
+  // SEPARATAMENTE contro i giochi ancora sul tavolo.
+  //
+  // L'effetto dipende dalla FIRMA della mano e dei meld (stringhe di id stabili),
+  // NON dal riferimento `g.state` (nuovo a ogni messaggio): così una mossa
+  // dell'avversario che non tocca la composizione della mano non tocca la
+  // selezione. Su una mossa RIFIUTATA non arriva stato -> nessun cambio di firma
+  // -> selezione intatta (l'utente corregge).
+  const handSig = g.state ? g.state.yourHand.map((c) => c.id).join(",") : "";
+  const meldSig = g.state ? g.state.tableMelds.map((m) => m.id).join(",") : "";
   useEffect(() => {
-    setSelectedCards([]);
-    setSelectedMeldId(null);
-  }, [g.state]);
+    const st = g.state;
+    if (!st) return; // nessuno stato ancora (o mossa rifiutata): non toccare la selezione
+    const handIds = new Set(st.yourHand.map((c) => c.id));
+    setSelectedCards((prev) => {
+      const next = prev.filter((id) => handIds.has(id));
+      return next.length === prev.length ? prev : next; // preserva l'identità se nulla cambia
+    });
+    const meldIds = new Set(st.tableMelds.map((m) => m.id));
+    setSelectedMeldId((prev) => (prev !== null && !meldIds.has(prev) ? null : prev));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handSig, meldSig]);
 
   /* ── Celebrazioni effimere ──────────────────────────────────────────
    * Alimentate dagli eventi reali del server `pozzetto_taken` / `burraco_made`,
@@ -56,9 +73,31 @@ export default function Page() {
       prev.includes(card.id) ? prev.filter((id) => id !== card.id) : [...prev, card.id],
     );
   };
+  // Selezione a intervallo (Shift+click desktop): unione degli id passati
+  // (già calcolati in ordine VISIVO dal componente mano). Nessuna regola: solo UI.
+  const selectRange = (ids: string[]) => {
+    setSelectedCards((prev) => {
+      const set = new Set(prev);
+      for (const id of ids) set.add(id);
+      return set.size === prev.length ? prev : Array.from(set);
+    });
+  };
+  const clearSelection = () => {
+    setSelectedCards((prev) => (prev.length === 0 ? prev : []));
+    setSelectedMeldId(null);
+  };
   const toggleMeld = (meldId: string) => {
     setSelectedMeldId((prev) => (prev === meldId ? null : meldId));
   };
+
+  // Esc = azzera la selezione ampia (alternativa da tastiera al chip "N selezionate").
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") clearSelection();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   /* ── Ripristino sessione in corso ──────────────────────────────────── */
   if (auth.status === "initializing") {
@@ -277,55 +316,82 @@ export default function Page() {
       {/* Turno + fase, in evidenza. */}
       <TurnBanner isMyTurn={isMyTurn} phaseHint={phaseHint} opponentName={opponentName} />
 
-      {/* ── Tavolo centrale ───────────────────────────────────────────── */}
-      <div className="tableau">
-        <div className="pile" data-actionable={isMyTurn && s.phase === "must_draw" ? "true" : "false"}>
-          <div className="slot deck" aria-hidden="true">♣</div>
-          <div className="num">{s.drawPileCount}</div>
-          <div className="lbl">Mazzo</div>
+      {/* ── Tavolo: griglia a postazioni (data-seats), isola centrale FISSA ──
+          v1 = 1v1 (data-seats="2"): avversario a Nord, tu a Sud, isola al centro.
+          La struttura è predisposta a 4 postazioni (solo layout): il CSS di
+          data-seats="4" esiste già e le targhe/aree si generalizzano owner→team
+          senza riscrittura. NESSUNA regola 2v2 è implementata qui. */}
+      <div className="table-grid" data-seats="2">
+        {/* Postazione avversario (Nord) — squadra "Loro" (acciaio/blu ● ). */}
+        <div className="seat-plate seat-north" data-team="them" data-active={!isMyTurn ? "true" : "false"}>
+          <span className="crest" aria-hidden="true">●</span>
+          <span className="seat-name">{opponentName}</span>
+          <span className="team-tag">Loro</span>
+          <span className="seat-hand">{s.opponentHandCount} in mano</span>
+          {!isMyTurn && <span className="turn-dot" aria-hidden="true" />}
+          {!opponentConnected && <span className="seat-off">offline</span>}
         </div>
 
-        <div className="pile" data-actionable={isMyTurn && s.phase === "must_draw" && s.discardCount > 0 ? "true" : "false"}>
-          <div className="slot" style={{ background: "transparent", padding: 0 }}>
-            {s.discardTop ? (
-              <CardView card={s.discardTop} small />
-            ) : (
-              <span className="slot empty">vuoto</span>
-            )}
+        {/* Isola centrale FISSA: mazzo, monte scarti, mano avversario, pozzetti. */}
+        <div className="board-center">
+          <div className="pile" data-actionable={isMyTurn && s.phase === "must_draw" ? "true" : "false"}>
+            <div className="slot deck" aria-hidden="true">♣</div>
+            <div className="num">{s.drawPileCount}</div>
+            <div className="lbl">Mazzo</div>
           </div>
-          <div className="num">{s.discardCount}</div>
-          <div className="lbl">Monte scarti</div>
-        </div>
 
-        <div className="pile">
-          <div className="slot facedown" aria-hidden="true" />
-          <div className="num">{s.opponentHandCount}</div>
-          <div className="lbl">Mano avversario</div>
-        </div>
-
-        <div className="pile">
-          <div className="pozzetti" aria-hidden="true">
-            {[0, 1].map((i) => (
-              <span key={i} className="pozzetto-mini" data-taken={i >= s.pozzettiRemaining ? "true" : "false"} />
-            ))}
+          <div className="pile" data-actionable={isMyTurn && s.phase === "must_draw" && s.discardCount > 0 ? "true" : "false"}>
+            <div className="slot" style={{ background: "transparent", padding: 0 }}>
+              {s.discardTop ? (
+                <CardView card={s.discardTop} small />
+              ) : (
+                <span className="slot empty">vuoto</span>
+              )}
+            </div>
+            <div className="num">{s.discardCount}</div>
+            <div className="lbl">Monte scarti</div>
           </div>
-          <div className="num">{s.pozzettiRemaining}</div>
-          <div className="lbl">Pozzetti</div>
+
+          <div className="pile">
+            <div className="slot facedown" aria-hidden="true" />
+            <div className="num">{s.opponentHandCount}</div>
+            <div className="lbl">Mano avversario</div>
+          </div>
+
+          <div className="pile">
+            <div className="pozzetti" aria-hidden="true">
+              {[0, 1].map((i) => (
+                <span key={i} className="pozzetto-mini" data-taken={i >= s.pozzettiRemaining ? "true" : "false"} />
+              ))}
+            </div>
+            <div className="num">{s.pozzettiRemaining}</div>
+            <div className="lbl">Pozzetti</div>
+          </div>
+
+          <div className="pile">
+            <div className="num" style={{ fontSize: "1rem" }}>{s.yourPozzettoTaken ? "Preso ✓" : "Non ancora"}</div>
+            <div className="lbl">Il tuo pozzetto</div>
+          </div>
         </div>
 
-        <div className="pile">
-          <div className="num" style={{ fontSize: "1rem" }}>{s.yourPozzettoTaken ? "Preso ✓" : "Non ancora"}</div>
-          <div className="lbl">Il tuo pozzetto</div>
+        {/* ── Giochi calati, per SQUADRA (loro a Nord, nostri a Sud) ─────── */}
+        <Melds
+          melds={s.tableMelds}
+          yourSeat={g.yourSeat}
+          selectedMeldId={selectedMeldId}
+          onSelectMeld={toggleMeld}
+          isMyTurn={isMyTurn}
+        />
+
+        {/* Postazione locale (Sud) — squadra "Noi" (oro ◆ ), si accende al tuo turno. */}
+        <div className="seat-plate seat-south" data-team="us" data-active={isMyTurn ? "true" : "false"}>
+          <span className="crest" aria-hidden="true">◆</span>
+          <span className="seat-name">{auth.user?.displayName ?? "Tu"}</span>
+          <span className="team-tag">Noi</span>
+          <span className="seat-hand">{s.yourHand.length} in mano</span>
+          {isMyTurn && <span className="turn-dot" aria-hidden="true" />}
         </div>
       </div>
-
-      {/* ── Giochi calati ─────────────────────────────────────────────── */}
-      <Melds
-        melds={s.tableMelds}
-        yourSeat={g.yourSeat}
-        selectedMeldId={selectedMeldId}
-        onSelectMeld={toggleMeld}
-      />
 
       {/* ── La tua mano (ancorata in basso, a ventaglio, riordinabile) ──── */}
       <BottomHand
@@ -336,6 +402,8 @@ export default function Page() {
         pending={g.pending}
         inFlightCardId={g.inFlightCardId}
         onToggleCard={toggleCard}
+        onSelectRange={selectRange}
+        onClearSelection={clearSelection}
       />
 
       <ActionBar
