@@ -359,20 +359,20 @@ attiva=15, filo d'inserimento=25, drag=30.
    stabile tra gli stati, così passi successivi e redesign non ereditano il bug
    dell'azzeramento.
 2. **Unificazione Pointer Events tap/drag** (`BottomHand.tsx`, `CardView.tsx`).
-   Sostituisce HTML5 DnD + onClick con un gestore Pointer unico; qui si
-   innestano flag "riordino" e `vibrate`.
+   Sostituisce HTML5 DnD + onClick con un gestore Pointer unico; qui si innesta
+   `vibrate` (feature-detected). **Il toggle "Riordina" è ESCLUSO** da questo
+   ciclo (decisione §11.2): riordino via long-press→drag + tastiera.
 3. **Layout mano a due file** (`BottomHand.tsx` + CSS). Wrap senza scroll-x, min
    44×64, fallback scroll verticale oltre ~20.
 4. **Tavolo a griglia con postazioni** (`page.tsx` `.tableau` + CSS). Aree
    `data-seats=2|4`, locale a Sud, meld per-squadra; **predispone** il 2v2 senza
    attivarlo.
 5. **z-index ladder** (solo CSS).
-6. **Ordinamento assistito per seme/valore** (`useHandOrder.ts` + trigger in
-   `BottomHand.tsx`). Riscrive l'ordine locale, puramente visivo.
+6. ~~**Ordinamento assistito per seme/valore**~~ — **RIMANDATO** (decisione
+   §11.1): fuori dallo scope di questo ciclo.
 
-I passi 1–3 chiudono il **Workstream A**; i passi 4–5 il **Workstream B**; il
-passo 6 è supporto trasversale alla selezione (compensa l'assenza di range-select
-su touch).
+I passi 1–3 chiudono il **Workstream A**; i passi 4–5 il **Workstream B**.
+(Il passo 6 e il toggle "Riordina" sono rinviati per decisione dell'utente.)
 
 ---
 
@@ -412,25 +412,26 @@ su touch).
 
 ---
 
-## 11. Decisioni rimesse a Massimo (da confermare prima dell'implementazione)
+## 11. Decisioni dell'utente — APPROVATE
 
-Il co-design ha CONVERGuto su tutto quanto sopra; queste restano **scelte di
-prodotto** su cui il lead chiede conferma:
+Il co-design ha converso su tutto quanto sopra; queste erano le scelte di
+prodotto rimesse al lead. **Decise da Massimo (approvazione del 2026-08-30):**
 
-1. **Ordinamento assistito (passo 6):** confermi di volerlo in v1 di questo
-   ciclo, o lo rimandiamo (i passi 1–5 restano completi e sufficienti a
-   risolvere il Workstream A)?
-2. **Toggle "Riordina" opzionale** (in aggiunta a long-press + tastiera):
-   lo includiamo come alternativa scopribile, o teniamo solo long-press +
-   tastiera per snellire?
-3. **Ambito di questo ciclo:** implementiamo **entrambi** i workstream (A + B)
-   nello stesso macro-ciclo, oppure spezziamo — prima A (interazione carte, il
-   dolore immediato) e poi B (tavolo) in un ciclo successivo?
-4. **2v2 in portrait piccolo (~560px):** confermi la strategia "hint landscape +
-   vista compatta" come accettabile, dato che la vista completa 4-postazioni non
-   entra sotto ~600px?
-5. **Palette squadre** Noi-oro / Loro-acciaio: ok, o preferisci altra coppia
-   (sempre cieco-sicura e con secondo canale)?
+1. **Ordinamento assistito (passo 6): RIMANDATO.** Non entra in questo ciclo; i
+   passi 1–5 sono sufficienti a risolvere il Workstream A. → **passo 6 fuori
+   scope.**
+2. **Toggle "Riordina" opzionale: ESCLUSO** in questo ciclo. Il riordino resta
+   coperto da **long-press→drag** (touch/mouse) + **tastiera `Ctrl/⌘+frecce`**.
+   → nel passo 2 NON si aggiunge il flag/pulsante "modalità riordino".
+3. **Ambito del ciclo: A + B INSIEME.** Si implementano entrambi i workstream
+   nello stesso macro-ciclo.
+4. **2v2 in portrait piccolo (~560px): APPROVATA** la strategia "hint landscape +
+   vista compatta".
+5. **Palette squadre Noi-oro / Loro-acciaio: CONFERMATA.**
+
+**Ambito implementativo effettivo di questo ciclo = passi 1–5 del §9, senza il
+toggle "Riordina".** `navigator.vibrate()` resta (feedback del long-press, non è
+il toggle escluso).
 
 ---
 
