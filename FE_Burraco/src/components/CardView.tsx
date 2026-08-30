@@ -38,9 +38,22 @@ export function cardLabel(card: Card): string {
 interface Props {
   card: Card;
   selected?: boolean;
-  onClick?: (card: Card) => void;
+  /**
+   * Attivazione della carta. L'evento è inoltrato così che il chiamante possa
+   * distinguere l'attivazione DA TASTIERA (Invio/Spazio → `e.detail === 0`) da
+   * quella da PUNTATORE (mouse/touch → `e.detail >= 1`), che nella mano è invece
+   * gestita a parte dai Pointer Events per convivere col riordino.
+   */
+  onClick?: (card: Card, e: React.MouseEvent) => void;
   /** Passthrough tastiera (es. riordino accessibile nella mano). Solo variante button. */
   onKeyDown?: (e: React.KeyboardEvent) => void;
+  /** Handler Pointer Events (selezione/riordino unificati), montati sul button. */
+  onPointerDown?: (e: React.PointerEvent) => void;
+  onPointerMove?: (e: React.PointerEvent) => void;
+  onPointerUp?: (e: React.PointerEvent) => void;
+  onPointerCancel?: (e: React.PointerEvent) => void;
+  /** Press-preview (touch): la carta è evidenziata prima del commit al rilascio. */
+  pressed?: boolean;
   small?: boolean;
   /** true tra invio dell'intenzione e ack del server, agganciato a QUESTA carta. */
   pending?: boolean;
@@ -55,6 +68,11 @@ export function CardView({
   selected,
   onClick,
   onKeyDown,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  pressed,
   small,
   pending,
   faceDown,
@@ -99,6 +117,7 @@ export function CardView({
   const common = {
     className: `card${clickable ? " clickable" : ""}`,
     "data-selected": selected ? "true" : "false",
+    "data-pressed": pressed ? "true" : "false",
     "data-color": isRed ? "red" : "black",
     "data-small": small ? "true" : "false",
     "data-pending": pending ? "true" : "false",
@@ -110,17 +129,24 @@ export function CardView({
     }${pending ? ", in attesa di conferma" : ""}`,
   } as const;
 
-  // Con onKeyDown la carta è interattiva (riordino da tastiera) anche quando la
-  // selezione è disabilitata (non è il tuo turno): resta focalizzabile e operabile.
-  const interactive = clickable || Boolean(onKeyDown);
+  // Con onKeyDown/Pointer la carta è interattiva (riordino/selezione) anche quando
+  // il toggle da click è disabilitato (non è il tuo turno): resta focalizzabile e
+  // operabile da tastiera. `aria-pressed` riflette la selezione quando è una
+  // carta selezionabile (in mano), a prescindere dal canale d'attivazione.
+  const selectable = clickable || Boolean(onPointerDown);
+  const interactive = selectable || Boolean(onKeyDown);
   if (interactive) {
     return (
       <button
         type="button"
         {...common}
-        aria-pressed={clickable ? (selected ? true : undefined) : undefined}
-        onClick={clickable ? () => onClick?.(card) : undefined}
+        aria-pressed={selectable ? (selected ? true : undefined) : undefined}
+        onClick={clickable ? (e) => onClick?.(card, e) : undefined}
         onKeyDown={onKeyDown}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
       >
         {content}
       </button>
