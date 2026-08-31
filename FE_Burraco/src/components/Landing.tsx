@@ -192,7 +192,7 @@ export function Landing({ onOpenAuth }: Props) {
             <h1 className="logo-word">Burraco</h1>
             <CrownCrest />
           </div>
-          <p className="logo-sub">Cicole Nettuno</p>
+          <p className="logo-sub">Circolo Notturno</p>
 
           <nav className="landing-nav" aria-label="Navigazione (anteprima)">
             {NAV_ITEMS.map((item) =>
