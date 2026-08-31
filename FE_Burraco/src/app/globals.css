@@ -2296,11 +2296,16 @@ button:disabled {
  * ornamentale e l'alone dei lampadari (calibrabili da agente_ui_ux).
  * =================================================================== */
 .landing {
-  /* Variabili locali (nomi coerenti): unico punto di taratura dell'oro/lampadari. */
-  --gold-hi: var(--brass-300);
-  --gold: var(--brass-500);
-  --gold-lo: var(--brass-600);
-  --lamp-glow: rgba(231, 208, 151, 0.22);
+  /* Variabili locali (nomi coerenti): unico punto di taratura dell'oro/lampadari.
+     TARATURA ui_ux: oro "vintage-lusso" più ricco e caldo dei --brass-* di base,
+     ma senza banding chiaro→scuro estremo (che darebbe l'effetto "lingotto/specchio").
+     - hi #ecd190: highlight caldo (logo/emblema/filigrana), NON bianco → niente riflesso.
+     - mid #c9a24a: allineato a --brass-500 (5.3:1 su feltro, storia contrasti preservata).
+     - lo  #96762f: bronzo antico profondo per dare profondità a filetti/ombre interne. */
+  --gold-hi: #ecd190;
+  --gold: #c9a24a;
+  --gold-lo: #96762f;
+  --lamp-glow: rgba(240, 214, 150, 0.24);
 
   min-height: 100vh;
   padding: clamp(10px, 2.4vw, 26px);
@@ -2329,7 +2334,7 @@ button:disabled {
     0 0 0 4px rgba(0, 0, 0, 0.3),
     var(--sh-lift);
   background:
-    radial-gradient(120% 60% at 50% 0%, rgba(231, 208, 151, 0.06), transparent 55%),
+    radial-gradient(120% 60% at 50% 0%, rgba(240, 214, 150, 0.07), transparent 55%),
     linear-gradient(180deg, rgba(18, 42, 34, 0.4), rgba(0, 0, 0, 0.28));
   overflow: hidden;
 }
@@ -2347,6 +2352,33 @@ button:disabled {
 .frame-corner.c-tr { top: 14px; right: 14px; border-left: 0; border-bottom: 0; border-top-right-radius: 8px; }
 .frame-corner.c-bl { bottom: 14px; left: 14px; border-right: 0; border-top: 0; border-bottom-left-radius: 8px; }
 .frame-corner.c-br { bottom: 14px; right: 14px; border-left: 0; border-top: 0; border-bottom-right-radius: 8px; }
+/* Filigrana d'angolo: piccola borchia sfumata sull'elbow del filetto + trattino
+   interno a 45° → l'angolo sembra "lavorato", non un semplice riquadro. Puro CSS. */
+.frame-corner::before {
+  content: "";
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 34%, var(--gold-hi), var(--gold-lo));
+  box-shadow: 0 0 6px rgba(240, 214, 150, 0.4);
+}
+.frame-corner::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold-hi), transparent);
+  opacity: 0.7;
+}
+.frame-corner.c-tl::before { top: -4px; left: -4px; }
+.frame-corner.c-tr::before { top: -4px; right: -4px; }
+.frame-corner.c-bl::before { bottom: -4px; left: -4px; }
+.frame-corner.c-br::before { bottom: -4px; right: -4px; }
+.frame-corner.c-tl::after { top: 6px; left: 6px; transform: rotate(45deg); transform-origin: left center; }
+.frame-corner.c-tr::after { top: 6px; right: 6px; transform: rotate(-45deg); transform-origin: right center; }
+.frame-corner.c-bl::after { bottom: 6px; left: 6px; transform: rotate(-45deg); transform-origin: left center; }
+.frame-corner.c-br::after { bottom: 6px; right: 6px; transform: rotate(45deg); transform-origin: right center; }
 
 /* Lampadari negli angoli alti. */
 .lamp {
@@ -2374,8 +2406,13 @@ button:disabled {
   line-height: 1;
   margin: 0;
   color: var(--gold-hi);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 0 22px rgba(231, 208, 151, 0.18);
-  letter-spacing: 0.01em;
+  /* Rilievo caldo: ombra scura per stacco dalla boiserie + alone dorato tenue.
+     Il secondo strato chiaro dà "spessore da lettera incisa", non riflesso a specchio. */
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.55),
+    0 2px 1px rgba(0, 0, 0, 0.35),
+    0 0 24px rgba(240, 214, 150, 0.2);
+  letter-spacing: 0.015em;
 }
 .crest-svg { width: clamp(52px, 8vw, 84px); height: auto; flex: 0 0 auto; }
 .logo-sub {
@@ -2405,10 +2442,14 @@ button:disabled {
 .nav-item[aria-current="page"] {
   color: var(--gold-hi);
   font-weight: 700;
-  text-shadow: 0 0 12px rgba(231, 208, 151, 0.3);
+  text-shadow: 0 0 12px rgba(240, 214, 150, 0.32);
 }
-/* Voci non funzionali: solo resa visiva, tono più tenue (non focalizzabili). */
-.nav-item[aria-disabled="true"] { opacity: 0.6; }
+/* Voci non funzionali: solo resa visiva, tono più tenue (non focalizzabili).
+   Hover "sofferto": cursore neutro (non a mano) e nessun cambio di colore/underline
+   → si capisce che sono inerti, senza sembrare link cliccabili. La micro-variazione
+   d'opacità è solo un feedback di presenza, non un invito all'azione. */
+.nav-item[aria-disabled="true"] { opacity: 0.6; cursor: default; }
+.nav-item[aria-disabled="true"]:hover { opacity: 0.72; }
 
 /* ── Hero: cornice legno attorno alla scena a feltro ───────────────── */
 .landing-hero {
@@ -2426,13 +2467,18 @@ button:disabled {
   aspect-ratio: 640 / 360;
 }
 .hero-scene { display: block; width: 100%; height: 100%; }
-/* Ventaglio di carte reali (CardView) in primo piano. */
+/* Ventaglio di carte reali (CardView) in primo piano.
+   Scala > 1: le carte "reali" 56×80 sono piccole sul feltro largo ~730px; un
+   ingrandimento uniforme dà presenza scenica mantenendo indici/pip leggibili
+   (nessuna ricostruzione: si riusa CardView). Pivot a bottom-center = arco a mano. */
 .hero-fan {
   position: absolute;
   left: 50%;
-  bottom: -6px;
+  bottom: 6%;
   width: 0;
   height: 0;
+  transform: scale(1.14);
+  transform-origin: 50% 100%;
 }
 .hero-fan-card {
   position: absolute;
@@ -2454,7 +2500,7 @@ button:disabled {
   border: 1px solid var(--gold-lo);
   border-radius: var(--r-lg);
   background: linear-gradient(180deg, rgba(10, 24, 18, 0.7), rgba(0, 0, 0, 0.45));
-  box-shadow: var(--sh-panel), inset 0 0 0 1px rgba(231, 208, 151, 0.12);
+  box-shadow: var(--sh-panel), inset 0 0 0 1px rgba(240, 214, 150, 0.14);
 }
 .cta-pill {
   flex: 1 1 190px;
@@ -2467,23 +2513,35 @@ button:disabled {
   font-size: var(--fs-body);
   font-weight: 700;
   letter-spacing: 0.02em;
-  transition: background var(--dur-base), color var(--dur-base), box-shadow var(--dur-base);
+  cursor: pointer;
+  transition: background var(--dur-base), color var(--dur-base),
+    box-shadow var(--dur-base), transform var(--dur-fast) var(--ease-out);
 }
 .cta-pill:hover {
-  background: rgba(231, 208, 151, 0.12);
+  background: rgba(240, 214, 150, 0.14);
   color: var(--text-strong);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.32);
 }
-/* Stato evidenziato (REGISTRATI): oro pieno, testo scuro (contrasto AAA). */
+.cta-pill:active {
+  transform: translateY(1px);
+}
+/* Stato evidenziato (REGISTRATI): oro pieno, testo scuro (contrasto AAA).
+   Il gradiente resta sui token --brass-300/500/600: garantisce testo ink-900
+   leggibile su TUTTA l'area (anche sullo stop più scuro: 5.2:1 AA verificato),
+   evitando l'oro-lo #96762f che col testo scuro scenderebbe a ~4.2:1. */
 .cta-pill[data-featured="true"] {
   color: var(--ink-900);
   border-color: var(--gold-hi);
   background: linear-gradient(180deg, var(--brass-300), var(--brass-500) 60%, var(--brass-600));
-  box-shadow: 0 8px 20px rgba(160, 125, 62, 0.36), inset 0 1px 0 rgba(255, 247, 230, 0.55);
+  box-shadow: 0 8px 20px rgba(150, 118, 47, 0.4), inset 0 1px 0 rgba(255, 247, 230, 0.55);
 }
 .cta-pill[data-featured="true"]:hover {
   color: var(--ink-900);
   filter: brightness(1.05);
+  box-shadow: 0 10px 26px rgba(150, 118, 47, 0.46), inset 0 1px 0 rgba(255, 247, 230, 0.6);
 }
+/* Focus ring avorio ad alto contrasto: visibile sia sul pannello scuro sia sul
+   riempimento oro (l'offset mostra il fondo scuro tra bottone e anello). */
 .cta-pill:focus-visible {
   outline: 3px solid var(--ivory-50);
   outline-offset: 3px;
@@ -2578,9 +2636,13 @@ button:disabled {
   .lamp, .whisky { display: none; }
   .cta-pill { flex-basis: 100%; }
   .landing-nav { gap: var(--sp-3) var(--sp-4); }
+  /* Su feltro compatto il ventaglio ingrandito uscirebbe di scena: lo si riporta
+     a scala reale così le carte restano intere e leggibili. */
+  .hero-fan { transform: scale(0.94); }
 }
 
-/* Riduzione del movimento: le transizioni delle pillole si annullano. */
+/* Riduzione del movimento: nessuna transizione né spostamento su press. */
 @media (prefers-reduced-motion: reduce) {
   .cta-pill { transition: none; }
+  .cta-pill:active { transform: none; }
 }

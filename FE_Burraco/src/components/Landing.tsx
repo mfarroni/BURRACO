@@ -30,11 +30,11 @@ function demoCard(rank: Rank, suit: Suit | null): Card {
   return { id: `demo-${rank}-${suit ?? "x"}`, rank, suit, isWild: false, wildKind: null };
 }
 const HERO_FAN: { card: Card; rot: number }[] = [
-  { card: demoCard("10", "clubs"), rot: -26 },
-  { card: demoCard("J", "diamonds"), rot: -13 },
+  { card: demoCard("10", "clubs"), rot: -22 },
+  { card: demoCard("J", "diamonds"), rot: -11 },
   { card: demoCard("Q", "diamonds"), rot: 0 },
-  { card: demoCard("K", "spades"), rot: 13 },
-  { card: demoCard("A", "hearts"), rot: 26 },
+  { card: demoCard("K", "spades"), rot: 11 },
+  { card: demoCard("A", "hearts"), rot: 22 },
 ];
 
 /* ── Voci di navigazione (SOLO resa visiva; link inerti tranne HOME) ──────── */
@@ -65,13 +65,15 @@ const RULES: { title: string; body: string }[] = [
 ];
 
 /* ── Ornamenti SVG decorativi (aria-hidden) ───────────────────────────────────
- * NOTA: i colori dentro gli SVG sono hex LETTERALI ALLINEATI ai token di
- * globals.css (var() non è risolto in modo affidabile negli attributi di
- * presentazione SVG in Chrome — stesso motivo per cui i mockup usano hex).
- * Mappa: brass-300 #e7d097 · brass-400 #d9ba6a · brass-500 #c8a24a ·
- * brass-600 #a9853a · ivory-50 #f7f3e7 · ivory-100 #efe9d6 · ivory-200 #e3dcc4 ·
- * ink-900 #1a1712 · card-red #b01b2e · felt 600/700/900 #1e5a44/#174a38/#0e2a22 ·
- * dorso #7c1f2b/#5c141d. Questi valori sono un PUNTO DI CALIBRAZIONE per ui_ux. */
+ * NOTA: i colori dentro gli SVG sono hex LETTERALI (var() non è risolto in modo
+ * affidabile negli attributi di presentazione SVG in Chrome — stesso motivo per
+ * cui i mockup usano hex). Calibrazione ui_ux — famiglia oro "vintage-lusso"
+ * coerente con le variabili locali di `.landing`:
+ *   luce/highlight #ecd190 (= --gold-hi) · oro emblema #e0c07a · oro mid #c8a24a ·
+ *   bronzo #a9853a · ivory-50 #f7f3e7 · ivory-100 #efe9d6 · ivory-200 #e3dcc4 ·
+ *   ink-900 #1a1712 · card-red #b01b2e · felt 600/700/900 #1e5a44/#174a38/#0e2a22 ·
+ *   dorso #7c1f2b/#5c141d. Ornamenti aria-hidden: contrasto non vincolante, ma
+ *   tenuti caldi e leggibili per coerenza col resto della scena. */
 
 /** Lampadario a candele (cristallo/ottone) con alone caldo. */
 function Chandelier() {
@@ -92,13 +94,13 @@ function Chandelier() {
       {[22, 60, 98].map((x) => (
         <g key={x}>
           <rect x={x - 3} y={x === 60 ? 90 : 86} width="6" height="14" rx="2" fill="#efe9d6" />
-          <ellipse cx={x} cy={x === 60 ? 84 : 80} rx="4.5" ry="8" fill="#e7d097" opacity="0.95" />
+          <ellipse cx={x} cy={x === 60 ? 84 : 80} rx="4.5" ry="8" fill="#ecd190" opacity="0.95" />
           <circle cx={x} cy={x === 60 ? 84 : 80} r="2.4" fill="#f7f3e7" />
         </g>
       ))}
       {/* gocce di cristallo */}
       {[34, 48, 60, 72, 86].map((x, i) => (
-        <path key={x} d={`M${x} ${104 + (i % 2) * 6} l4 10 l-4 8 l-4 -8 z`} fill="#e7d097" opacity="0.55" />
+        <path key={x} d={`M${x} ${104 + (i % 2) * 6} l4 10 l-4 8 l-4 -8 z`} fill="#ecd190" opacity="0.55" />
       ))}
     </svg>
   );
@@ -129,7 +131,7 @@ function CrownCrest() {
       {/* corona */}
       <path
         d="M28 34 L34 18 L42 30 L48 14 L54 30 L62 18 L68 34 Z"
-        fill="#d9ba6a"
+        fill="#e0c07a"
         stroke="#a9853a"
         strokeWidth="1.5"
         strokeLinejoin="round"
@@ -201,7 +203,12 @@ export function Landing({ onOpenAuth }: Props) {
                   {item}
                 </span>
               ) : (
-                <span key={item} className="nav-item" aria-disabled="true">
+                <span
+                  key={item}
+                  className="nav-item"
+                  aria-disabled="true"
+                  title="Anteprima — sezione non attiva in questa versione"
+                >
                   {item}
                 </span>
               ),
@@ -228,8 +235,8 @@ export function Landing({ onOpenAuth }: Props) {
                   <stop offset="100%" stopColor="#0e2a22" />
                 </radialGradient>
                 <radialGradient id="lp-warm" cx="50%" cy="26%" r="55%">
-                  <stop offset="0%" stopColor="rgba(231,208,151,0.28)" />
-                  <stop offset="100%" stopColor="rgba(231,208,151,0)" />
+                  <stop offset="0%" stopColor="rgba(240,214,150,0.3)" />
+                  <stop offset="100%" stopColor="rgba(240,214,150,0)" />
                 </radialGradient>
                 <linearGradient id="lp-back" x1="0" y1="0" x2="1" y2="1">
                   <stop offset="0%" stopColor="#7c1f2b" />
@@ -275,13 +282,13 @@ export function Landing({ onOpenAuth }: Props) {
               {/* nastro BURRACO */}
               <g transform="translate(320 44)">
                 <path d="M-150 -16 H150 L134 0 L150 16 H-150 L-134 0 Z" fill="#7c1f2b" stroke="#c8a24a" strokeWidth="2" />
-                <text x="0" y="6" textAnchor="middle" fontFamily="Georgia, serif" fontSize="20" letterSpacing="6" fill="#e7d097" fontWeight="700">BURRACO</text>
+                <text x="0" y="6" textAnchor="middle" fontFamily="Georgia, serif" fontSize="20" letterSpacing="6" fill="#ecd190" fontWeight="700">BURRACO</text>
               </g>
 
               {/* gettone DEALER */}
               <g transform="translate(470 250)">
-                <circle r="26" fill="#1a1712" stroke="#d9ba6a" strokeWidth="3" />
-                <text x="0" y="5" textAnchor="middle" fontFamily="system-ui, sans-serif" fontSize="11" letterSpacing="1" fill="#e7d097" fontWeight="700">DEALER</text>
+                <circle r="26" fill="#1a1712" stroke="#e0c07a" strokeWidth="3" />
+                <text x="0" y="5" textAnchor="middle" fontFamily="system-ui, sans-serif" fontSize="11" letterSpacing="1" fill="#ecd190" fontWeight="700">DEALER</text>
               </g>
             </svg>
 
