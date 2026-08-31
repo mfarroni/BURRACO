@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import type { Card } from "@/lib/contract";
 import { useGameSocket } from "@/lib/useGameSocket";
 import { useAuth } from "@/lib/useAuth";
-import { AuthPanel } from "@/components/AuthPanel";
+import { AuthPanel, type AuthMode } from "@/components/AuthPanel";
+import { Landing } from "@/components/Landing";
 import { ProfilePanel } from "@/components/ProfilePanel";
 import { BottomHand } from "@/components/BottomHand";
 import { CardView } from "@/components/CardView";
@@ -32,6 +33,9 @@ export default function Page() {
 
   // Form della lobby.
   const [roomCode, setRoomCode] = useState("");
+  // Ramo anonimo: la vetrina è la prima vista; `showAuth` apre l'AuthPanel sul
+  // percorso scelto (login/register/guest) senza cambiare route (SPA).
+  const [showAuth, setShowAuth] = useState<AuthMode | null>(null);
   // Vista Profilo (sola lettura) sovrapposta alla lobby autenticata.
   const [showProfile, setShowProfile] = useState(false);
 
@@ -112,9 +116,16 @@ export default function Page() {
     );
   }
 
-  /* ── Non autenticato → schermata d'ingresso (Accedi/Registrati/Ospite) ─ */
+  /* ── Non autenticato → vetrina d'accesso, poi AuthPanel sul percorso scelto ─
+   * La vetrina è la prima vista (fedele al mockup vintage-lusso). I tre bottoni
+   * NON navigano a route: impostano `showAuth`, che apre l'AuthPanel sul percorso
+   * corrispondente. `onBack` riporta alla vetrina senza toccare lo stato auth. */
   if (auth.status === "anonymous") {
-    return <AuthPanel auth={auth} />;
+    return showAuth ? (
+      <AuthPanel auth={auth} initialMode={showAuth} onBack={() => setShowAuth(null)} />
+    ) : (
+      <Landing onOpenAuth={setShowAuth} />
+    );
   }
 
   /* ── Profilo (sola lettura), raggiungibile dalla lobby autenticata ──── */

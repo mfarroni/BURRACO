@@ -20,10 +20,18 @@ import type { UseAuth } from "@/lib/useAuth";
  * sono pulsanti con `aria-pressed`, pienamente operabili da tastiera nativamente.
  */
 
-type Mode = "login" | "register" | "guest";
+export type AuthMode = "login" | "register" | "guest";
+type Mode = AuthMode;
 
 interface Props {
   auth: UseAuth;
+  /**
+   * Percorso su cui aprire il pannello (default "login", retro-compatibile).
+   * La vetrina lo usa per pilotare Accedi/Registrati/Ospite senza route.
+   */
+  initialMode?: AuthMode;
+  /** Se fornito, mostra un ritorno alla vetrina (stato locale in page.tsx). */
+  onBack?: () => void;
 }
 
 const MODES: { id: Mode; label: string }[] = [
@@ -32,8 +40,8 @@ const MODES: { id: Mode; label: string }[] = [
   { id: "guest", label: "Ospite" },
 ];
 
-export function AuthPanel({ auth }: Props) {
-  const [mode, setMode] = useState<Mode>("login");
+export function AuthPanel({ auth, initialMode = "login", onBack }: Props) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -72,6 +80,11 @@ export function AuthPanel({ auth }: Props) {
 
   return (
     <div className="lobby auth-panel">
+      {onBack && (
+        <button type="button" className="btn-ghost auth-back" onClick={onBack} disabled={busy}>
+          <span aria-hidden="true">&larr;</span> Torna alla vetrina
+        </button>
+      )}
       <div className="brand">
         <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
         <h1>Burraco</h1>
