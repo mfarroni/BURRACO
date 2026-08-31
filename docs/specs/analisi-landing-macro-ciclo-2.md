@@ -29,6 +29,55 @@ riusando design token e `CardView` esistenti, senza introdurre route o logica di
 
 ---
 
+## §0-bis — Mockup fornito dal lead (riferimento visivo certo, 2026-08-31)
+
+Il lead ha allegato l'immagine di riferimento definitiva (l'`unified_home_v1.jpg` della traccia,
+prima mancante) e ha **approvato il piano** chiedendo fedeltà a questa immagine. La vetrina da
+realizzare è l'estetica "vintage-lusso" di CLAUDE.md. Descrizione fedele, dall'alto in basso:
+
+- **Cornice pagina:** doppio filetto **dorato** ornato lungo tutto il bordo dello schermo, con
+  angoli decorati. Sfondo: parete a **boiserie di legno scuro** (pannelli), vignettatura ai bordi.
+- **Lampadari:** due **lampadari a candele** (cristallo/ottone) negli angoli alti, sinistra e
+  destra, con alone di luce caldo.
+- **Logo centrale:** "**Burraco**" in **serif dorato** di grande formato; a destra un emblema
+  con **corona** sopra un ventaglio di **carte**; sottotitolo piccolo "**Cicole Nettuno**".
+- **Nav bar** (centrata, sotto il logo): `HOME · CHI SIAMO · REGOLE · TORNEI · SHOP · CONTATTI`,
+  testo dorato, "HOME" evidenziato. **Solo riferimento visivo** (CLAUDE.md): resa grafica sì,
+  funzionalità no (link inerti/`aria-disabled`, tranne "HOME").
+- **Hero (foto tavolo):** riquadro con **feltro verde** e **fotografia** di due mani maschili
+  (giacca scura, fede) che giocano; carte reali sparse (indici visibili, es. 10♣, J♦/Q♦…),
+  mazzo coperto al centro, un **nastro "BURRACO"** bordeaux/oro e un gettone "**DEALER**".
+- **Pannello CTA:** riquadro scuro arrotondato con bordo dorato che contiene **tre bottoni a
+  pillola**: `ACCEDI` · `REGISTRATI` (evidenziato, riempimento oro pieno) · `GIOCA COME OSPITE`.
+  I tre bottoni hanno **peso paritario** (questo sostituisce la gerarchia ipotizzata in R6).
+- **Pergamena regole:** una **pergamena** arrotolata con titolo "**REGOLE DEL GIOCO — BURRACO**"
+  e sezioni: **INTRODUZIONE · PREPARAZIONE · SVOLGIMENTO DEL GIOCO · BURRACO PULITO E SPORCO ·
+  PUNTEGGI** (nel mockup il corpo è testo segnaposto). Rientra nello scope (CLAUDE.md).
+- **Dettaglio ambiente:** due **bicchieri di whisky** con ghiaccio, sul piano di legno, negli
+  angoli bassi sinistra/destra.
+
+**Rettifiche aggiornate rispetto alle §0 R4/R6:**
+- **R4′:** la **nav bar** e la **pergamena regole** sono ora IN scope come *resa visiva* fedele
+  (la nav resta non funzionale; la pergamena è statica con le 5 intestazioni reali).
+- **R6′:** **tre bottoni oro paritari** (ACCEDI/REGISTRATI/GIOCA COME OSPITE), non gerarchia
+  ospite-primario. "REGISTRATI" è lo stato evidenziato di default (oro pieno).
+- **Restano valide:** R1 (nessuna route: i tre bottoni pilotano gli stati di `AuthPanel` /
+  `auth.guest`, non `router.push`), R5 (riuso `CardView`/asset per le carte).
+
+**Tensione con `direzione-visiva.md` — decisione del lead:** questa immagine adotta oro saturo,
+lampadari e registro "lusso" che `direzione-visiva.md` §1.2 elencava come anti-pattern. Il lead
+ha dato indicazione **esplicita** di essere fedele all'immagine allegata: la sua richiesta diretta
+prevale sul documento di direzione interno per questa vetrina. `agente_ui_ux` rifinirà i valori
+mantenendo la fedeltà richiesta e la leggibilità/accessibilità (contrasto AA, focus, tastiera).
+
+**Nota asset:** l'hero e gli ornati del mockup sono raster fotografici. In assenza dei file
+sorgente, `agente_develop` realizza una **resa fedele in CSS/SVG** (boiserie e feltro via
+gradienti, lampadari/cornice/emblema in SVG, carte dell'hero via `CardView`/SVG, pergamena via
+CSS), predisponendo *slot immagine* dove, se il lead fornirà i JPG (in
+`FE_Burraco/public/mockups/`), potranno sostituire le rese sintetiche.
+
+---
+
 ## ITERAZIONE 1 — Component breakdown
 
 ### 1.1 Dove vive la landing
