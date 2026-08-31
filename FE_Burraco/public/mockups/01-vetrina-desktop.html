@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Burraco — Vetrina desktop</title>
+<style>
+:root{
+--room-950:#0f2019;--room-900:#132a21;
+--felt-900:#14352a;--felt-800:#1a4234;--felt-700:#205039;--felt-600:#2a5f46;
+--wood-900:#2a1a0d;--wood-800:#402813;--wood-700:#5c3b1e;--wood-600:#74502a;
+--brass-600:#a07d3e;--brass-500:#c0a052;--brass-400:#d3b76a;--brass-300:#e0c789;
+--ivory-50:#f6f1e3;--ivory-100:#efe8d6;--ivory-200:#e2dabf;
+--ink-900:#211b12;--ink-700:#4c4236;
+--card-red:#b3182b;
+--text-strong:#f4efe2;--text:#e7e1cf;--text-muted:#bcc7bb;--text-faint:#92a196;
+--team-us-300:#e0c789;--team-us-500:#c0a052;--team-them-300:#86b8d6;--team-them-500:#5f93b3;
+--success-300:#82d6a6;--danger-500:#d1493c;--danger-300:#f0a79b;--warn-500:#d39a35;--warn-300:#eecf8b;--info-300:#a9d0e4;
+--card-back-a:#6b2530;--card-back-b:#4c1a22;
+--sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;--sp-6:32px;--sp-7:48px;
+--r-sm:6px;--r-md:10px;--r-lg:16px;--r-card:9px;--r-pill:999px;
+--sh-card:0 2px 4px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,247,230,.22);
+--sh-lift:0 10px 22px rgba(0,0,0,.46);--sh-panel:0 6px 18px rgba(0,0,0,.30);
+--sh-inset:inset 0 2px 8px rgba(0,0,0,.42);--glow-turn:0 0 0 2px var(--brass-300),0 0 16px rgba(224,199,137,.30);
+--fs-display:2rem;--fs-h1:1.5rem;--fs-h2:1.25rem;--fs-body:1rem;--fs-sm:.875rem;--fs-xs:.75rem;
+--font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+--font-sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+font-family:var(--font-sans);color:var(--text);
+background:
+radial-gradient(120% 90% at 30% 8%,rgba(224,199,137,.10),transparent 55%),
+radial-gradient(140% 120% at 80% 100%,var(--room-900),var(--room-950) 70%);
+min-height:100vh;
+}
+.wrap{max-width:1200px;margin:0 auto;padding:var(--sp-7) var(--sp-6);}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:var(--sp-7);align-items:center;}
+/* ---- Left column ---- */
+.brand{display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-5);}
+.brand-crest{width:52px;height:52px;flex:0 0 auto;}
+.brand-name{font-family:var(--font-serif);font-size:var(--fs-display);letter-spacing:.5px;color:var(--text-strong);line-height:1;}
+.brand-sub{font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--brass-300);}
+.tagline{font-family:var(--font-serif);font-size:2.35rem;line-height:1.16;color:var(--text-strong);margin:0 0 var(--sp-3);max-width:16ch;}
+.tagline em{color:var(--brass-300);font-style:italic;}
+.lead{font-size:var(--fs-body);color:var(--text-muted);max-width:44ch;margin:0 0 var(--sp-6);line-height:1.5;}
+.cta-primary{
+display:inline-flex;align-items:center;gap:var(--sp-3);
+font-family:var(--font-sans);font-size:1.05rem;font-weight:700;letter-spacing:.3px;
+color:var(--ink-900);cursor:pointer;border:0;
+padding:var(--sp-4) var(--sp-6);border-radius:var(--r-pill);
+background:linear-gradient(180deg,var(--brass-300),var(--brass-500) 60%,var(--brass-600));
+box-shadow:0 8px 20px rgba(160,125,62,.36),inset 0 1px 0 rgba(255,247,230,.6);
+}
+.cta-primary:focus-visible{outline:3px solid var(--ivory-50);outline-offset:3px;}
+.cta-primary .arrow{font-size:1.15rem;}
+.segmented{display:inline-flex;margin-left:var(--sp-4);border:1px solid rgba(224,199,137,.28);border-radius:var(--r-pill);overflow:hidden;background:rgba(15,32,25,.5);}
+.segmented button{background:transparent;border:0;color:var(--text-muted);font-family:var(--font-sans);font-size:var(--fs-sm);font-weight:600;padding:var(--sp-3) var(--sp-5);cursor:pointer;}
+.segmented button+button{border-left:1px solid rgba(224,199,137,.2);}
+.segmented button:hover{color:var(--text-strong);}
+.cta-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--sp-2);margin-bottom:var(--sp-6);}
+.badges{display:flex;gap:var(--sp-3);flex-wrap:wrap;margin-bottom:var(--sp-6);}
+.badge{display:inline-flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-sm);color:var(--text-muted);background:rgba(20,53,42,.55);border:1px solid rgba(224,199,137,.16);padding:var(--sp-2) var(--sp-4);border-radius:var(--r-pill);}
+.badge svg{flex:0 0 auto;}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-4);}
+.mode{position:relative;border-radius:var(--r-lg);padding:var(--sp-5);background:linear-gradient(180deg,rgba(32,80,57,.55),rgba(20,53,42,.55));border:1px solid rgba(224,199,137,.18);box-shadow:var(--sh-panel);}
+.mode h3{margin:0 0 var(--sp-1);font-family:var(--font-serif);font-size:var(--fs-h2);color:var(--text-strong);}
+.mode p{margin:0;font-size:var(--fs-sm);color:var(--text-muted);}
+.mode--active{border-color:var(--brass-500);box-shadow:0 0 0 1px var(--brass-500),var(--sh-panel);}
+.mode--active .tag{background:var(--brass-500);color:var(--ink-900);}
+.mode--soon{opacity:.72;}
+.mode--soon .tag{background:rgba(211,154,53,.2);color:var(--warn-300);border:1px solid rgba(211,154,53,.4);}
+.tag{position:absolute;top:var(--sp-4);right:var(--sp-4);font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:2px 10px;border-radius:var(--r-pill);}
+.mode--soon[aria-disabled="true"]{pointer-events:none;}
+/* ---- Right column hero SVG ---- */
+.hero-frame{border-radius:calc(var(--r-lg) + 6px);padding:14px;background:linear-gradient(160deg,var(--wood-600),var(--wood-800) 45%,var(--wood-900));box-shadow:var(--sh-lift),inset 0 0 0 2px rgba(160,125,62,.35);}
+.hero-frame svg{display:block;width:100%;height:auto;border-radius:var(--r-lg);}
+/* footer note */
+.mock-note{max-width:1200px;margin:var(--sp-7) auto 0;padding:var(--sp-5) var(--sp-6);border-top:1px solid rgba(224,199,137,.18);color:var(--text-faint);font-size:var(--fs-sm);line-height:1.55;}
+.mock-note strong{color:var(--text-muted);}
+.mock-note .stamp{display:block;margin-top:var(--sp-3);font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--brass-600);}
+@media (max-width:900px){.hero-grid{grid-template-columns:1fr;}.tagline{font-size:2rem;}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<div class="hero-grid">
+<!-- LEFT -->
+<section>
+<div class="brand">
+<svg class="brand-crest" viewBox="0 0 52 52" aria-hidden="true">
+<circle cx="26" cy="26" r="24" fill="none" stroke="#c0a052" stroke-width="2"/>
+<circle cx="26" cy="26" r="19" fill="#14352a"/>
+<path d="M26 13 L33 26 L26 39 L19 26 Z" fill="#b3182b"/>
+<path d="M26 17 L30 26 L26 35 L22 26 Z" fill="#e0c789"/>
+</svg>
+<div>
+<div class="brand-name">Burraco</div>
+<div class="brand-sub">Il circolo, online</div>
+</div>
+</div>
+<h1 class="tagline">Burraco — il tavolo del<br>circolo, <em>dal tuo browser</em></h1>
+<p class="lead">Siediti al feltro verde, distribuisci le carte e gioca la tua mano. Niente da installare: apri e sei al tavolo.</p>
+<div class="cta-row">
+<button class="cta-primary" type="button">Gioca come Ospite <span class="arrow" aria-hidden="true">&rarr;</span></button>
+<div class="segmented" role="group" aria-label="Accesso account">
+<button type="button">Accedi</button>
+<button type="button">Registrati</button>
+</div>
+</div>
+<div class="badges" aria-label="Perché è comodo">
+<span class="badge"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="#82d6a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Gratis</span>
+<span class="badge"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="#82d6a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Nessuna installazione</span>
+<span class="badge"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="#82d6a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Si gioca dal browser</span>
+</div>
+<div class="modes">
+<div class="mode mode--active">
+<span class="tag">Attivo</span>
+<h3>1 contro 1</h3>
+<p>Testa a testa al tavolo, tu e un avversario. Pronto da giocare.</p>
+</div>
+<div class="mode mode--soon" aria-disabled="true">
+<span class="tag">In arrivo</span>
+<h3>2 contro 2</h3>
+<p>A coppie, Noi contro Loro. Disponibile prossimamente.</p>
+</div>
+</div>
+</section>
+<!-- RIGHT: hero SVG -->
+<section aria-label="Anteprima del tavolo">
+<div class="hero-frame">
+<svg viewBox="0 0 620 480" role="img" aria-label="Illustrazione di un tavolo da Burraco: feltro verde, mazzo e scarti al centro, ventaglio di carte avorio in primo piano">
+<defs>
+<radialGradient id="felt" cx="50%" cy="42%" r="75%">
+<stop offset="0%" stop-color="#2a5f46"/>
+<stop offset="55%" stop-color="#205039"/>
+<stop offset="100%" stop-color="#14352a"/>
+</radialGradient>
+<radialGradient id="warmlight" cx="50%" cy="30%" r="55%">
+<stop offset="0%" stop-color="rgba(224,199,137,.28)"/>
+<stop offset="100%" stop-color="rgba(224,199,137,0)"/>
+</radialGradient>
+<linearGradient id="cardface" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#f6f1e3"/>
+<stop offset="100%" stop-color="#e2dabf"/>
+</linearGradient>
+<linearGradient id="cardback" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0%" stop-color="#6b2530"/>
+<stop offset="100%" stop-color="#4c1a22"/>
+</linearGradient>
+</defs>
+<rect x="0" y="0" width="620" height="480" fill="url(#felt)"/>
+<rect x="0" y="0" width="620" height="480" fill="url(#warmlight)"/>
+<ellipse cx="310" cy="250" rx="300" ry="230" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="60" opacity=".35"/>
+<!-- center deck + discard -->
+<g transform="translate(250,150)">
+<rect x="0" y="0" width="56" height="80" rx="9" fill="url(#cardback)" stroke="#a07d3e" stroke-width="1.5"/>
+<rect x="-3" y="-3" width="56" height="80" rx="9" fill="url(#cardback)" stroke="#a07d3e" stroke-width="1.5"/>
+</g>
+<g transform="translate(320,150)">
+<rect x="0" y="0" width="56" height="80" rx="9" fill="url(#cardface)" stroke="#c9c0a4" stroke-width="1"/>
+<text x="8" y="20" font-family="Georgia,serif" font-size="15" fill="#b3182b" font-weight="700">K</text>
+<text x="28" y="52" font-family="Georgia,serif" font-size="26" fill="#b3182b">&#9829;</text>
+</g>
+<!-- fan of ivory cards foreground -->
+<g transform="translate(310,400)">
+<g transform="rotate(-24) translate(-150,0)"><rect x="0" y="0" width="60" height="86" rx="9" fill="url(#cardface)" stroke="#c9c0a4"/><text x="8" y="22" font-family="Georgia,serif" font-size="16" fill="#211b12" font-weight="700">7</text><text x="24" y="56" font-family="Georgia,serif" font-size="26" fill="#211b12">&#9827;</text></g>
+<g transform="rotate(-12) translate(-90,-6)"><rect x="0" y="0" width="60" height="86" rx="9" fill="url(#cardface)" stroke="#c9c0a4"/><text x="8" y="22" font-family="Georgia,serif" font-size="16" fill="#b3182b" font-weight="700">A</text><text x="24" y="56" font-family="Georgia,serif" font-size="26" fill="#b3182b">&#9830;</text></g>
+<g transform="rotate(0) translate(-30,-10)"><rect x="0" y="0" width="60" height="86" rx="9" fill="url(#cardface)" stroke="#c9c0a4"/><text x="8" y="22" font-family="Georgia,serif" font-size="16" fill="#211b12" font-weight="700">10</text><text x="24" y="56" font-family="Georgia,serif" font-size="26" fill="#211b12">&#9824;</text></g>
+<g transform="rotate(12) translate(30,-6)"><rect x="0" y="0" width="60" height="86" rx="9" fill="url(#cardface)" stroke="#c9c0a4"/><text x="8" y="22" font-family="Georgia,serif" font-size="16" fill="#b3182b" font-weight="700">Q</text><text x="24" y="56" font-family="Georgia,serif" font-size="26" fill="#b3182b">&#9829;</text></g>
+<g transform="rotate(24) translate(90,0)"><rect x="0" y="0" width="60" height="86" rx="9" fill="url(#cardface)" stroke="#c9c0a4"/><text x="8" y="22" font-family="Georgia,serif" font-size="16" fill="#211b12" font-weight="700">J</text><text x="24" y="56" font-family="Georgia,serif" font-size="26" fill="#211b12">&#9824;</text></g>
+</g>
+</svg>
+</div>
+</section>
+</div>
+</main>
+<footer class="mock-note">
+<strong>Nota di design — Vetrina desktop.</strong> Due colonne: a sinistra la voce del prodotto (brand serif + tagline su 2 righe come caso peggiore) e una sola azione dominante, la CTA ottone "Gioca come Ospite", perché l'ingresso senza attrito è la priorità di conversione; accesso/registrazione restano segmented secondari a basso peso. A destra un HERO SVG statico (nessuna immagine di terzi) che comunica in un colpo d'occhio atmosfera "circolo": feltro caldo, cornice legno, ventaglio d'avorio. L'ottone appare solo su CTA e modalità attiva (registro anti-casinò). La modalità 2v2 è marcata "In arrivo" e resa non cliccabile (aria-disabled) per non promettere ciò che non c'è. Compromesso: l'hero è illustrativo e non interattivo, così resta leggero e offline.
+<span class="stamp">Mockup statico · dati di esempio · non funzionante</span>
+</footer>
+</body>
+</html>

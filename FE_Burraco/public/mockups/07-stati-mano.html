@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Burraco — Stati della mano</title>
+<style>
+:root{
+--room-950:#0f2019;--room-900:#132a21;
+--felt-900:#14352a;--felt-800:#1a4234;--felt-700:#205039;--felt-600:#2a5f46;
+--wood-900:#2a1a0d;--wood-800:#402813;--wood-700:#5c3b1e;--wood-600:#74502a;
+--brass-600:#a07d3e;--brass-500:#c0a052;--brass-400:#d3b76a;--brass-300:#e0c789;
+--ivory-50:#f6f1e3;--ivory-100:#efe8d6;--ivory-200:#e2dabf;
+--ink-900:#211b12;--ink-700:#4c4236;
+--card-red:#b3182b;
+--text-strong:#f4efe2;--text:#e7e1cf;--text-muted:#bcc7bb;--text-faint:#92a196;
+--team-us-300:#e0c789;--team-us-500:#c0a052;--team-them-300:#86b8d6;--team-them-500:#5f93b3;
+--success-300:#82d6a6;--danger-500:#d1493c;--danger-300:#f0a79b;--warn-500:#d39a35;--warn-300:#eecf8b;--info-300:#a9d0e4;
+--card-back-a:#6b2530;--card-back-b:#4c1a22;
+--sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;--sp-6:32px;--sp-7:48px;
+--r-sm:6px;--r-md:10px;--r-lg:16px;--r-card:9px;--r-pill:999px;
+--sh-card:0 2px 4px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,247,230,.22);
+--sh-lift:0 10px 22px rgba(0,0,0,.46);--sh-panel:0 6px 18px rgba(0,0,0,.30);
+--sh-inset:inset 0 2px 8px rgba(0,0,0,.42);--glow-turn:0 0 0 2px var(--brass-300),0 0 16px rgba(224,199,137,.30);
+--fs-display:2rem;--fs-h1:1.5rem;--fs-h2:1.25rem;--fs-body:1rem;--fs-sm:.875rem;--fs-xs:.75rem;
+--font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+--font-sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--font-sans);color:var(--text);background:radial-gradient(120% 80% at 50% 10%,rgba(224,199,137,.10),transparent 55%),linear-gradient(180deg,var(--room-900),var(--room-950));min-height:100vh;}
+.wrap{max-width:1200px;margin:0 auto;padding:var(--sp-6) var(--sp-5);}
+h1{font-family:var(--font-serif);font-size:var(--fs-h1);color:var(--text-strong);margin:0 0 var(--sp-2);}
+.sub{color:var(--text-muted);font-size:var(--fs-sm);margin:0 0 var(--sp-6);}
+.panels{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-5);}
+.panel{background:radial-gradient(120% 90% at 50% 25%,var(--felt-600),var(--felt-800));border-radius:var(--r-lg);padding:var(--sp-5) var(--sp-4);box-shadow:var(--sh-inset),inset 0 0 0 1px rgba(160,125,62,.22);display:flex;flex-direction:column;}
+.stage{flex:1;display:flex;align-items:flex-end;justify-content:center;min-height:170px;padding-bottom:var(--sp-4);}
+.hand{display:flex;}
+.card{width:56px;height:80px;border-radius:var(--r-card);background:linear-gradient(180deg,var(--ivory-50),var(--ivory-200));border:1px solid #cabf9f;box-shadow:var(--sh-card);position:relative;color:var(--ink-900);font-family:var(--font-serif);flex:0 0 auto;margin-left:-20px;transition:transform .16s ease,opacity .16s ease;}
+.card:first-child{margin-left:0;} .card.red{color:var(--card-red);}
+.card .tl{position:absolute;top:4px;left:5px;display:flex;flex-direction:column;align-items:center;line-height:.9;}
+.card .tl b{font-size:.82rem;font-weight:700;} .card .tl i{font-size:.7rem;font-style:normal;}
+.card .pip{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.5rem;}
+.card.pin{border:2px solid var(--brass-500);} .card.pin .g{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:15px;height:15px;border-radius:3px;background:radial-gradient(circle at 35% 30%,#fff,var(--brass-400),var(--brass-600));box-shadow:0 0 6px rgba(224,199,137,.7);}
+/* (a) rest — no change */
+/* (b) multi-select: 3 cards lifted ~12px + brass outline */
+.panel-b .card.sel{transform:translateY(-12px);box-shadow:0 0 0 2px var(--brass-300),var(--sh-lift);}
+.selchip{align-self:center;margin-top:var(--sp-3);display:inline-flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-xs);font-weight:700;color:var(--ink-900);background:linear-gradient(180deg,var(--brass-300),var(--brass-500));border-radius:var(--r-pill);padding:5px 12px;}
+.selchip .x{width:17px;height:17px;border-radius:50%;background:rgba(15,32,25,.35);color:var(--ivory-50);display:grid;place-items:center;font-size:.72rem;}
+/* (c) reorder: detached card scale 1.06, gap open, gold insertion line, rest dimmed 0.7 */
+.panel-c .hand .card{opacity:.7;}
+.panel-c .drag{opacity:1;transform:translateY(-16px) scale(1.06) rotate(-3deg);box-shadow:var(--sh-lift);z-index:3;margin-left:-8px;}
+.panel-c .gap{width:20px;flex:0 0 auto;position:relative;margin-left:-6px;}
+.panel-c .gap::before{content:"";position:absolute;top:-6px;bottom:-6px;left:50%;transform:translateX(-50%);width:3px;border-radius:2px;background:linear-gradient(180deg,var(--brass-300),var(--brass-500));box-shadow:0 0 8px rgba(224,199,137,.75);}
+.cap{margin-top:var(--sp-3);}
+.cap .nm{font-family:var(--font-serif);font-size:var(--fs-body);color:var(--text-strong);}
+.cap .nm .k{color:var(--brass-300);}
+.cap p{margin:4px 0 0;font-size:var(--fs-sm);color:var(--text-muted);line-height:1.45;}
+.mock-note{max-width:1200px;margin:var(--sp-6) auto 0;padding:var(--sp-4) var(--sp-5);border-top:1px solid rgba(224,199,137,.18);color:var(--text-faint);font-size:var(--fs-sm);line-height:1.55;}
+.mock-note strong{color:var(--text-muted);} .mock-note .stamp{display:block;margin-top:var(--sp-2);font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--brass-600);}
+@media (max-width:820px){.panels{grid-template-columns:1fr;}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<h1>Stati della mano</h1>
+<p class="sub">Tre condizioni della zona-mano, rese inconfondibili a colpo d'occhio. Dati di esempio.</p>
+<div class="panels">
+<!-- (a) REST -->
+<section class="panel panel-a">
+<div class="stage">
+<div class="hand">
+<span class="card red"><span class="tl"><b>A</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span>
+<span class="card"><span class="tl"><b>K</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+<span class="card red"><span class="tl"><b>Q</b><i>&#9830;</i></span><span class="pip">&#9830;</span></span>
+<span class="card"><span class="tl"><b>J</b><i>&#9827;</i></span><span class="pip">&#9827;</span></span>
+<span class="card"><span class="tl"><b>9</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+<span class="card red"><span class="tl"><b>7</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span>
+</div>
+</div>
+<div class="cap">
+<div class="nm">a · <span class="k">Riposo</span></div>
+<p>Nessuna carta selezionata. Ventaglio ordinato, tutte allo stesso livello: lo stato di partenza neutro.</p>
+</div>
+</section>
+<!-- (b) MULTI-SELECT -->
+<section class="panel panel-b">
+<div class="stage">
+<div class="hand">
+<span class="card red sel"><span class="tl"><b>A</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span>
+<span class="card sel"><span class="tl"><b>A</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+<span class="card red sel"><span class="tl"><b>A</b><i>&#9830;</i></span><span class="pip">&#9830;</span></span>
+<span class="card"><span class="tl"><b>J</b><i>&#9827;</i></span><span class="pip">&#9827;</span></span>
+<span class="card"><span class="tl"><b>9</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+<span class="card red"><span class="tl"><b>7</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span>
+</div>
+</div>
+<span class="selchip">3 selezionate <span class="x" aria-label="Annulla selezione">&times;</span></span>
+<div class="cap">
+<div class="nm">b · <span class="k">Selezione multipla</span></div>
+<p>3 carte sollevate ~12px con contorno ottone; la chip "3 selezionate ✕" conta e permette di annullare. Pronte per essere calate.</p>
+</div>
+</section>
+<!-- (c) REORDER -->
+<section class="panel panel-c">
+<div class="stage">
+<div class="hand">
+<span class="card red"><span class="tl"><b>A</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span>
+<span class="card"><span class="tl"><b>K</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+<span class="gap" aria-hidden="true"></span>
+<span class="card"><span class="tl"><b>J</b><i>&#9827;</i></span><span class="pip">&#9827;</span></span>
+<span class="card"><span class="tl"><b>9</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+<span class="card red drag"><span class="tl"><b>Q</b><i>&#9830;</i></span><span class="pip">&#9830;</span></span>
+<span class="card red"><span class="tl"><b>7</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span>
+</div>
+</div>
+<div class="cap">
+<div class="nm">c · <span class="k">Riordino in corso</span></div>
+<p>La carta staccata sale e si ingrandisce (scala 1.06); si apre un varco con un filo d'oro d'inserimento; il resto della mano è attenuato a 0.7 per focalizzare il movimento.</p>
+</div>
+</section>
+</div>
+</main>
+<footer class="mock-note">
+<strong>Nota di design — Stati della mano.</strong> Tre pannelli affiancati (impilati sotto 820px) per rendere gli stati confrontabili e inconfondibili. Le tre condizioni usano segnali FISICI distinti, non solo colore: riposo = tutto a livello; selezione = sollevamento + outline ottone + chip contatore; riordino = elemento ingrandito e staccato, varco con filo d'oro, resto attenuato. Così restano leggibili anche per chi non distingue bene i colori. L'ottone è riservato al momento d'azione (selezione/inserimento), coerente col registro anti-casinò. Le transizioni sono brevi (.16s) e rispettano <code>prefers-reduced-motion</code>. Compromesso: qui gli stati sono congelati come istantanee statiche per la revisione; nel prodotto sono transitori guidati dall'interazione.
+<span class="stamp">Mockup statico · dati di esempio · non funzionante</span>
+</footer>
+</body>
+</html>

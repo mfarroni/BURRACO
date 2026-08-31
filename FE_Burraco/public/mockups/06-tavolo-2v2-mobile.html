@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Burraco — Tavolo 2v2 mobile landscape</title>
+<style>
+:root{
+--room-950:#0f2019;--room-900:#132a21;
+--felt-900:#14352a;--felt-800:#1a4234;--felt-700:#205039;--felt-600:#2a5f46;
+--wood-900:#2a1a0d;--wood-800:#402813;--wood-700:#5c3b1e;--wood-600:#74502a;
+--brass-600:#a07d3e;--brass-500:#c0a052;--brass-400:#d3b76a;--brass-300:#e0c789;
+--ivory-50:#f6f1e3;--ivory-100:#efe8d6;--ivory-200:#e2dabf;
+--ink-900:#211b12;--ink-700:#4c4236;
+--card-red:#b3182b;
+--text-strong:#f4efe2;--text:#e7e1cf;--text-muted:#bcc7bb;--text-faint:#92a196;
+--team-us-300:#e0c789;--team-us-500:#c0a052;--team-them-300:#86b8d6;--team-them-500:#5f93b3;
+--success-300:#82d6a6;--danger-500:#d1493c;--danger-300:#f0a79b;--warn-500:#d39a35;--warn-300:#eecf8b;--info-300:#a9d0e4;
+--card-back-a:#6b2530;--card-back-b:#4c1a22;
+--sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;--sp-6:32px;--sp-7:48px;
+--r-sm:6px;--r-md:10px;--r-lg:16px;--r-card:9px;--r-pill:999px;
+--sh-card:0 2px 4px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,247,230,.22);
+--sh-lift:0 10px 22px rgba(0,0,0,.46);--sh-panel:0 6px 18px rgba(0,0,0,.30);
+--sh-inset:inset 0 2px 8px rgba(0,0,0,.42);--glow-turn:0 0 0 2px var(--brass-300),0 0 16px rgba(224,199,137,.30);
+--fs-display:2rem;--fs-h1:1.5rem;--fs-h2:1.25rem;--fs-body:1rem;--fs-sm:.875rem;--fs-xs:.75rem;
+--font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+--font-sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--font-sans);color:var(--text);background:var(--room-950);padding:var(--sp-4);}
+.phone-l{width:740px;height:360px;max-width:100%;margin:0 auto;position:relative;display:flex;flex-direction:column;
+background:radial-gradient(120% 90% at 50% 40%,rgba(224,199,137,.10),transparent 60%),linear-gradient(180deg,var(--room-900),var(--room-950));
+border:1px solid rgba(224,199,137,.18);border-radius:20px;overflow:hidden;box-shadow:var(--sh-lift);}
+/* top strip: opponents chips + score + turn */
+.topstrip{display:flex;align-items:center;gap:var(--sp-2);padding:6px var(--sp-3);background:linear-gradient(180deg,rgba(15,32,25,.94),rgba(15,32,25,.7));border-bottom:1px solid rgba(224,199,137,.18);}
+.chip{display:flex;align-items:center;gap:5px;max-width:150px;background:rgba(0,0,0,.28);border:1px solid rgba(224,199,137,.2);border-radius:var(--r-pill);padding:3px 8px;}
+.chip.them{border-color:rgba(95,147,179,.4);} .chip.us{border-color:rgba(192,160,82,.4);}
+.chip .av{width:18px;height:18px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-size:.55rem;font-weight:700;}
+.chip.us .av{background:#4a3a1e;color:var(--brass-300);} .chip.them .av{background:#274456;color:var(--team-them-300);}
+.chip .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.68rem;font-weight:600;}
+.chip .n{font-size:.6rem;color:var(--text-faint);flex:0 0 auto;}
+.chip.turn{box-shadow:var(--glow-turn);}
+.chip.turn::after{content:"gioca";font-size:.5rem;text-transform:uppercase;font-weight:700;color:var(--ink-900);background:var(--brass-400);border-radius:var(--r-pill);padding:1px 5px;}
+.scorebox{margin-left:auto;display:flex;gap:6px;flex:0 0 auto;}
+.sb{display:flex;align-items:center;gap:4px;font-size:.66rem;background:rgba(0,0,0,.3);border-radius:var(--r-pill);padding:2px 8px;}
+.sb b{font-family:var(--font-serif);font-size:.85rem;color:var(--brass-300);} .sb.them b{color:var(--team-them-300);}
+.crest{width:8px;height:8px;border-radius:2px;display:inline-block;} .crest.us{background:var(--brass-400);} .crest.them{background:var(--team-them-500);}
+/* middle: partner top + island center */
+.mid{flex:1;display:grid;grid-template-columns:1fr auto 1fr;grid-template-rows:auto 1fr;gap:6px;padding:6px var(--sp-3);align-items:center;}
+.partner{grid-column:1 / -1;justify-self:center;display:flex;align-items:center;gap:6px;}
+.partner .chip{max-width:210px;}
+.melds-us{grid-row:2;grid-column:1;} .island{grid-row:2;grid-column:2;} .melds-them{grid-row:2;grid-column:3;}
+.melds-col h4{margin:0 0 3px;font-size:.6rem;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:4px;}
+.melds-us h4{color:var(--brass-300);} .melds-them h4{color:var(--team-them-300);text-align:right;justify-content:flex-end;}
+.mrow{display:flex;gap:4px;overflow-x:auto;padding-bottom:3px;}
+.melds-them .mrow{justify-content:flex-end;}
+.meld{display:flex;background:rgba(15,32,25,.35);border-radius:5px;padding:3px;position:relative;flex:0 0 auto;}
+.meld.us{border:1px solid rgba(192,160,82,.4);} .meld.them{border:1px solid rgba(95,147,179,.4);}
+.mc{width:20px;height:29px;border-radius:4px;margin-left:-12px;background:linear-gradient(180deg,var(--ivory-50),var(--ivory-200));border:1px solid #cabf9f;position:relative;font-family:var(--font-serif);color:var(--ink-900);flex:0 0 auto;}
+.mc:first-child{margin-left:0;} .mc.red{color:var(--card-red);}
+.mc .t{position:absolute;top:0;left:2px;font-size:.44rem;font-weight:700;}
+.mc .p{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:.55rem;}
+.mc.pin{border:1px solid var(--brass-500);} .mc.jl{color:#7a5aa0;}
+.bb{position:absolute;top:-7px;left:2px;font-size:.42rem;font-weight:700;text-transform:uppercase;padding:0 4px;border-radius:var(--r-pill);}
+.bb.clean{background:var(--success-300);color:var(--room-950);} .bb.dirty{background:var(--warn-300);color:var(--room-950);}
+/* island */
+.island{display:flex;gap:8px;align-items:center;}
+.pile{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.pile .cap{font-size:.5rem;text-transform:uppercase;color:var(--text-faint);}
+.ic,.ib{width:32px;height:46px;border-radius:6px;flex:0 0 auto;}
+.ib{background:repeating-linear-gradient(45deg,var(--card-back-a),var(--card-back-a) 3px,var(--card-back-b) 3px,var(--card-back-b) 6px);border:1px solid rgba(160,125,62,.5);}
+.ic{background:linear-gradient(180deg,var(--ivory-50),var(--ivory-200));border:1px solid #cabf9f;position:relative;font-family:var(--font-serif);color:var(--card-red);}
+.ic .t{position:absolute;top:2px;left:3px;font-size:.55rem;font-weight:700;} .ic .p{position:absolute;top:52%;left:50%;transform:translate(-50%,-50%);font-size:.9rem;}
+.poz{display:flex;gap:3px;}
+/* bottom: your hand two rows + full-view hint */
+.bottom{background:linear-gradient(0deg,rgba(15,32,25,.96),rgba(15,32,25,.7));border-top:1px solid rgba(224,199,137,.22);padding:5px var(--sp-3);display:flex;align-items:center;gap:var(--sp-3);}
+.you-tag{flex:0 0 auto;display:flex;flex-direction:column;gap:3px;align-items:flex-start;}
+.you-tag .chip{max-width:none;}
+.you-tag .hint{font-size:.55rem;color:var(--text-faint);}
+.full-btn{font-size:.6rem;font-weight:700;color:var(--brass-300);background:transparent;border:1px solid var(--brass-500);border-radius:var(--r-pill);padding:3px 8px;cursor:pointer;}
+.hand{flex:1;display:flex;flex-direction:column;gap:3px;overflow:hidden;}
+.hrow{display:flex;}
+.hcard{width:26px;height:38px;border-radius:5px;margin-left:-13px;background:linear-gradient(180deg,var(--ivory-50),var(--ivory-200));border:1px solid #cabf9f;box-shadow:var(--sh-card);position:relative;font-family:var(--font-serif);color:var(--ink-900);flex:0 0 auto;}
+.hcard:first-child{margin-left:0;} .hcard.red{color:var(--card-red);}
+.hcard .t{position:absolute;top:1px;left:2px;font-size:.5rem;font-weight:700;line-height:1;}
+.hcard .p{position:absolute;top:54%;left:50%;transform:translate(-50%,-50%);font-size:.62rem;}
+.hcard.pin{border:1.5px solid var(--brass-500);} .hcard.jl{color:#7a5aa0;}
+.actions{flex:0 0 auto;display:flex;flex-direction:column;gap:3px;}
+.actions .btn{font-size:.62rem;font-weight:700;border-radius:var(--r-pill);padding:4px 10px;cursor:pointer;border:1px solid rgba(224,199,137,.35);background:rgba(15,32,25,.5);color:var(--text);}
+.actions .btn.primary{color:var(--ink-900);border:0;background:linear-gradient(180deg,var(--brass-300),var(--brass-500));}
+.mock-note{width:740px;max-width:100%;margin:var(--sp-4) auto 0;padding:var(--sp-4);color:var(--text-faint);font-size:var(--fs-xs);line-height:1.55;}
+.mock-note strong{color:var(--text-muted);} .mock-note .stamp{display:block;margin-top:var(--sp-2);letter-spacing:1px;text-transform:uppercase;color:var(--brass-600);}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+</style>
+</head>
+<body>
+<main class="phone-l" data-seats="4">
+<!-- TOP STRIP: two opponents as chips -->
+<div class="topstrip">
+<span class="chip them"><span class="av">G</span><span class="nm">Guendalina Bonaccorsi</span><span class="n">14</span></span>
+<span class="chip them turn"><span class="av">R</span><span class="nm">Rosalinda Pappalardo</span><span class="n">12</span></span>
+<div class="scorebox">
+<span class="sb us"><span class="crest us"></span>◆<b>1.985</b></span>
+<span class="sb them"><span class="crest them"></span>●<b>2.110</b></span>
+</div>
+</div>
+<!-- MIDDLE -->
+<div class="mid">
+<div class="partner">
+<span class="chip us"><span class="av">C</span><span class="nm">Costantino Della Valle-Marchetti</span><span class="n">11</span></span>
+<span style="font-size:.5rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:.5px">◆ compagno · Nord</span>
+</div>
+<div class="melds-col melds-us">
+<h4><span class="crest us"></span>Noi</h4>
+<div class="mrow">
+<div class="meld us"><span class="bb clean">Pulito</span><span class="mc"><span class="t">4</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">5</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">6</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">7</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">8</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">9</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">10</span><span class="p">&#9827;</span></span></div>
+<div class="meld us"><span class="mc red"><span class="t">7</span><span class="p">&#9829;</span></span><span class="mc"><span class="t">7</span><span class="p">&#9824;</span></span><span class="mc red"><span class="t">7</span><span class="p">&#9830;</span></span></div>
+<div class="meld us"><span class="mc red"><span class="t">3</span><span class="p">&#9830;</span></span><span class="mc red"><span class="t">3</span><span class="p">&#9829;</span></span><span class="mc pin"><span class="t">2</span></span></div>
+</div>
+</div>
+<div class="island">
+<div class="pile"><span class="cap">Mazzo</span><span class="ib"></span><span class="cap">76</span></div>
+<div class="pile"><span class="cap">Scarti</span><span class="ic red"><span class="t">J</span><span class="p">&#9829;</span></span></div>
+<div class="pile"><span class="cap">Pozzetti</span><span class="poz"><span class="ib" style="width:26px;height:38px"></span><span class="ib" style="width:26px;height:38px"></span></span></div>
+</div>
+<div class="melds-col melds-them">
+<h4>Loro <span class="crest them"></span></h4>
+<div class="mrow">
+<div class="meld them"><span class="bb dirty">Sporco</span><span class="mc red"><span class="t">4</span><span class="p">&#9830;</span></span><span class="mc red"><span class="t">5</span><span class="p">&#9830;</span></span><span class="mc red"><span class="t">6</span><span class="p">&#9830;</span></span><span class="mc jl"><span class="t">&#9733;</span><span class="p">&#9733;</span></span><span class="mc red"><span class="t">8</span><span class="p">&#9830;</span></span><span class="mc red"><span class="t">9</span><span class="p">&#9830;</span></span></div>
+<div class="meld them"><span class="mc"><span class="t">K</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">K</span><span class="p">&#9824;</span></span><span class="mc red"><span class="t">K</span><span class="p">&#9829;</span></span></div>
+<div class="meld them"><span class="mc"><span class="t">9</span><span class="p">&#9824;</span></span><span class="mc"><span class="t">9</span><span class="p">&#9827;</span></span><span class="mc pin"><span class="t">2</span></span></div>
+</div>
+</div>
+</div>
+<!-- BOTTOM: your hand -->
+<div class="bottom">
+<div class="you-tag">
+<span class="chip us"><span class="av">TU</span><span class="nm">Tu (Ospite)</span><span class="n">13</span></span>
+<button class="full-btn" type="button">Vista completa &#9974;</button>
+<span class="hint">◆ Sud · attendi il tuo turno</span>
+</div>
+<div class="hand" aria-label="La tua mano, due file">
+<div class="hrow">
+<span class="hcard red"><span class="t">A</span><span class="p">&#9829;</span></span>
+<span class="hcard"><span class="t">A</span><span class="p">&#9824;</span></span>
+<span class="hcard"><span class="t">K</span><span class="p">&#9827;</span></span>
+<span class="hcard red"><span class="t">Q</span><span class="p">&#9830;</span></span>
+<span class="hcard"><span class="t">J</span><span class="p">&#9824;</span></span>
+<span class="hcard red"><span class="t">8</span><span class="p">&#9829;</span></span>
+<span class="hcard"><span class="t">8</span><span class="p">&#9824;</span></span>
+</div>
+<div class="hrow">
+<span class="hcard red"><span class="t">6</span><span class="p">&#9830;</span></span>
+<span class="hcard"><span class="t">5</span><span class="p">&#9827;</span></span>
+<span class="hcard"><span class="t">4</span><span class="p">&#9824;</span></span>
+<span class="hcard red"><span class="t">3</span><span class="p">&#9829;</span></span>
+<span class="hcard pin"><span class="t">2</span><span class="p" style="opacity:.4">&#9827;</span></span>
+<span class="hcard jl"><span class="t">&#9733;</span><span class="p">&#9733;</span></span>
+</div>
+</div>
+<div class="actions">
+<button class="btn primary" type="button">Cala</button>
+<button class="btn" type="button">Scarta</button>
+</div>
+</div>
+</main>
+<footer class="mock-note">
+<strong>Nota di design — Tavolo 2v2 mobile landscape.</strong> In landscape stretto (740×360) tutto deve coesistere: i due avversari diventano chip compatti nella barra superiore (con nome troncato), il compagno è una chip centrata sopra l'isola, e le calate delle due squadre stanno ai lati dell'isola centrale in strisce a scroll orizzontale. La tua mano resta in basso su due file leggibili. Il turno attivo (avversario Est) è marcato con glow ottone + "gioca" sulla chip. Il pulsante "Vista completa" offre l'uscita quando il landscape stringe troppo. Caso peggiore: 4 nomi lunghi, giochi pieni su entrambe le squadre, tutto presente senza scroll verticale della pagina. Compromesso accettato: le carte nelle calate sono molto piccole (mini 20×29) ma restano indici e semi; per l'ispezione dettagliata si usa "Vista completa".
+<span class="stamp">Mockup statico · dati di esempio · non funzionante</span>
+</footer>
+</body>
+</html>

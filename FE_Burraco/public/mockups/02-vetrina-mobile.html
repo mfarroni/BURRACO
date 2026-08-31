@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Burraco — Vetrina mobile</title>
+<style>
+:root{
+--room-950:#0f2019;--room-900:#132a21;
+--felt-900:#14352a;--felt-800:#1a4234;--felt-700:#205039;--felt-600:#2a5f46;
+--wood-900:#2a1a0d;--wood-800:#402813;--wood-700:#5c3b1e;--wood-600:#74502a;
+--brass-600:#a07d3e;--brass-500:#c0a052;--brass-400:#d3b76a;--brass-300:#e0c789;
+--ivory-50:#f6f1e3;--ivory-100:#efe8d6;--ivory-200:#e2dabf;
+--ink-900:#211b12;--ink-700:#4c4236;
+--card-red:#b3182b;
+--text-strong:#f4efe2;--text:#e7e1cf;--text-muted:#bcc7bb;--text-faint:#92a196;
+--team-us-300:#e0c789;--team-us-500:#c0a052;--team-them-300:#86b8d6;--team-them-500:#5f93b3;
+--success-300:#82d6a6;--danger-500:#d1493c;--danger-300:#f0a79b;--warn-500:#d39a35;--warn-300:#eecf8b;--info-300:#a9d0e4;
+--card-back-a:#6b2530;--card-back-b:#4c1a22;
+--sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;--sp-6:32px;--sp-7:48px;
+--r-sm:6px;--r-md:10px;--r-lg:16px;--r-card:9px;--r-pill:999px;
+--sh-card:0 2px 4px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,247,230,.22);
+--sh-lift:0 10px 22px rgba(0,0,0,.46);--sh-panel:0 6px 18px rgba(0,0,0,.30);
+--sh-inset:inset 0 2px 8px rgba(0,0,0,.42);--glow-turn:0 0 0 2px var(--brass-300),0 0 16px rgba(224,199,137,.30);
+--fs-display:2rem;--fs-h1:1.5rem;--fs-h2:1.25rem;--fs-body:1rem;--fs-sm:.875rem;--fs-xs:.75rem;
+--font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+--font-sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--font-sans);color:var(--text);background:var(--room-950);padding:var(--sp-5) 0;}
+/* device shell to demonstrate narrow portrait */
+.phone{width:360px;max-width:100%;margin:0 auto;background:
+radial-gradient(120% 60% at 50% 6%,rgba(224,199,137,.12),transparent 55%),
+linear-gradient(180deg,var(--room-900),var(--room-950));
+border:1px solid rgba(224,199,137,.18);border-radius:26px;box-shadow:var(--sh-lift);overflow:hidden;}
+.pad{padding:var(--sp-5) var(--sp-4);}
+.brand{display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-4);}
+.brand-crest{width:40px;height:40px;flex:0 0 auto;}
+.brand-name{font-family:var(--font-serif);font-size:1.6rem;color:var(--text-strong);line-height:1;}
+.brand-sub{font-size:.66rem;letter-spacing:2px;text-transform:uppercase;color:var(--brass-300);}
+.tagline{font-family:var(--font-serif);font-size:1.5rem;line-height:1.18;color:var(--text-strong);margin:0 0 var(--sp-3);}
+.tagline em{color:var(--brass-300);font-style:italic;}
+/* compact hero */
+.hero-frame{border-radius:16px;padding:8px;background:linear-gradient(160deg,var(--wood-600),var(--wood-900));box-shadow:var(--sh-panel);margin-bottom:var(--sp-4);}
+.hero-frame svg{display:block;width:100%;height:auto;border-radius:10px;}
+.cta-primary{display:flex;justify-content:center;align-items:center;gap:var(--sp-2);width:100%;font-family:var(--font-sans);font-size:1.05rem;font-weight:700;color:var(--ink-900);border:0;padding:var(--sp-4);border-radius:var(--r-pill);cursor:pointer;background:linear-gradient(180deg,var(--brass-300),var(--brass-500) 60%,var(--brass-600));box-shadow:0 8px 20px rgba(160,125,62,.36),inset 0 1px 0 rgba(255,247,230,.6);margin-bottom:var(--sp-3);}
+.segmented{display:flex;border:1px solid rgba(224,199,137,.28);border-radius:var(--r-pill);overflow:hidden;background:rgba(15,32,25,.5);}
+.segmented button{flex:1;background:transparent;border:0;color:var(--text-muted);font-family:var(--font-sans);font-size:var(--fs-sm);font-weight:600;padding:var(--sp-3);cursor:pointer;}
+.segmented button+button{border-left:1px solid rgba(224,199,137,.2);}
+.fold-hint{text-align:center;font-size:var(--fs-xs);color:var(--text-faint);margin:var(--sp-4) 0;letter-spacing:.5px;}
+.divider{height:1px;background:rgba(224,199,137,.16);margin:var(--sp-5) 0;}
+.sec-title{font-family:var(--font-serif);font-size:1.05rem;color:var(--text-strong);margin:0 0 var(--sp-3);}
+.badges{display:flex;flex-direction:column;gap:var(--sp-2);margin-bottom:var(--sp-5);}
+.badge{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-sm);color:var(--text-muted);background:rgba(20,53,42,.55);border:1px solid rgba(224,199,137,.16);padding:var(--sp-3) var(--sp-4);border-radius:var(--r-md);}
+.modes{display:flex;flex-direction:column;gap:var(--sp-3);}
+.mode{position:relative;border-radius:var(--r-lg);padding:var(--sp-4);background:linear-gradient(180deg,rgba(32,80,57,.5),rgba(20,53,42,.5));border:1px solid rgba(224,199,137,.18);}
+.mode h3{margin:0 0 2px;font-family:var(--font-serif);font-size:var(--fs-h2);color:var(--text-strong);}
+.mode p{margin:0;font-size:var(--fs-sm);color:var(--text-muted);}
+.mode--active{border-color:var(--brass-500);}
+.tag{position:absolute;top:var(--sp-3);right:var(--sp-3);font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 9px;border-radius:var(--r-pill);}
+.mode--active .tag{background:var(--brass-500);color:var(--ink-900);}
+.mode--soon{opacity:.72;}
+.mode--soon .tag{background:rgba(211,154,53,.2);color:var(--warn-300);border:1px solid rgba(211,154,53,.4);}
+/* error panel */
+.err{margin-top:var(--sp-5);background:rgba(209,73,60,.10);border:1px solid rgba(240,167,155,.4);border-radius:var(--r-lg);padding:var(--sp-4);}
+.err-head{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-2);}
+.err-head .ic{width:22px;height:22px;flex:0 0 auto;}
+.err-head strong{color:var(--danger-300);font-size:var(--fs-sm);}
+.err p{margin:0 0 var(--sp-3);font-size:var(--fs-sm);color:var(--text);line-height:1.5;}
+.err .field{width:100%;padding:var(--sp-3);border-radius:var(--r-md);border:1px solid rgba(240,167,155,.5);background:rgba(15,32,25,.6);color:var(--text-strong);font-family:var(--font-sans);margin-bottom:var(--sp-2);}
+.err .field::placeholder{color:var(--text-faint);}
+.err .guest-out{display:block;width:100%;text-align:center;margin-top:var(--sp-2);font-size:var(--fs-sm);font-weight:700;color:var(--brass-300);background:transparent;border:1px solid var(--brass-500);border-radius:var(--r-pill);padding:var(--sp-3);cursor:pointer;}
+.mock-note{width:360px;max-width:100%;margin:var(--sp-5) auto 0;padding:var(--sp-4);color:var(--text-faint);font-size:var(--fs-xs);line-height:1.55;}
+.mock-note strong{color:var(--text-muted);}
+.mock-note .stamp{display:block;margin-top:var(--sp-2);letter-spacing:1px;text-transform:uppercase;color:var(--brass-600);}
+/* worst case: narrow to 320 */
+@media (max-width:380px){.phone{width:320px;}}
+</style>
+</head>
+<body>
+<main class="phone">
+<div class="pad">
+<!-- ABOVE THE FOLD -->
+<div class="brand">
+<svg class="brand-crest" viewBox="0 0 52 52" aria-hidden="true">
+<circle cx="26" cy="26" r="24" fill="none" stroke="#c0a052" stroke-width="2"/>
+<circle cx="26" cy="26" r="19" fill="#14352a"/>
+<path d="M26 13 L33 26 L26 39 L19 26 Z" fill="#b3182b"/>
+<path d="M26 17 L30 26 L26 35 L22 26 Z" fill="#e0c789"/>
+</svg>
+<div><div class="brand-name">Burraco</div><div class="brand-sub">Il circolo, online</div></div>
+</div>
+<h1 class="tagline">Il tavolo del circolo, <em>dal tuo browser</em></h1>
+<div class="hero-frame">
+<svg viewBox="0 0 320 150" role="img" aria-label="Anteprima del tavolo: feltro verde, mazzo e scarti, carte avorio">
+<defs>
+<radialGradient id="felt2" cx="50%" cy="35%" r="80%"><stop offset="0%" stop-color="#2a5f46"/><stop offset="60%" stop-color="#205039"/><stop offset="100%" stop-color="#14352a"/></radialGradient>
+<linearGradient id="cf2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f6f1e3"/><stop offset="100%" stop-color="#e2dabf"/></linearGradient>
+<linearGradient id="cb2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6b2530"/><stop offset="100%" stop-color="#4c1a22"/></linearGradient>
+</defs>
+<rect width="320" height="150" fill="url(#felt2)"/>
+<rect width="320" height="150" fill="none"/>
+<g transform="translate(120,36)"><rect width="42" height="60" rx="7" fill="url(#cb2)" stroke="#a07d3e"/></g>
+<g transform="translate(170,36)"><rect width="42" height="60" rx="7" fill="url(#cf2)" stroke="#c9c0a4"/><text x="6" y="16" font-family="Georgia,serif" font-size="12" fill="#b3182b" font-weight="700">K</text><text x="18" y="42" font-family="Georgia,serif" font-size="20" fill="#b3182b">&#9829;</text></g>
+<g transform="translate(160,150)">
+<g transform="rotate(-16) translate(-70,-8)"><rect width="44" height="62" rx="7" fill="url(#cf2)" stroke="#c9c0a4"/><text x="6" y="16" font-size="12" font-family="Georgia,serif" fill="#211b12" font-weight="700">7</text></g>
+<g transform="rotate(0) translate(-22,-14)"><rect width="44" height="62" rx="7" fill="url(#cf2)" stroke="#c9c0a4"/><text x="6" y="16" font-size="12" font-family="Georgia,serif" fill="#b3182b" font-weight="700">A</text></g>
+<g transform="rotate(16) translate(26,-8)"><rect width="44" height="62" rx="7" fill="url(#cf2)" stroke="#c9c0a4"/><text x="6" y="16" font-size="12" font-family="Georgia,serif" fill="#211b12" font-weight="700">Q</text></g>
+</g>
+</svg>
+</div>
+<button class="cta-primary" type="button">Gioca come Ospite <span aria-hidden="true">&rarr;</span></button>
+<div class="segmented" role="group" aria-label="Accesso account">
+<button type="button">Accedi</button>
+<button type="button">Registrati</button>
+</div>
+<p class="fold-hint">&darr; Scorri per saperne di più</p>
+
+<!-- BELOW THE FOLD -->
+<div class="divider"></div>
+<h2 class="sec-title">Perché è comodo</h2>
+<div class="badges">
+<span class="badge"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="#82d6a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Gratis</span>
+<span class="badge"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="#82d6a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Nessuna installazione</span>
+<span class="badge"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="#82d6a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Si gioca dal browser</span>
+</div>
+<h2 class="sec-title">Modalità</h2>
+<div class="modes">
+<div class="mode mode--active"><span class="tag">Attivo</span><h3>1 contro 1</h3><p>Testa a testa, pronto da giocare.</p></div>
+<div class="mode mode--soon" aria-disabled="true"><span class="tag">In arrivo</span><h3>2 contro 2</h3><p>A coppie, Noi contro Loro. Prossimamente.</p></div>
+</div>
+
+<!-- LOGIN ERROR STATE -->
+<div class="divider"></div>
+<h2 class="sec-title">Accedi al tuo account</h2>
+<div class="err" role="alert">
+<div class="err-head">
+<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="#f0a79b" stroke-width="2"/><path d="M12 7v6" stroke="#f0a79b" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.5" r="1.2" fill="#f0a79b"/></svg>
+<strong>Accesso non riuscito</strong>
+</div>
+<p>Email o password non corrispondono. Riprova o continua come Ospite.</p>
+<input class="field" type="email" value="mario.rossi@example.com" aria-label="Email" readonly>
+<input class="field" type="password" value="••••••••" aria-label="Password" readonly>
+<button class="cta-primary" type="button" style="margin-top:4px;margin-bottom:0;">Riprova</button>
+<button class="guest-out" type="button">Continua come Ospite</button>
+</div>
+</div>
+</main>
+<footer class="mock-note">
+<strong>Nota di design — Vetrina mobile.</strong> Colonna unica, priorità all'above-the-fold: brand, tagline, hero compatto, CTA Ospite a larghezza piena e segmented. Il resto (badge fiducia, modalità) è sotto lo scroll con un hint esplicito. Lo stato d'errore di accesso è di prima classe: pannello contenuto, icona neutra (non allarmistica), testo in <strong>--danger-300</strong>, messaggio specifico e non colpevolizzante, e l'uscita "Continua come Ospite" SEMPRE offerta per non intrappolare l'utente. Caso peggiore: la shell è portrait stretta (fino a 320px), tutto resta leggibile e i tocchi restano ampi. Compromesso: l'hero è ridotto ma conserva l'identità del feltro.
+<span class="stamp">Mockup statico · dati di esempio · non funzionante</span>
+</footer>
+</body>
+</html>

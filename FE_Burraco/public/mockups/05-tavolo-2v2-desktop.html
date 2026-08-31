@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Burraco — Tavolo 2v2 desktop</title>
+<style>
+:root{
+--room-950:#0f2019;--room-900:#132a21;
+--felt-900:#14352a;--felt-800:#1a4234;--felt-700:#205039;--felt-600:#2a5f46;
+--wood-900:#2a1a0d;--wood-800:#402813;--wood-700:#5c3b1e;--wood-600:#74502a;
+--brass-600:#a07d3e;--brass-500:#c0a052;--brass-400:#d3b76a;--brass-300:#e0c789;
+--ivory-50:#f6f1e3;--ivory-100:#efe8d6;--ivory-200:#e2dabf;
+--ink-900:#211b12;--ink-700:#4c4236;
+--card-red:#b3182b;
+--text-strong:#f4efe2;--text:#e7e1cf;--text-muted:#bcc7bb;--text-faint:#92a196;
+--team-us-300:#e0c789;--team-us-500:#c0a052;--team-them-300:#86b8d6;--team-them-500:#5f93b3;
+--success-300:#82d6a6;--danger-500:#d1493c;--danger-300:#f0a79b;--warn-500:#d39a35;--warn-300:#eecf8b;--info-300:#a9d0e4;
+--card-back-a:#6b2530;--card-back-b:#4c1a22;
+--sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;--sp-6:32px;--sp-7:48px;
+--r-sm:6px;--r-md:10px;--r-lg:16px;--r-card:9px;--r-pill:999px;
+--sh-card:0 2px 4px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,247,230,.22);
+--sh-lift:0 10px 22px rgba(0,0,0,.46);--sh-panel:0 6px 18px rgba(0,0,0,.30);
+--sh-inset:inset 0 2px 8px rgba(0,0,0,.42);--glow-turn:0 0 0 2px var(--brass-300),0 0 16px rgba(224,199,137,.30);
+--fs-display:2rem;--fs-h1:1.5rem;--fs-h2:1.25rem;--fs-body:1rem;--fs-sm:.875rem;--fs-xs:.75rem;
+--font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+--font-sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--font-sans);color:var(--text);background:var(--room-950);}
+.table-shell{min-height:100vh;padding:var(--sp-4);background:radial-gradient(120% 80% at 50% 20%,rgba(224,199,137,.12),transparent 55%),linear-gradient(180deg,var(--room-900),var(--room-950));}
+.frame{max-width:1240px;margin:0 auto;border-radius:22px;padding:12px;background:linear-gradient(160deg,var(--wood-600),var(--wood-800) 45%,var(--wood-900));box-shadow:var(--sh-lift),inset 0 0 0 2px rgba(160,125,62,.3);}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--sp-3);}
+.scoreboard{display:flex;gap:var(--sp-3);}
+.score{min-width:130px;background:linear-gradient(180deg,rgba(15,32,25,.7),rgba(15,32,25,.4));border:1px solid rgba(224,199,137,.3);border-radius:var(--r-md);padding:var(--sp-2) var(--sp-4);}
+.score.them{border-color:rgba(95,147,179,.4);}
+.score .lbl{display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.5px;color:var(--text-faint);}
+.score .val{font-family:var(--font-serif);font-size:1.5rem;color:var(--brass-300);} .score.them .val{color:var(--team-them-300);}
+.crest{width:12px;height:12px;border-radius:3px;display:inline-block;} .crest.us{background:var(--brass-400);} .crest.them{background:var(--team-them-500);}
+.round-tag{font-size:var(--fs-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;}
+/* PARAMETRIC seats=4 */
+.felt{border-radius:16px;padding:var(--sp-4);background:radial-gradient(120% 90% at 50% 45%,var(--felt-600),var(--felt-700) 55%,var(--felt-900));box-shadow:var(--sh-inset);
+display:grid;gap:var(--sp-3);
+grid-template-columns:170px 1fr 170px;
+grid-template-areas:
+"north north north"
+"west center east"
+"melds melds melds"
+"south south south";
+align-items:center;}
+.north{grid-area:north;justify-self:center;} .west{grid-area:west;} .east{grid-area:east;justify-self:end;}
+.center{grid-area:center;} .melds{grid-area:melds;} .south{grid-area:south;}
+/* nameplate seats */
+.seat{display:inline-flex;align-items:center;gap:var(--sp-2);max-width:190px;background:rgba(15,32,25,.62);border:1px solid rgba(224,199,137,.2);border-radius:var(--r-md);padding:6px var(--sp-3);position:relative;}
+.seat .av{width:26px;height:26px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-size:.66rem;font-weight:700;border:1px solid rgba(224,199,137,.4);}
+.seat.us .av{background:linear-gradient(180deg,#4a3a1e,#2a1f0f);color:var(--brass-300);}
+.seat.them .av{background:linear-gradient(180deg,#274456,#16303c);color:var(--team-them-300);}
+.seat .info{min-width:0;}
+.seat .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;font-size:var(--fs-sm);color:var(--text);}
+.seat .role{font-size:.62rem;text-transform:uppercase;letter-spacing:.5px;}
+.seat.us .role{color:var(--brass-400);} .seat.them .role{color:var(--team-them-300);}
+.seat.us{border-left:3px solid var(--brass-500);} .seat.them{border-left:3px solid var(--team-them-500);}
+.seat .cnt{font-size:var(--fs-xs);color:var(--text-faint);margin-left:auto;flex:0 0 auto;}
+.seat.turn{box-shadow:var(--glow-turn);border-color:var(--brass-300);}
+.seat .turn-dot{position:absolute;top:-6px;right:-6px;font-size:.6rem;background:var(--brass-400);color:var(--ink-900);border-radius:var(--r-pill);padding:2px 7px;font-weight:700;text-transform:uppercase;}
+.side-hand{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.side-hand .fan{display:flex;} .side-hand .cb{width:26px;height:38px;border-radius:5px;margin-left:-16px;background:linear-gradient(135deg,var(--card-back-a),var(--card-back-b));border:1px solid rgba(160,125,62,.5);}
+.side-hand .cb:first-child{margin-left:0;}
+/* center island fixed */
+.center{display:flex;justify-content:center;gap:var(--sp-6);align-items:center;position:relative;}
+.turn-arrow{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:210px;height:130px;pointer-events:none;}
+.pile{display:flex;flex-direction:column;align-items:center;gap:5px;z-index:1;}
+.pile .cap{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.5px;color:var(--text-faint);}
+.card{width:56px;height:80px;border-radius:var(--r-card);background:linear-gradient(180deg,var(--ivory-50),var(--ivory-200));border:1px solid #cabf9f;box-shadow:var(--sh-card);position:relative;color:var(--ink-900);font-family:var(--font-serif);flex:0 0 auto;}
+.card.red{color:var(--card-red);}
+.card .tl{position:absolute;top:4px;left:5px;display:flex;flex-direction:column;align-items:center;line-height:.9;}
+.card .tl b{font-size:.82rem;font-weight:700;} .card .tl i{font-size:.7rem;font-style:normal;}
+.card .pip{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.5rem;}
+.cardback{width:56px;height:80px;border-radius:var(--r-card);background:repeating-linear-gradient(45deg,var(--card-back-a),var(--card-back-a) 4px,var(--card-back-b) 4px,var(--card-back-b) 8px);border:1px solid rgba(160,125,62,.55);box-shadow:var(--sh-card);}
+.stack{position:relative;width:56px;height:80px;} .stack>*{position:absolute;top:0;left:0;}
+.poz{display:flex;gap:var(--sp-2);}
+/* melds two teams */
+.melds{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3);}
+.team-melds{border-radius:var(--r-lg);padding:var(--sp-3);}
+.team-melds.us{background:linear-gradient(180deg,rgba(160,125,62,.14),rgba(20,53,42,.35));border:1px solid rgba(192,160,82,.4);}
+.team-melds.them{background:linear-gradient(180deg,rgba(95,147,179,.14),rgba(20,53,42,.35));border:1px solid rgba(95,147,179,.4);}
+.tm-head{display:flex;align-items:center;gap:6px;margin-bottom:var(--sp-2);}
+.tm-head h3{margin:0;font-family:var(--font-serif);font-size:var(--fs-sm);color:var(--text-strong);}
+.tm-head .cnt{margin-left:auto;font-size:var(--fs-xs);color:var(--text-faint);}
+.meld-list{display:flex;flex-wrap:wrap;gap:var(--sp-3) var(--sp-4);}
+.meld{display:flex;background:rgba(15,32,25,.3);border-radius:var(--r-sm);padding:5px;position:relative;}
+.meld .mc{width:34px;height:50px;border-radius:6px;margin-left:-20px;background:linear-gradient(180deg,var(--ivory-50),var(--ivory-200));border:1px solid #cabf9f;position:relative;font-family:var(--font-serif);color:var(--ink-900);flex:0 0 auto;}
+.meld .mc:first-child{margin-left:0;} .meld .mc.red{color:var(--card-red);}
+.meld .mc .t{position:absolute;top:2px;left:3px;font-size:.56rem;font-weight:700;}
+.meld .mc .p{position:absolute;top:52%;left:50%;transform:translate(-50%,-50%);font-size:.82rem;}
+.meld .mc.pin{border:1.5px solid var(--brass-500);} .meld .mc.pin .g{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:11px;height:11px;border-radius:2px;background:radial-gradient(circle at 35% 30%,#fff,var(--brass-400),var(--brass-600));}
+.meld .mc.jl{color:#7a5aa0;}
+.bb{position:absolute;top:-8px;left:4px;font-size:.5rem;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:var(--r-pill);}
+.bb.clean{background:var(--success-300);color:var(--room-950);} .bb.dirty{background:var(--warn-300);color:var(--room-950);}
+/* south you */
+.south{display:flex;flex-direction:column;gap:var(--sp-2);align-items:center;}
+.south-head{align-self:stretch;display:flex;align-items:center;gap:var(--sp-3);}
+.hand{display:flex;}
+.hand .card{margin-left:-22px;transition:transform .12s ease;} .hand .card:first-child{margin-left:0;}
+.hand .card .br{position:absolute;bottom:4px;right:5px;transform:rotate(180deg);display:flex;flex-direction:column;align-items:center;line-height:.9;}
+.hand .card .br b{font-size:.82rem;font-weight:700;} .hand .card .br i{font-size:.7rem;font-style:normal;}
+.hand .card:hover{transform:translateY(-10px);}
+.mock-note{max-width:1240px;margin:var(--sp-5) auto 0;padding:var(--sp-4) var(--sp-6);border-top:1px solid rgba(224,199,137,.18);color:var(--text-faint);font-size:var(--fs-sm);line-height:1.55;}
+.mock-note strong{color:var(--text-muted);} .mock-note .stamp{display:block;margin-top:var(--sp-2);font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--brass-600);}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+</style>
+</head>
+<body>
+<div class="table-shell" data-seats="4">
+<div class="frame">
+<div class="topbar">
+<div class="scoreboard">
+<div class="score us"><div class="lbl"><span class="crest us"></span>◆ Noi (Nord-Sud)</div><div class="val">1.985</div></div>
+<div class="score them"><div class="lbl"><span class="crest them"></span>● Loro (Est-Ovest)</div><div class="val">2.110</div></div>
+</div>
+<div class="round-tag">Solo layout 2v2 · senso di giro orario</div>
+</div>
+<div class="felt">
+<!-- NORTH: compagno (Noi) -->
+<div class="north">
+<div class="side-hand">
+<div class="seat us"><span class="av">C</span><div class="info"><div class="nm">Costantino Della Valle-Marchetti</div><div class="role">◆ Noi · compagno</div></div><span class="cnt">11</span></div>
+<div class="fan" aria-hidden="true"><span class="cb"></span><span class="cb"></span><span class="cb"></span><span class="cb"></span><span class="cb"></span><span class="cb"></span></div>
+</div>
+</div>
+<!-- WEST: avversario (Loro) -->
+<div class="west">
+<div class="side-hand">
+<div class="seat them"><span class="av">G</span><div class="info"><div class="nm">Guendalina Bonaccorsi-Ruggeri</div><div class="role">● Loro · Ovest</div></div><span class="cnt">14</span></div>
+<div class="fan" aria-hidden="true"><span class="cb"></span><span class="cb"></span><span class="cb"></span><span class="cb"></span><span class="cb"></span></div>
+</div>
+</div>
+<!-- CENTER ISLAND fixed -->
+<div class="center">
+<svg class="turn-arrow" viewBox="0 0 210 130" aria-hidden="true">
+<path d="M40 30 A70 55 0 0 1 170 30" fill="none" stroke="rgba(224,199,137,.28)" stroke-width="3" stroke-dasharray="5 6"/>
+<path d="M170 30 l-9 -5 l2 11 z" fill="rgba(224,199,137,.5)"/>
+</svg>
+<div class="pile"><span class="cap">Mazzo</span><div class="stack"><span class="cardback" style="top:2px;left:2px"></span><span class="cardback"></span></div><span class="cap">76</span></div>
+<div class="pile"><span class="cap">Scarti</span><div class="stack"><span class="card red"><span class="tl"><b>J</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span></div><span class="cap">monte</span></div>
+<div class="pile"><span class="cap">Pozzetti</span><div class="poz"><span class="cardback"></span><span class="cardback"></span></div><span class="cap">2 chiusi</span></div>
+</div>
+<!-- EAST: avversario (Loro) turno attivo -->
+<div class="east">
+<div class="side-hand">
+<div class="seat them turn"><span class="turn-dot">Gioca</span><span class="av">R</span><div class="info"><div class="nm">Rosalinda Pappalardo-Squillace</div><div class="role">● Loro · Est</div></div><span class="cnt">12</span></div>
+<div class="fan" aria-hidden="true"><span class="cb"></span><span class="cb"></span><span class="cb"></span><span class="cb"></span><span class="cb"></span><span class="cb"></span></div>
+</div>
+</div>
+<!-- MELDS both teams full -->
+<div class="melds">
+<div class="team-melds us">
+<div class="tm-head"><span class="crest us"></span><h3>I nostri giochi ◆ NOI</h3><span class="cnt">5 giochi</span></div>
+<div class="meld-list">
+<div class="meld"><span class="bb clean">Burraco pulito</span><span class="mc"><span class="t">4</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">5</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">6</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">7</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">8</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">9</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">10</span><span class="p">&#9827;</span></span></div>
+<div class="meld"><span class="mc red"><span class="t">7</span><span class="p">&#9829;</span></span><span class="mc"><span class="t">7</span><span class="p">&#9824;</span></span><span class="mc red"><span class="t">7</span><span class="p">&#9830;</span></span></div>
+<div class="meld"><span class="mc"><span class="t">K</span><span class="p">&#9824;</span></span><span class="mc"><span class="t">Q</span><span class="p">&#9824;</span></span><span class="mc"><span class="t">J</span><span class="p">&#9824;</span></span><span class="mc"><span class="t">10</span><span class="p">&#9824;</span></span></div>
+<div class="meld"><span class="mc red"><span class="t">3</span><span class="p">&#9830;</span></span><span class="mc red"><span class="t">3</span><span class="p">&#9829;</span></span><span class="mc pin"><span class="t">2</span><span class="g"></span></span></div>
+</div>
+</div>
+<div class="team-melds them">
+<div class="tm-head"><span class="crest them"></span><h3>I loro giochi ● LORO</h3><span class="cnt">5 giochi</span></div>
+<div class="meld-list">
+<div class="meld"><span class="bb dirty">Burraco sporco</span><span class="mc red"><span class="t">4</span><span class="p">&#9830;</span></span><span class="mc red"><span class="t">5</span><span class="p">&#9830;</span></span><span class="mc red"><span class="t">6</span><span class="p">&#9830;</span></span><span class="mc jl"><span class="t">&#9733;</span><span class="p">&#9733;</span></span><span class="mc red"><span class="t">8</span><span class="p">&#9830;</span></span><span class="mc red"><span class="t">9</span><span class="p">&#9830;</span></span><span class="mc red"><span class="t">10</span><span class="p">&#9830;</span></span></div>
+<div class="meld"><span class="mc"><span class="t">K</span><span class="p">&#9827;</span></span><span class="mc"><span class="t">K</span><span class="p">&#9824;</span></span><span class="mc red"><span class="t">K</span><span class="p">&#9829;</span></span></div>
+<div class="meld"><span class="mc"><span class="t">9</span><span class="p">&#9824;</span></span><span class="mc"><span class="t">9</span><span class="p">&#9827;</span></span><span class="mc pin"><span class="t">2</span><span class="g"></span></span></div>
+<div class="meld"><span class="mc red"><span class="t">Q</span><span class="p">&#9829;</span></span><span class="mc red"><span class="t">J</span><span class="p">&#9829;</span></span><span class="mc red"><span class="t">10</span><span class="p">&#9829;</span></span><span class="mc red"><span class="t">9</span><span class="p">&#9829;</span></span></div>
+</div>
+</div>
+</div>
+<!-- SOUTH you -->
+<div class="south">
+<div class="south-head">
+<div class="seat us"><span class="av">TU</span><div class="info"><div class="nm">Tu (Ospite)</div><div class="role">◆ Noi · Sud</div></div><span class="cnt">13 carte</span></div>
+</div>
+<div class="hand" aria-label="La tua mano">
+<span class="card red"><span class="tl"><b>A</b><i>&#9829;</i></span><span class="pip">&#9829;</span><span class="br"><b>A</b><i>&#9829;</i></span></span>
+<span class="card"><span class="tl"><b>A</b><i>&#9824;</i></span><span class="pip">&#9824;</span><span class="br"><b>A</b><i>&#9824;</i></span></span>
+<span class="card"><span class="tl"><b>K</b><i>&#9827;</i></span><span class="pip">&#9827;</span><span class="br"><b>K</b><i>&#9827;</i></span></span>
+<span class="card red"><span class="tl"><b>Q</b><i>&#9830;</i></span><span class="pip">&#9830;</span><span class="br"><b>Q</b><i>&#9830;</i></span></span>
+<span class="card"><span class="tl"><b>J</b><i>&#9824;</i></span><span class="pip">&#9824;</span><span class="br"><b>J</b><i>&#9824;</i></span></span>
+<span class="card red"><span class="tl"><b>8</b><i>&#9829;</i></span><span class="pip">&#9829;</span><span class="br"><b>8</b><i>&#9829;</i></span></span>
+<span class="card"><span class="tl"><b>8</b><i>&#9824;</i></span><span class="pip">&#9824;</span><span class="br"><b>8</b><i>&#9824;</i></span></span>
+<span class="card red"><span class="tl"><b>6</b><i>&#9830;</i></span><span class="pip">&#9830;</span><span class="br"><b>6</b><i>&#9830;</i></span></span>
+<span class="card"><span class="tl"><b>5</b><i>&#9827;</i></span><span class="pip">&#9827;</span><span class="br"><b>5</b><i>&#9827;</i></span></span>
+<span class="card"><span class="tl"><b>4</b><i>&#9824;</i></span><span class="pip">&#9824;</span><span class="br"><b>4</b><i>&#9824;</i></span></span>
+<span class="card red"><span class="tl"><b>3</b><i>&#9829;</i></span><span class="pip">&#9829;</span><span class="br"><b>3</b><i>&#9829;</i></span></span>
+<span class="card pinella" style="border:2px solid var(--brass-500)"><span class="tl"><b>2</b><i>&#9827;</i></span><span class="pip" style="opacity:0">&#9827;</span><span class="br"><b>2</b><i>&#9827;</i></span><span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:15px;height:15px;border-radius:3px;background:radial-gradient(circle at 35% 30%,#fff,var(--brass-400),var(--brass-600));box-shadow:0 0 6px rgba(224,199,137,.7)"></span></span>
+<span class="card jolly" style="color:#7a5aa0"><span class="tl"><b>&#9733;</b></span><span class="pip">&#9733;</span><span style="position:absolute;bottom:6px;left:0;right:0;text-align:center;font-family:var(--font-sans);font-size:.5rem;letter-spacing:1px;font-weight:700;color:#7a5aa0">JOLLY</span></span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<footer class="mock-note">
+<strong>Nota di design — Tavolo 2v2 desktop (solo layout, nessuna regola).</strong> Stessa griglia parametrica, commutata a <code>data-seats="4"</code>: nord (compagno), west/center/east, melds, sud (tu, sempre a Sud). L'isola centrale non si sposta rispetto al 1v1, così l'occhio resta ancorato. Identità squadra sui 3 canali: posizione (Noi Nord-Sud vs Loro Est-Ovest), colore (ottone vs acciaio, con bordo-sinistro colorato sulle targhe), etichetta+crest (◆ Noi / ● Loro). Il turno è su un avversario (Est): glow ottone tenue + badge "Gioca", e un arco tratteggiato al centro indica il senso di giro orario. Caso peggiore: 4 nomi lunghi troncati con ellissi e giochi di ENTRAMBE le squadre pieni (burraco pulito e sporco su entrambi i lati).
+<span class="stamp">Mockup statico · dati di esempio · non funzionante</span>
+</footer>
+</body>
+</html>

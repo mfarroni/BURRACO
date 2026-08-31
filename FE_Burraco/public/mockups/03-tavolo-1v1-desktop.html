@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Burraco — Tavolo 1v1 desktop</title>
+<style>
+:root{
+--room-950:#0f2019;--room-900:#132a21;
+--felt-900:#14352a;--felt-800:#1a4234;--felt-700:#205039;--felt-600:#2a5f46;
+--wood-900:#2a1a0d;--wood-800:#402813;--wood-700:#5c3b1e;--wood-600:#74502a;
+--brass-600:#a07d3e;--brass-500:#c0a052;--brass-400:#d3b76a;--brass-300:#e0c789;
+--ivory-50:#f6f1e3;--ivory-100:#efe8d6;--ivory-200:#e2dabf;
+--ink-900:#211b12;--ink-700:#4c4236;
+--card-red:#b3182b;
+--text-strong:#f4efe2;--text:#e7e1cf;--text-muted:#bcc7bb;--text-faint:#92a196;
+--team-us-300:#e0c789;--team-us-500:#c0a052;--team-them-300:#86b8d6;--team-them-500:#5f93b3;
+--success-300:#82d6a6;--danger-500:#d1493c;--danger-300:#f0a79b;--warn-500:#d39a35;--warn-300:#eecf8b;--info-300:#a9d0e4;
+--card-back-a:#6b2530;--card-back-b:#4c1a22;
+--sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;--sp-6:32px;--sp-7:48px;
+--r-sm:6px;--r-md:10px;--r-lg:16px;--r-card:9px;--r-pill:999px;
+--sh-card:0 2px 4px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,247,230,.22);
+--sh-lift:0 10px 22px rgba(0,0,0,.46);--sh-panel:0 6px 18px rgba(0,0,0,.30);
+--sh-inset:inset 0 2px 8px rgba(0,0,0,.42);--glow-turn:0 0 0 2px var(--brass-300),0 0 16px rgba(224,199,137,.30);
+--fs-display:2rem;--fs-h1:1.5rem;--fs-h2:1.25rem;--fs-body:1rem;--fs-sm:.875rem;--fs-xs:.75rem;
+--font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+--font-sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--font-sans);color:var(--text);background:var(--room-950);}
+.table-shell{min-height:100vh;padding:var(--sp-4);background:
+radial-gradient(120% 80% at 50% 22%,rgba(224,199,137,.12),transparent 55%),
+linear-gradient(180deg,var(--room-900),var(--room-950));}
+.frame{max-width:1200px;margin:0 auto;border-radius:22px;padding:12px;
+background:linear-gradient(160deg,var(--wood-600),var(--wood-800) 45%,var(--wood-900));
+box-shadow:var(--sh-lift),inset 0 0 0 2px rgba(160,125,62,.3);}
+/* Parametric table grid, seats=2 */
+.felt{
+border-radius:16px;padding:var(--sp-5);
+background:radial-gradient(120% 90% at 50% 30%,var(--felt-600),var(--felt-700) 55%,var(--felt-900));
+box-shadow:var(--sh-inset);
+display:grid;gap:var(--sp-4);
+grid-template-areas:"north" "center" "melds" "south";
+}
+[data-seats="2"] .felt{grid-template-rows:auto auto 1fr auto;}
+.north{grid-area:north;} .center{grid-area:center;} .melds{grid-area:melds;} .south{grid-area:south;}
+/* topbar */
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--sp-4);}
+.scoreboard{display:flex;gap:var(--sp-3);align-items:stretch;}
+.score{min-width:120px;background:linear-gradient(180deg,rgba(15,32,25,.7),rgba(15,32,25,.4));border:1px solid rgba(224,199,137,.3);border-radius:var(--r-md);padding:var(--sp-2) var(--sp-4);}
+.score .lbl{display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);letter-spacing:.5px;text-transform:uppercase;color:var(--text-faint);}
+.score .val{font-family:var(--font-serif);font-size:1.5rem;color:var(--brass-300);line-height:1.1;}
+.score.them .val{color:var(--team-them-300);}
+.crest{width:12px;height:12px;border-radius:2px;display:inline-block;}
+.crest.us{background:var(--brass-400);} .crest.them{background:var(--team-them-500);}
+.round-tag{font-size:var(--fs-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;}
+/* player nameplates */
+.nameplate{display:inline-flex;align-items:center;gap:var(--sp-2);max-width:280px;background:rgba(15,32,25,.6);border:1px solid rgba(224,199,137,.2);border-radius:var(--r-pill);padding:6px var(--sp-4);}
+.nameplate .av{width:26px;height:26px;border-radius:50%;flex:0 0 auto;background:linear-gradient(180deg,var(--felt-600),var(--felt-800));border:1px solid rgba(224,199,137,.4);display:grid;place-items:center;font-size:.7rem;color:var(--brass-300);font-weight:700;}
+.nameplate .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;color:var(--text);}
+.nameplate .meta{font-size:var(--fs-xs);color:var(--text-faint);}
+.nameplate.turn{box-shadow:var(--glow-turn);border-color:var(--brass-300);}
+.turn-flag{font-size:var(--fs-xs);color:var(--brass-300);font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+.north-row{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--sp-4);}
+.opp-hand{display:flex;}
+.opp-hand .cb{width:34px;height:48px;border-radius:6px;margin-left:-22px;background:linear-gradient(135deg,var(--card-back-a),var(--card-back-b));border:1px solid rgba(160,125,62,.5);box-shadow:0 1px 2px rgba(0,0,0,.4);}
+.opp-hand .cb:first-child{margin-left:0;}
+.opp-count{font-size:var(--fs-xs);color:var(--text-faint);align-self:center;margin-left:var(--sp-2);}
+/* center island */
+.center{display:flex;justify-content:center;gap:var(--sp-6);align-items:center;padding:var(--sp-3) 0;}
+.pile{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.pile .cap{font-size:var(--fs-xs);letter-spacing:.5px;text-transform:uppercase;color:var(--text-faint);}
+.stack{position:relative;width:56px;height:80px;}
+.stack .card,.stack .cardback{position:absolute;top:0;left:0;}
+.pozzetti{display:flex;gap:var(--sp-3);}
+/* CARD component */
+.card{width:56px;height:80px;border-radius:var(--r-card);background:linear-gradient(180deg,var(--ivory-50),var(--ivory-200));border:1px solid #cabf9f;box-shadow:var(--sh-card);position:relative;color:var(--ink-900);font-family:var(--font-serif);flex:0 0 auto;}
+.card.red{color:var(--card-red);}
+.card .tl,.card .br{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:.95;}
+.card .tl{top:4px;left:5px;} .card .br{bottom:4px;right:5px;transform:rotate(180deg);}
+.card .tl b,.card .br b{font-size:.82rem;font-weight:700;} .card .tl i,.card .br i{font-size:.72rem;font-style:normal;}
+.card .pip{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.5rem;}
+.cardback{width:56px;height:80px;border-radius:var(--r-card);background:
+repeating-linear-gradient(45deg,var(--card-back-a),var(--card-back-a) 4px,var(--card-back-b) 4px,var(--card-back-b) 8px);
+border:1px solid rgba(160,125,62,.55);box-shadow:var(--sh-card);flex:0 0 auto;}
+.card.pinella{border:2px solid var(--brass-500);box-shadow:0 0 0 1px var(--brass-300),var(--sh-card);}
+.card.pinella .gem{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:16px;height:16px;background:radial-gradient(circle at 35% 30%,#fff,var(--brass-400) 55%,var(--brass-600));border-radius:3px;box-shadow:0 0 6px rgba(224,199,137,.7);}
+.card.jolly{color:#7a5aa0;background:linear-gradient(180deg,#f6f1e3,#e7e0ce);}
+.card.jolly .pip{font-size:1.4rem;}
+.card.jolly .jl{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-family:var(--font-sans);font-size:.5rem;letter-spacing:1px;color:#7a5aa0;font-weight:700;}
+/* melds */
+.melds{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-4);}
+.team-melds{border-radius:var(--r-lg);padding:var(--sp-4);}
+.team-melds.us{background:linear-gradient(180deg,rgba(160,125,62,.14),rgba(20,53,42,.35));border:1px solid rgba(192,160,82,.4);}
+.team-melds.them{background:linear-gradient(180deg,rgba(95,147,179,.14),rgba(20,53,42,.35));border:1px solid rgba(95,147,179,.4);}
+.tm-head{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-3);}
+.tm-head .crest{width:14px;height:14px;border-radius:3px;}
+.tm-head h3{margin:0;font-family:var(--font-serif);font-size:var(--fs-body);color:var(--text-strong);}
+.tm-head .cnt{margin-left:auto;font-size:var(--fs-xs);color:var(--text-faint);}
+.meld-list{display:flex;flex-wrap:wrap;gap:var(--sp-3);}
+.meld{display:flex;background:rgba(15,32,25,.3);border-radius:var(--r-sm);padding:6px;position:relative;}
+.meld .card{width:40px;height:58px;margin-left:-24px;}
+.meld .card:first-child{margin-left:0;}
+.meld .card .tl b{font-size:.62rem;} .meld .card .tl i{font-size:.55rem;} .meld .card .pip{font-size:1rem;}
+.meld .card .br{display:none;}
+.badge-burraco{position:absolute;top:-9px;left:6px;font-size:.56rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:2px 7px;border-radius:var(--r-pill);}
+.badge-burraco.clean{background:var(--success-300);color:var(--room-950);}
+.badge-burraco.dirty{background:var(--warn-300);color:var(--room-950);}
+/* south / your hand */
+.south{display:flex;flex-direction:column;gap:var(--sp-3);}
+.south.turn{padding:var(--sp-3);border-radius:var(--r-lg);box-shadow:var(--glow-turn);background:rgba(224,199,137,.05);}
+.south-head{display:flex;align-items:center;gap:var(--sp-3);}
+.hand{display:flex;flex-direction:column;gap:0;align-items:center;}
+.hand-row{display:flex;}
+.hand-row .card{margin-left:-20px;transition:transform .12s ease;}
+.hand-row .card:first-child{margin-left:0;}
+.hand-row.r2{margin-top:-14px;}
+.hand-row .card:hover{transform:translateY(-10px);}
+.actionbar{display:flex;gap:var(--sp-3);align-items:center;justify-content:center;flex-wrap:wrap;}
+.btn{font-family:var(--font-sans);font-weight:700;font-size:var(--fs-sm);border-radius:var(--r-pill);padding:var(--sp-3) var(--sp-5);cursor:pointer;border:1px solid rgba(224,199,137,.35);background:rgba(15,32,25,.5);color:var(--text);}
+.btn.primary{color:var(--ink-900);border:0;background:linear-gradient(180deg,var(--brass-300),var(--brass-500) 60%,var(--brass-600));box-shadow:0 6px 16px rgba(160,125,62,.34);}
+.mock-note{max-width:1200px;margin:var(--sp-5) auto 0;padding:var(--sp-4) var(--sp-6);border-top:1px solid rgba(224,199,137,.18);color:var(--text-faint);font-size:var(--fs-sm);line-height:1.55;}
+.mock-note strong{color:var(--text-muted);}
+.mock-note .stamp{display:block;margin-top:var(--sp-2);font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--brass-600);}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+</style>
+</head>
+<body>
+<div class="table-shell" data-seats="2">
+<div class="frame">
+<div class="topbar">
+<div class="scoreboard">
+<div class="score us"><div class="lbl"><span class="crest us"></span>◆ Noi</div><div class="val">1.240</div></div>
+<div class="score them"><div class="lbl"><span class="crest them"></span>● Loro</div><div class="val">980</div></div>
+</div>
+<div class="round-tag">Prima mano · Pozzetti in gioco</div>
+</div>
+<div class="felt">
+<!-- NORTH: opponent -->
+<div class="north north-row">
+<div class="nameplate">
+<span class="av">M</span>
+<span class="nm">Massimiliano Bevilacqua-Fontanelli</span>
+<span class="meta">13</span>
+</div>
+<div class="opp-hand" aria-label="Carte avversario coperte">
+<span class="cb"></span><span class="cb"></span><span class="cb"></span><span class="cb"></span><span class="cb"></span><span class="cb"></span><span class="cb"></span><span class="cb"></span>
+<span class="opp-count">13 carte</span>
+</div>
+</div>
+<!-- CENTER ISLAND -->
+<div class="center">
+<div class="pile">
+<span class="cap">Mazzo</span>
+<div class="stack">
+<span class="cardback" style="top:2px;left:2px"></span>
+<span class="cardback"></span>
+</div>
+<span class="cap">78</span>
+</div>
+<div class="pile">
+<span class="cap">Scarti</span>
+<div class="stack">
+<span class="card red"><span class="tl"><b>9</b><i>&#9830;</i></span><span class="pip">&#9830;</span><span class="br"><b>9</b><i>&#9830;</i></span></span>
+</div>
+<span class="cap">monte</span>
+</div>
+<div class="pile">
+<span class="cap">Pozzetti</span>
+<div class="pozzetti">
+<span class="cardback"></span><span class="cardback"></span>
+</div>
+<span class="cap">2 chiusi</span>
+</div>
+</div>
+<!-- MELDS -->
+<div class="melds">
+<div class="team-melds us">
+<div class="tm-head"><span class="crest us"></span><h3>I nostri giochi ◆ NOI</h3><span class="cnt">6 giochi</span></div>
+<div class="meld-list">
+<!-- clean burraco -->
+<div class="meld"><span class="badge-burraco clean">Burraco pulito</span>
+<span class="card"><span class="tl"><b>5</b><i>&#9827;</i></span><span class="pip">&#9827;</span></span>
+<span class="card"><span class="tl"><b>6</b><i>&#9827;</i></span><span class="pip">&#9827;</span></span>
+<span class="card"><span class="tl"><b>7</b><i>&#9827;</i></span><span class="pip">&#9827;</span></span>
+<span class="card"><span class="tl"><b>8</b><i>&#9827;</i></span><span class="pip">&#9827;</span></span>
+<span class="card"><span class="tl"><b>9</b><i>&#9827;</i></span><span class="pip">&#9827;</span></span>
+<span class="card"><span class="tl"><b>10</b><i>&#9827;</i></span><span class="pip">&#9827;</span></span>
+<span class="card"><span class="tl"><b>J</b><i>&#9827;</i></span><span class="pip">&#9827;</span></span>
+</div>
+<!-- tris -->
+<div class="meld">
+<span class="card red"><span class="tl"><b>Q</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span>
+<span class="card"><span class="tl"><b>Q</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+<span class="card red"><span class="tl"><b>Q</b><i>&#9830;</i></span><span class="pip">&#9830;</span></span>
+</div>
+<div class="meld">
+<span class="card"><span class="tl"><b>4</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+<span class="card"><span class="tl"><b>5</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+<span class="card"><span class="tl"><b>6</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+<span class="card"><span class="tl"><b>7</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+</div>
+</div>
+</div>
+<div class="team-melds them">
+<div class="tm-head"><span class="crest them"></span><h3>I loro giochi ● LORO</h3><span class="cnt">4 giochi</span></div>
+<div class="meld-list">
+<div class="meld"><span class="badge-burraco dirty">Burraco sporco</span>
+<span class="card red"><span class="tl"><b>3</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span>
+<span class="card red"><span class="tl"><b>4</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span>
+<span class="card pinella"><span class="tl"><b>2</b><i>&#9827;</i></span><span class="gem"></span></span>
+<span class="card red"><span class="tl"><b>6</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span>
+<span class="card red"><span class="tl"><b>7</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span>
+<span class="card red"><span class="tl"><b>8</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span>
+<span class="card red"><span class="tl"><b>9</b><i>&#9829;</i></span><span class="pip">&#9829;</span></span>
+</div>
+<div class="meld">
+<span class="card"><span class="tl"><b>K</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+<span class="card red"><span class="tl"><b>K</b><i>&#9830;</i></span><span class="pip">&#9830;</span></span>
+<span class="card jolly"><span class="tl"><b>&#9733;</b></span><span class="pip">&#9733;</span><span class="jl">JOLLY</span></span>
+</div>
+<div class="meld">
+<span class="card"><span class="tl"><b>8</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+<span class="card"><span class="tl"><b>9</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+<span class="card"><span class="tl"><b>10</b><i>&#9824;</i></span><span class="pip">&#9824;</span></span>
+</div>
+</div>
+</div>
+</div>
+<!-- SOUTH: your turn active -->
+<div class="south turn">
+<div class="south-head">
+<div class="nameplate turn"><span class="av">TU</span><span class="nm">Tu (Ospite)</span><span class="meta">25 carte</span></div>
+<span class="turn-flag">&#9679; È il tuo turno</span>
+</div>
+<div class="hand" aria-label="La tua mano, 25 carte">
+<div class="hand-row r1">
+<span class="card red"><span class="tl"><b>A</b><i>&#9829;</i></span><span class="pip">&#9829;</span><span class="br"><b>A</b><i>&#9829;</i></span></span>
+<span class="card red"><span class="tl"><b>A</b><i>&#9830;</i></span><span class="pip">&#9830;</span><span class="br"><b>A</b><i>&#9830;</i></span></span>
+<span class="card"><span class="tl"><b>A</b><i>&#9824;</i></span><span class="pip">&#9824;</span><span class="br"><b>A</b><i>&#9824;</i></span></span>
+<span class="card"><span class="tl"><b>K</b><i>&#9827;</i></span><span class="pip">&#9827;</span><span class="br"><b>K</b><i>&#9827;</i></span></span>
+<span class="card red"><span class="tl"><b>K</b><i>&#9829;</i></span><span class="pip">&#9829;</span><span class="br"><b>K</b><i>&#9829;</i></span></span>
+<span class="card"><span class="tl"><b>Q</b><i>&#9824;</i></span><span class="pip">&#9824;</span><span class="br"><b>Q</b><i>&#9824;</i></span></span>
+<span class="card red"><span class="tl"><b>J</b><i>&#9830;</i></span><span class="pip">&#9830;</span><span class="br"><b>J</b><i>&#9830;</i></span></span>
+<span class="card"><span class="tl"><b>10</b><i>&#9827;</i></span><span class="pip">&#9827;</span><span class="br"><b>10</b><i>&#9827;</i></span></span>
+<span class="card"><span class="tl"><b>10</b><i>&#9824;</i></span><span class="pip">&#9824;</span><span class="br"><b>10</b><i>&#9824;</i></span></span>
+<span class="card red"><span class="tl"><b>9</b><i>&#9829;</i></span><span class="pip">&#9829;</span><span class="br"><b>9</b><i>&#9829;</i></span></span>
+<span class="card"><span class="tl"><b>8</b><i>&#9827;</i></span><span class="pip">&#9827;</span><span class="br"><b>8</b><i>&#9827;</i></span></span>
+<span class="card"><span class="tl"><b>8</b><i>&#9824;</i></span><span class="pip">&#9824;</span><span class="br"><b>8</b><i>&#9824;</i></span></span>
+<span class="card red"><span class="tl"><b>7</b><i>&#9830;</i></span><span class="pip">&#9830;</span><span class="br"><b>7</b><i>&#9830;</i></span></span>
+</div>
+<div class="hand-row r2">
+<span class="card"><span class="tl"><b>7</b><i>&#9824;</i></span><span class="pip">&#9824;</span><span class="br"><b>7</b><i>&#9824;</i></span></span>
+<span class="card red"><span class="tl"><b>6</b><i>&#9829;</i></span><span class="pip">&#9829;</span><span class="br"><b>6</b><i>&#9829;</i></span></span>
+<span class="card"><span class="tl"><b>6</b><i>&#9827;</i></span><span class="pip">&#9827;</span><span class="br"><b>6</b><i>&#9827;</i></span></span>
+<span class="card red"><span class="tl"><b>5</b><i>&#9830;</i></span><span class="pip">&#9830;</span><span class="br"><b>5</b><i>&#9830;</i></span></span>
+<span class="card"><span class="tl"><b>5</b><i>&#9824;</i></span><span class="pip">&#9824;</span><span class="br"><b>5</b><i>&#9824;</i></span></span>
+<span class="card"><span class="tl"><b>4</b><i>&#9827;</i></span><span class="pip">&#9827;</span><span class="br"><b>4</b><i>&#9827;</i></span></span>
+<span class="card red"><span class="tl"><b>4</b><i>&#9830;</i></span><span class="pip">&#9830;</span><span class="br"><b>4</b><i>&#9830;</i></span></span>
+<span class="card"><span class="tl"><b>3</b><i>&#9824;</i></span><span class="pip">&#9824;</span><span class="br"><b>3</b><i>&#9824;</i></span></span>
+<span class="card pinella"><span class="tl"><b>2</b><i>&#9830;</i></span><span class="gem"></span><span class="br"><b>2</b><i>&#9830;</i></span></span>
+<span class="card pinella"><span class="tl"><b>2</b><i>&#9824;</i></span><span class="gem"></span><span class="br"><b>2</b><i>&#9824;</i></span></span>
+<span class="card jolly"><span class="tl"><b>&#9733;</b></span><span class="pip">&#9733;</span><span class="jl">JOLLY</span></span>
+<span class="card red"><span class="tl"><b>Q</b><i>&#9829;</i></span><span class="pip">&#9829;</span><span class="br"><b>Q</b><i>&#9829;</i></span></span>
+</div>
+</div>
+<div class="actionbar">
+<button class="btn" type="button">Pesca dal mazzo</button>
+<button class="btn" type="button">Prendi il monte scarti</button>
+<button class="btn primary" type="button">Cala selezione</button>
+<button class="btn" type="button">Scarta</button>
+</div>
+</div>
+</div>
+</div>
+<footer class="mock-note">
+<strong>Nota di design — Tavolo 1v1 desktop.</strong> Layout parametrico con <code>data-seats="2"</code>: nord (avversario) / center (isola mazzo-scarti-pozzetti FISSA) / melds / sud (tu). L'isola centrale resta immobile 2↔4 come punto di ancoraggio. La squadra è comunicata su 3 canali ridondanti (posizione, colore ottone/acciaio, etichetta+crest ◆Noi/●Loro) così chi non distingue i colori resta orientato. Il turno è l'informazione più forte dopo la mano: glow ottone tenue e statico (no lampeggio) su targa e zona-mano. Caso peggiore reale: nome avversario lungo troncato con ellissi, 6+ calate con burraco pulito e sporco marcati da badge, e la TUA mano piena da 25 carte su due file sovrapposte. Compromesso: le carte in mano si sovrappongono per stare nello spazio, ma l'hit-target resta l'intera carta e gli indici angolari restano sempre visibili sulla striscia esposta.
+<span class="stamp">Mockup statico · dati di esempio · non funzionante</span>
+</footer>
+</body>
+</html>

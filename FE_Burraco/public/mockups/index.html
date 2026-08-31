@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Burraco — Mockup di direzione visiva</title>
+<style>
+:root{
+--room-950:#0f2019;--room-900:#132a21;
+--felt-900:#14352a;--felt-800:#1a4234;--felt-700:#205039;--felt-600:#2a5f46;
+--wood-900:#2a1a0d;--wood-800:#402813;--wood-700:#5c3b1e;--wood-600:#74502a;
+--brass-600:#a07d3e;--brass-500:#c0a052;--brass-400:#d3b76a;--brass-300:#e0c789;
+--ivory-50:#f6f1e3;--ivory-100:#efe8d6;--ivory-200:#e2dabf;
+--ink-900:#211b12;--ink-700:#4c4236;
+--card-red:#b3182b;
+--text-strong:#f4efe2;--text:#e7e1cf;--text-muted:#bcc7bb;--text-faint:#92a196;
+--team-us-300:#e0c789;--team-us-500:#c0a052;--team-them-300:#86b8d6;--team-them-500:#5f93b3;
+--success-300:#82d6a6;--danger-500:#d1493c;--danger-300:#f0a79b;--warn-500:#d39a35;--warn-300:#eecf8b;--info-300:#a9d0e4;
+--card-back-a:#6b2530;--card-back-b:#4c1a22;
+--sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;--sp-6:32px;--sp-7:48px;
+--r-sm:6px;--r-md:10px;--r-lg:16px;--r-card:9px;--r-pill:999px;
+--sh-card:0 2px 4px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,247,230,.22);
+--sh-lift:0 10px 22px rgba(0,0,0,.46);--sh-panel:0 6px 18px rgba(0,0,0,.30);
+--sh-inset:inset 0 2px 8px rgba(0,0,0,.42);--glow-turn:0 0 0 2px var(--brass-300),0 0 16px rgba(224,199,137,.30);
+--fs-display:2rem;--fs-h1:1.5rem;--fs-h2:1.25rem;--fs-body:1rem;--fs-sm:.875rem;--fs-xs:.75rem;
+--font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+--font-sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--font-sans);color:var(--text);background:radial-gradient(120% 80% at 50% 6%,rgba(224,199,137,.10),transparent 55%),linear-gradient(180deg,var(--room-900),var(--room-950));min-height:100vh;}
+.wrap{max-width:1040px;margin:0 auto;padding:var(--sp-7) var(--sp-5);}
+.head{display:flex;align-items:center;gap:var(--sp-4);margin-bottom:var(--sp-5);}
+.crest{width:46px;height:46px;flex:0 0 auto;}
+.title{font-family:var(--font-serif);font-size:var(--fs-h1);color:var(--text-strong);line-height:1.1;}
+.title small{display:block;font-family:var(--font-sans);font-size:.7rem;letter-spacing:2.5px;text-transform:uppercase;color:var(--brass-300);margin-bottom:4px;}
+.warn{display:flex;gap:var(--sp-3);align-items:flex-start;background:rgba(211,154,53,.12);border:1px solid rgba(211,154,53,.45);border-radius:var(--r-lg);padding:var(--sp-4) var(--sp-5);margin-bottom:var(--sp-6);}
+.warn svg{flex:0 0 auto;margin-top:2px;}
+.warn strong{color:var(--warn-300);} .warn p{margin:4px 0 0;font-size:var(--fs-sm);color:var(--text-muted);}
+.section{margin-bottom:var(--sp-6);}
+.section h2{font-family:var(--font-serif);font-size:var(--fs-h2);color:var(--text-strong);margin:0 0 var(--sp-3);padding-bottom:6px;border-bottom:1px solid rgba(224,199,137,.2);}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--sp-4);}
+a.card-link{display:flex;flex-direction:column;gap:6px;text-decoration:none;background:linear-gradient(180deg,rgba(32,80,57,.5),rgba(20,53,42,.5));border:1px solid rgba(224,199,137,.2);border-radius:var(--r-lg);padding:var(--sp-4) var(--sp-5);transition:border-color .15s ease,transform .15s ease;}
+a.card-link:hover{border-color:var(--brass-400);transform:translateY(-2px);}
+a.card-link:focus-visible{outline:3px solid var(--brass-300);outline-offset:2px;}
+.card-link .no{font-family:var(--font-serif);font-size:1.1rem;color:var(--brass-300);}
+.card-link .nm{font-weight:700;color:var(--text-strong);font-size:var(--fs-body);}
+.card-link .ds{font-size:var(--fs-sm);color:var(--text-muted);line-height:1.4;}
+footer{margin-top:var(--sp-7);padding-top:var(--sp-4);border-top:1px solid rgba(224,199,137,.18);color:var(--text-faint);font-size:var(--fs-xs);letter-spacing:.5px;}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<div class="head">
+<svg class="crest" viewBox="0 0 52 52" aria-hidden="true">
+<circle cx="26" cy="26" r="24" fill="none" stroke="#c0a052" stroke-width="2"/>
+<circle cx="26" cy="26" r="19" fill="#14352a"/>
+<path d="M26 13 L33 26 L26 39 L19 26 Z" fill="#b3182b"/>
+<path d="M26 17 L30 26 L26 35 L22 26 Z" fill="#e0c789"/>
+</svg>
+<div class="title"><small>Direzione visiva · circolo/torneo</small>Burraco — Mockup di direzione visiva</div>
+</div>
+<div class="warn" role="note">
+<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 L22 20 H2 Z" fill="none" stroke="#eecf8b" stroke-width="2" stroke-linejoin="round"/><path d="M12 10 v5" stroke="#eecf8b" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.6" r="1.1" fill="#eecf8b"/></svg>
+<div><strong>Prototipi visivi NON funzionanti</strong><p>Tutte le schermate usano dati di esempio (nomi di fantasia, punteggi inventati) e non contengono logica di gioco. Servono a validare grafica, layout, gerarchia e stati visivi.</p></div>
+</div>
+<div class="section">
+<h2>Vetrina</h2>
+<div class="grid">
+<a class="card-link" href="01-vetrina-desktop.html"><span class="no">01</span><span class="nm">Vetrina — desktop</span><span class="ds">Brand, tagline su 2 righe, CTA Ospite, badge fiducia, modalità 1v1/2v2, hero SVG del tavolo.</span></a>
+<a class="card-link" href="02-vetrina-mobile.html"><span class="no">02</span><span class="nm">Vetrina — mobile</span><span class="ds">Colonna unica portrait (fino a 320px), above-the-fold + scroll, stato d'errore di accesso non colpevolizzante.</span></a>
+</div>
+</div>
+<div class="section">
+<h2>Tavolo</h2>
+<div class="grid">
+<a class="card-link" href="03-tavolo-1v1-desktop.html"><span class="no">03</span><span class="nm">Tavolo 1v1 — desktop</span><span class="ds">Isola centrale, avversario a Nord (nome lungo), 6+ calate con burraco pulito/sporco, tua mano da 25 carte, turno attivo.</span></a>
+<a class="card-link" href="04-tavolo-1v1-mobile.html"><span class="no">04</span><span class="nm">Tavolo 1v1 — mobile</span><span class="ds">Status sticky, isola, mano da 25 carte a tre file (scroll verticale), action bar + chip selezione.</span></a>
+<a class="card-link" href="05-tavolo-2v2-desktop.html"><span class="no">05</span><span class="nm">Tavolo 2v2 — desktop</span><span class="ds">Solo layout: 4 postazioni, identità squadra su 3 canali, senso di giro, giochi Noi/Loro pieni.</span></a>
+<a class="card-link" href="06-tavolo-2v2-mobile.html"><span class="no">06</span><span class="nm">Tavolo 2v2 — mobile landscape</span><span class="ds">4 postazioni in landscape stretto, avversari come chip, mano a due file, hint "vista completa".</span></a>
+</div>
+</div>
+<div class="section">
+<h2>Stati</h2>
+<div class="grid">
+<a class="card-link" href="07-stati-mano.html"><span class="no">07</span><span class="nm">Stati della mano</span><span class="ds">Riposo · selezione multipla (chip contatore) · riordino in corso (varco + filo d'oro).</span></a>
+</div>
+</div>
+<footer>Mockup statici · self-contained · offline · dati di esempio · nessuna logica di gioco</footer>
+</main>
+</body>
+</html>
