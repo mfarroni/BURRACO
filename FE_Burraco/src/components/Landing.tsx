@@ -59,14 +59,14 @@ function Chandelier() {
       />
       {[22, 60, 98].map((x) => (
         <g key={x}>
-          <rect x={x - 3} y={x === 60 ? 90 : 86 width="6" height="14" rx="2" fill="#efe9d6" />
+          <rect x={x - 3} y={x === 60 ? 90 : 86} width="6" height="14" rx="2" fill="#efe9d6" />
           <ellipse cx={x} cy={x === 60 ? 84 : 80} rx="4.5" ry="8" fill="#ecd190" opacity="0.95" />
           <circle cx={x} cy={x === 60 ? 84 : 80} r="2.4" fill="#f7f3e7" />
         </g>
-      )}
+      ))}
       {[34, 48, 60, 72, 86].map((x, i) => (
-        <path key={x} d=`pM${x} ${104 + (i % 2) * 6} l4 10 l-4 8 l-4 -8 x`fill="#ecd190" opacity="0.55" />
-      )}
+        <path key={x} d={`M${x} ${104 + (i % 2) * 6} l4 10 l-4 8 l-4 -8 z`} fill="#ecd190" opacity="0.55" />
+      ))}
     </svg>
   );
 }
@@ -83,7 +83,7 @@ function CrownCrest() {
               width="20"
               height="30"
               rx="3"
-              transform=yrotate(${r}) translate(0 6)`
+            transform={`rotate(${r}) translate(0 6)`}
               fill="#f7f3e7"
               stroke="#a9853a"
               strokeWidth="1"
