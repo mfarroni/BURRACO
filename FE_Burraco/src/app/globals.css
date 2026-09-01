@@ -2648,3 +2648,157 @@ button:disabled {
 }
 
 
+
+
+/* ===================================================================
+ * LANDING PAGE DECOMPOSTA CON PULSANTI REALI CON IMMAGINE INTERNA
+ * =================================================================== */
+.landing-decomposed-wrapper {
+  min-height: 100vh;
+  background-color: #0b0806;
+  background-image:
+    radial-gradient(120% 60% at 50% -8%, rgba(240, 214, 150, 0.22), transparent 50%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.4) 0 2px, transparent 2px 4px, rgba(255, 255, 255, 0.015) 4px 6px, transparent 6px 148px),
+    linear-gradient(180deg, #1c140c, #0b0806);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 24px clamp(12px, 3vw, 40px);
+}
+
+.landing-decomposed-container {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.landing-main-frame {
+  position: relative;
+  padding: 36px clamp(16px, 4vw, 48px);
+  border: 2px solid #c9a24a;
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 6px rgba(0, 0, 0, 0.4), inset 0 0 0 7px #96762f, 0 8px 32px rgba(0, 0, 0, 0.6);
+  background: radial-gradient(120% 60% at 50% 0%, rgba(240, 214, 150, 0.06), transparent 55%), linear-gradient(180deg, rgba(18, 42, 34, 0.35), rgba(0, 0, 0, 0.4));
+}
+
+.landing-header { text-align: center; margin-bottom: 24px; }
+.logo-title {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: clamp(2.4rem, 6vw, 3.8rem);
+  color: #ecd190;
+  margin: 0;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.8), 0 0 16px rgba(236,209,144,0.3);
+}
+.logo-subtitle {
+  font-size: 0.9rem;
+  letter-spacing: 0.38em;
+  text-transform: uppercase;
+  color: #c9a24a;
+  margin: 4px 0 16px;
+}
+.navbar-menu {
+  display: flex;
+  justify-content: center;
+  gap: clamp(12px, 3vw, 32px);
+  padding: 12px 0;
+  border-top: 1px solid rgba(231, 208, 151, 0.25);
+  border-bottom: 1px solid rgba(231, 208, 151, 0.25);
+}
+.nav-link {
+  font-size: 0.85rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #c9a24a;
+  cursor: pointer;
+}
+.nav-link.active {
+  color: #ecd190;
+  font-weight: 700;
+  text-shadow: 0 0 8px rgba(236,209,144,0.5);
+}
+
+.hero-fused-section {
+  margin: 24px auto;
+  max-width: 760px;
+  display: flex;
+  justify-content: center;
+}
+.hero-fused-container {
+  width: 100%;
+  max-width: 680px;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+  mask-image: radial-gradient(ellipse at 50% 50%, black 65%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, black 65%, transparent 100%);
+}
+.hero-tavolo-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+.cta-decomposed-section {
+  margin: 28px auto;
+  max-width: 760px;
+  padding: 16px 24px;
+  border: 1px solid #96762f;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(16, 14, 10, 0.85), rgba(5, 4, 3, 0.95));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(240, 214, 150, 0.15);
+}
+.cta-buttons-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.btn-real-action {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  border-radius: 9999px;
+  transition: transform 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-real-img {
+  display: block;
+  height: clamp(40px, 5vw, 56px);
+  width: auto;
+  border-radius: 9999px;
+}
+.btn-real-action:hover {
+  transform: translateY(-2px) scale(1.03);
+  filter: brightness(1.12);
+  box-shadow: 0 0 20px rgba(245, 215, 127, 0.65);
+}
+.btn-real-action:focus-visible {
+  outline: 3px solid #ecd190;
+  outline-offset: 3px;
+}
+
+.rules-scroll-section {
+  margin: 28px auto 0;
+  max-width: 760px;
+  display: flex;
+  justify-content: center;
+}
+.scroll-img-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.scroll-rules-img {
+  display: block;
+  width: 100%;
+  max-width: 680px;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
