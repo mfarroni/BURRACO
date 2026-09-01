@@ -2647,3 +2647,71 @@ button:disabled {
   .cta-pill:active { transform: none; }
 }
 
+
+/* ===================================================================
+ * LANDING 1:1 MOCKUP UFFICIALE OVERLAY
+ * =================================================================== */
+.landing-121-wrapper {
+  min-height: 100vh;
+  background-color: #000000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  margin: 0;
+  overflow-x: hidden;
+}
+
+.landing-121-container {
+  position: relative;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.mockup-frame {
+  position: relative;
+  width: 100%;
+  height: auto;
+}
+
+.mockup-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.cta-overlay {
+  position: absolute;
+  top: 52.5%;
+  left: 31.5%;
+  width: 37%;
+  height: 7.5%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5%;
+  z-index: 100;
+}
+
+.cta-hitbox {
+  flex: 1;
+  height: 100%;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  cursor: pointer;
+  border-radius: 9999px;
+  transition: box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.cta-hitbox:hover {
+  box-shadow: 0 0 16px rgba(245, 215, 127, 0.45) !important;
+}
+
+.cta-hitbox:focus-visible {
+  outline: 2px solid #ecd190 !important;
+  outline-offset: 2px;
+}
