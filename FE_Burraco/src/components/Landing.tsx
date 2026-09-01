@@ -76,19 +76,20 @@ function CrownCrest() {
     <svg className="crest-svg" viewBox="0 0 96 96" aria-hidden="true">
       <g transform="translate(48 60)">
         {[-22, -8, 8, 22].map((r, i) => (
-            <rect
-              key={r}
-              x="-10"
-              y="-30"
-              width="20"
-              height="30"
-              rx="3"
+          <rect
+            key={r}
+            x="-10"
+            y="-30"
+            width="20"
+            height="30"
+            rx="3"
             transform={`rotate(${r}) translate(0 6)`}
-              fill="#f7f3e7"
-              stroke="#a9853a"
-              strokeWidth="1"
-              opacity={0.85 + i * 0.03}
-          ))}
+            fill="#f7f3e7"
+            stroke="#a9853a"
+            strokeWidth="1"
+            opacity={0.85 + i * 0.03}
+          />
+        ))}
       </g>
       <path
         d="M28 34 L34 18 L42 30 L48 14 L54 30 L62 18 L68 34 Z"
