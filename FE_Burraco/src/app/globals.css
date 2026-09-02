@@ -1,7 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-*/ ==================================================================
- * LANDING PAGE ARCHITETTURA A 4 LIVELLI (BURRACO CLUB)
- * ================================================================= */
+:root {
+  --font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  min-height: 100vh;
+  background-color: #0b0806;
+  color: #f7f3e7;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+}
 .landing-club-root {
   position: relative;
   width: 100vw;
@@ -9,8 +24,6 @@
   background-color: #0b0806;
   overflow-x: hidden;
 }
-
-*/ Â  LAYER 1 (Fisso) - Sfondo Boiserie + 4 Angoli Â  Â  Â  Â  Â  Â  Â  Â  Â  Â  Â  Â  Â  */
 .layer-0-fixed {
   position: fixed;
   inset: 0;
@@ -22,7 +35,6 @@
     repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.4) 0 2px, transparent 2px 4px, rgba(255, 255, 255, 0.015) 4px 6px, transparent 6px 148px),
     linear-gradient(180deg, #1c140c, #0b0806);
 }
-
 .corner-decor {
   position: absolute;
   pointer-events: none;
@@ -35,7 +47,6 @@
 
 .lamp-svg, .whisky-svg { display: block; width: 100%; height: auto; }
 
-*/ Â  LAYER2 1 (Fisso) - Cornice Dorata Perimetrale Fullscreen Â  Â  Â  Â  */
 .layer-1-frame-fixed {
   position: fixed;
   inset: 0;
@@ -68,36 +79,171 @@
 .brk-bl { bottom: 16px; left: 16px; border-width: 0 0 3px 3px; }
 .brk-br { bottom: 16px; right: 16px; border-width: 0 3px 3px 0; }
 
-*/ Â€ LAYER 2 (Fisso) - Header & Barra di Navigazione Â  Â€ Â€ Â€ Â€ Â€ Â€ Â€ Â€ Â€ Â€ */
 .layer-2-header-fixed {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 50;
-  background: linear-gradient(180deg, rgba(11, 8, 6, 0.95ø¤€ØÀ”°É‰„ ÄÄ°€à°€Ø°€À¸à¤€àÔ”°ÑÉ…¹ÍÁ…É•¹Ð€ÄÀÀ”¤ì(€‰…­¥‘É½Àµ™¥±Ñ•Èè‰±ÕÈ ÑÁà¤ì(€Á…‘‘¥¹œè€ÄáÁà€ÈÑÁà€ÄÁÁàì)ô(¹¡•…‘•Èµ¥¹¹•Èì(€µ…àµÝ¥‘Ñ è€ÄÄÀÁÁàì(€µ…É¥¸è€À…ÕÑ¼ì(€‘¥ÍÁ±…äè™±•àì(€™±•àµ‘¥É•Ñ¥½¸è½±Õµ¸ì(€…±¥¸µ¥Ñ•µÌè•¹Ñ•Èì)ô(¹¡•…‘•Èµ±½¼µÉ½ÕÀì(€‘¥ÍÁ±…äè™±•àì(€…±¥¸µ¥Ñ•µÌè•¹Ñ•Èì(€…Àè€ÄÉÁàì)ô(¹±½¼µÑ•áÐì(€™½¹Ðµ™…µ¥±äèÙ…È ´µ™½¹ÐµÍ•É¥˜°•½É¥„°Í•É¥˜¤ì(€™½¹ÐµÍ¥é”è±…µÀ ÉÉ•´°€Ð¸ÕÙÜ°€Ì¸ÉÉ•´¤ì(€½±½Èè€•ÄäÀì(€µ…É¥¸è€Àì(€Ñ•áÐµÍ¡…‘½Üè€À€ÉÁà€ÑÁàÉ‰„ À°€À°€À°€À¸à¤°€À€À€ÄÙÁàÉ‰„ ÈÌØ°€ÈÀä°€ÄÐÐ°€À¸Ð¤ì)ô(¹É•ÍÐµÍÙœìÝ¥‘Ñ è€ÐÑÁàì¡•¥¡Ðè€ÐÑÁàìô(¹±½¼µÍÕ‰Ñ•áÐì(€™½¹ÐµÍ¥é”è€À¸áÉ•´ì(€±•ÑÑ•ÈµÍÁ…¥¹œè€À¸ÌÕ•´ì(€Ñ•áÐµÑÉ…¹Í™½É´èÕÁÁ•É…Í”ì(€½±½Èè€Œå„ÈÑ„ì(€…±¥¸µÍ•±˜è™±•àµ•¹ì(€µ…É¥¸µ‰½ÑÑ½´è€áÁàì)ô(¹¡•…‘•Èµ¹…Øµµ•¹Ôì(€‘¥ÍÁ±…äè™±•àì(€©ÕÍÑ¥™äµ½¹Ñ•¹Ðè•¹Ñ•Èì(€…Àè±…µÀ ÄÉÁà°€È¸ÕÙÜ°€ÈáÁà¤ì(€µ…É¥¸µÑ½Àè€ÄÁÁàì(€Á…‘‘¥¹œè€áÁà€ÄÙÁàì(€‰½É‘•ÈµÑ½Àè€ÅÁàÍ½±¥É‰„ ÈÀÄ°€ÄØÈ°€ÜÐ°€À¸Ì¤ì(€‰½É‘•Èµ‰½ÑÑ½´è€ÅÁàÍ½±¥É‰„ ÈÀÄ°€ÄØÈ°€ÜÐ°€À¸Ì¤ì)ô(¹¹…Øµ±¥¹¬µ‰Ñ¸ì(€™½¹ÐµÍ¥é”è€À¸àÉÉ•´ì(€±•ÑÑ•ÈµÍÁ…¥¹œè€À¸ÄÙ•´ì(€Ñ•áÐµÑÉ…¹Í™½É´èÕÁÁ•É…Í”ì(€½±½Èè€Œå„ÈÑ„ì(€Ñ•áÐµ‘•½É…Ñ¥½¸è¹½¹”ì(€ÑÉ…¹Í¥Ñ¥½¸è½±½È€À¸ÉÌ•…Í”°Ñ•áÐµÍ¡…‘½Ü€À¸ÉÌ•…Í”ì)ô(¹¹…Ùµ±¥¹¬µ‰Ñ¸¹…Ñ¥Ù”°(¹¹…Øµ±¥¹­‰Ñ¸é¡½Ù•Èì(€½±½Èè€˜Ý”É„Ìì(€Ñ•áÐµÍ¡…‘½Üè€À€À€ÄÁÁàÉ‰„ ÈÐÜ°€ÈÈØ°€ÄØÌ°€À¸Ø¤ì)ô((¨¼ƒ
-€1eH€Ì€¡MÉ½±°I•…±”¤€´±ÕÍÍ¼½¹Ñ•¹ÕÑ¼•¹ÑÉ…±”ƒ
-€ƒ
-€ƒ
-€ƒ
-€€¨¼(¹±…å•È´ÌµÍÉ½±°µÍÑÉ•…´ì(€Á½Í¥Ñ¥½¸èÉ•±…Ñ¥Ù”ì(€èµ¥¹‘•àè€ÈÀì(€µ¥¸µ¡•¥¡Ðè€ÄÀÁ‘Ù ì(€½Ù•É™±½Üµäè…ÕÑ¼ì(€Á…‘‘¥¹œµÑ½Àè±…µÀ ÄÐÁÁà°€ÄáÙÜ°€ÄÜÕÁà¤ì(€Á…‘‘¥¹œµ‰½ÑÑ½´è€ØÁÁàì(€‰½àµÍ¥é¥¹œè‰½É‘•Èµ‰½àì)ô(¹ÍÑÉ•…´µ½¹Ñ•¹Ðµ½¹Ñ…¥¹•Èì(€µ…àµÝ¥‘Ñ è€àÈÁÁàì(€µ…É¥¸è€À…ÕÑ¼ì(€Á…‘‘¥¹œè€À€ÄÙÁàì(€‘¥ÍÁ±…äè™±•àì(€™±•àµ‘¥É•Ñ¥½¸è½±Õµ¸ì(€…Àè€ÈáÁàì)ô((¼¨	1=<€ÄèQ…Ù½±¼‘„¥½¼€¡!•É¼…É¤€¨¼(¹‰±½¬µ¡•É¼µÑ…Ù½±¼ìÝ¥‘Ñ è€ÄÀÀ”ì‘¥ÍÁ±…äè™±•àì©ÕÍÑ¥™äµ½¹Ñ•¹Ðè•¹Ñ•Èìô(¹¡•É¼µÑ…‰±”µ…Éì(€Ý¥‘Ñ è€ÄÀÀ”ì(€µ…àµÝ¥‘Ñ è€ØàÁÁàì(€‰½É‘•ÈµÉ…‘¥ÕÌè€ÈáÁàì(€½Ù•É™±½Üè¡¥‘‘•¸ì(€‰½àµÍ¡…‘½Üè€À€À€ÌÉÁàÉ‰„ À°€À°€À°€À¸ÜÔ¤ì(€µ…Í¬µ¥µ…”èÉ…‘¥…°µÉ…‘¥•¹Ð¡•±±¥ÁÍ”…Ð€ÔÀ”€ÔÀ”°‰±…¬€Øà”°ÑÉ…¹ÍÁ…É•¹Ð€ÄÀÀ”¤ì(€€µÝ•‰­¥Ðµµ…Í¬µ¥µ…”èÉ…‘¥…°µÉ…‘¥•¹Ð¡•±±¥ÁÍ”…Ð€ÔÀ”€ÔÀ”°‰±…¬€Øà”°ÑÉ…¹ÍÁ…É•¹Ð€ÄÀÀ”¤ì)ô(¹¡•É¼µÑ…‰±”µ¥µœì(€‘¥ÍÁ±…äè‰±½¬ì(€Ý¥‘Ñ è€ÄÀÀ”ì(€¡•¥¡Ðè…ÕÑ¼ì(€½‰©•Ðµ™¥Ðè½Ù•Èì)ô((¼¨	1=<€ÈèA…¹¹•±±¼é¥½¹¤€¡	…ÉÉ„P¥¸A•±±”¤€¨¼(¹‰±½¬µ±•…Ñ¡•ÈµÑ„ìÝ¥‘Ñ è€ÄÀÀ”ì‘¥ÍÁ±…äè™±•àì©ÕÍÑ¥™äµ½¹Ñ•¹Ðè•¹Ñ•Èìô(¹±•…Ñ¡•ÈµÁ…¹•°µ¥¹¹•Èì(€Ý¥‘Ñ è€ÄÀÀ”ì(€µ…àµÝ¥‘Ñ è€ØàÁÁàì(€Á…‘‘¥¹œè€ÄÙÁà€ÈÑÁàì(€‰½É‘•Èè€Ä¸ÕÁàÍ½±¥€ŒäØÜØÉ˜ì(€‰½É‘•ÈµÉ…‘¥ÕÌè€ÈÑÁàì(€‰…­É½Õ¹è±¥¹•…ÈµÉ…‘¥•¹Ð ÄàÁ‘•œ°É‰„ ÈÀ°€ÄØ°€ÄÈ°€À¸ä¤°É‰„ Ø°€Ð°€Ì°€À¸äà¤¤ì(€‰½àµÍ¡…‘½Üè€À€ÄÁÁà€ÈáÁàÉ‰„ À°€À°€À°€À¸Ü¤°¥¹Í•Ð€À€ÅÁà€ÀÉ‰„ ÈÐÔ°€ÈÄÔ°€ÄÈÜ°€À¸È¤ì(€‘¥ÍÁ±…äè™±•àì(€©ÕÍÑ¥™äµ½¹Ñ•¹Ðè•¹Ñ•Èì(€…±¥¸µ¥Ñ•µÌè•¹Ñ•Èì(€…Àè€ÄÙÁàì(€™±•àµÝÉ…ÀèÝÉ…Àì)ô(¹‰Ñ¸µ…Ñ¥½¸µÝÉ…ÁÁ•Èì(€‰…­É½Õ¹èÑÉ…¹ÍÁ…É•¹Ðì(€‰½É‘•Èè¥¹¡•É¥Ðì(€Á…‘‘¥¹œè€Àì(€µ…É¥¸è€Àì(€ÕÉÍ½ÈèÁ½¥¹Ñ•Èì(€‰½É‘•ÈµÉ…‘¥ÕÌè€äääåÁàì(€ÑÉ…¹Í¥Ñ¥½¸èÑÉ…¹Í™½É´€À¸ÉÌ•…Í”°™¥±Ñ•È€À¸ÉÌ•…Í”°‰½àµÍ¡…‘½Ü€À¸ÉÌ•…Í”ì(€‘¥ÍÁ±…äè¥¹±¥¹”µ™±•àì(€…±¥¸µ¥Ñ•µÌè•¹Ñ•Èì(€©ÕÍÑ¥™äµ½¹Ñ•¹Ðè•¹Ñ•Èì)ô(¹‰Ñ¸µ…Ñ¥½¸µ¥µœì(€‘¥ÍÁ±…äè‰±½¬ì(€¡•¥¡Ðè±…µÀ ÐÉÁà°€ÕÙÜ°€ÔÙÁà¤ì(€Ý¥‘Ñ è…ÕÑ¼ì(€‰½É‘•ÈµÉ…‘¥ÕÌè€äääåÁàì)ô(¹‰Ñ¸µ…Ñ¥½¸µÝÉ…ÁÁ•Èé¡½Ù•Èì(€ÑÉ…¹Í™½É´èÑÉ…¹Í±…Ñ•d ´ÉÁà¤Í…±” Ä¸ÀÐ¤ì(€™¥±Ñ•Èè‰É¥¡Ñ¹•ÍÌ Ä¸ÄÔ¤ì(€‰½àµÍ¡…‘½Üè€À€À€ÈÉÁàÉ‰„ ÈÐÜ°€ÈÈØ°€ÄØÌ°€À¸Ü¤ì)ô(¹‰Ñ¸µ…Ñ¥½¸µÝÉ…ÁÁ•Èé™½ÕìµÙ¥Í¥‰±”ì(€½ÕÑ±¥¹”è€ÍÁàÍ½±¥€•ÄäÀì(€½ÕÑ±¥¹”µ½™™Í•Ðè€ÍÁàì)ô((¼¨	1=<€ÌèI•½±…µ•¹Ñ¼€¡A•É…µ•¹„¹Ñ¥„MÉ½Ñ½±…Ñ„¤€¨¼(¹‰±½¬µÍÉ½±°µÉÕ±•ÌìÝ¥‘Ñ è€ÄÀÀ”ì‘¥ÍÁ±…äè™±•àì©ÕÍÑ¥™äµ½¹Ñ•¹Ðè•¹Ñ•Èìô(¹É½±°µÁ•É…µ•¹„µ…Éì(€Ý¥‘Ñ è€ÄÀÀ”ì(€µ…àµÝ¥‘Ñ è€ØàÁÁàì(€‘¥ÍÁ±…äè™±•àì(€©ÕÍÑ¥™äµ½¹Ñ•¹Ðè•¹Ñ•Èì)ô(¹ÍÉ½±°µÁ•É…µ•¹„µ¥µœì(€‘¥ÍÁ±…äè‰±½¬ì(€Ý¥‘Ñ è€ÄÀÀ”ì(€¡•¥¡Ðè…ÕÑ¼ì(€‰½É‘•ÈµÉ…‘¥ÕÌè€ÄÉÁàì(€‰½àµÍ¡…‘½Üè€À€ÄÁÁà€ÌÁÁàÉ‰„ À°€À°€À°€À¸Ø¤ì)ô((¼¨ƒŠSŠPI•ÍÁ½¹Í¥Ù”‘…ÁÑ…Ñ¥½¸ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€ƒ
-€€¨¼)ÖVF–†Ö‚×v–GFƒ¢sc‡‚’°¢æÆ××F÷ÖÆVgBÂæÆ××F÷×&–v‡BÀ¢çv†—6·’Ö&÷GFöÒÖÆVgBÂçv†—6·’Ö&÷GFöÒ×&–v‡B°¢÷6—G“¢ãC°¢66ÆS¢ãƒ°¢Ð¢æ†VFW"ÖæfÖVçR°¢v¢'ƒ°¢fÆW‚×w&¢w&°¢Ð¢ææbÖÆ–æ²Ö'Fâ²föçB×6—¦S¢ãsW&VÓ²Ð¢æÆVF†W"×æVÂÖ–ææW"°¢fÆW‚ÖF—&V7F–öã¢6öÇVÖã°¢v¢'ƒ°¢Ð§Ð 
+  background: linear-gradient(180deg, rgba(11, 8, 6, 0.95) 60%,µ¨ba(11, 8, 6, 0.8) 85%, transparent 100%);
+  backidrop-filter: blur(4px);
+  padding: 18px 24px 10px;
+}
+.header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.header-logo-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo-text {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: clamp(2rem, 4.5vw, 3.2rem);
+  color: #ecd190;
+  margin: 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8), 0 0 16px rgba(236, 209, 144, 0.4);
+}
+.crest-svg { width: 44px; height: 44px; }
+.logo-subtext {
+  font-size: 0.8rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: #c9a24a;
+  align-self: flex-end;
+  margin-bottom: 8px;
+}
+.header-nav-menu {
+  display: flex;
+  justify-content: center;
+  gap: clamp(12px, 2.5vw, 28px);
+  margin-top: 10px;
+  padding: 8px 16px;
+  bouder-top: 1px solid rgba(201, 162, 74, 0.3);
+  border-bottom: 1px solid rgba(201, 162, 74, 0.3);
+}
+.navmlink-btn {
+  font-size: 0.82rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #c9a24a;
+  text-decoration: none;
+  transition: color 0.2s ease, text-shadow 0.2s ease;
+}
+.navmlink-btn.active,
+.nav-linkbtn:hover {
+  color: #f7e2a3;
+  text-shadow: 0 0 10px rgba(247, 226, 163, 0.6);
+}
+.layer-3-scroll-stream {
+  position: relative;
+  z-index: 20;
+  min-height: 100dvh;
+  overflow-y: auto;
+  padding-top: clamp(140px, 18vw, 175px);
+  padding-bottom: 60px;
+  box-sizing: border-box;
+}
+.stream-content-container {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.block-hero-table { width: 100%; display: flex; justify-content: center; }
+.hero-table-card {
+  width: 100%;
+  max-width: 680px;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 0 32px rgba(0, 0, 0, 0.75);
+  mask-image: radial-gradient(ellipse at 50% 50%, black 68%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, black 68%, transparent 100%);
+}
+.hero-table-img {
+  display: block;
+  width: 100%;
+ height: auto;
+  object-fit: cover;
+}
+.block-leather-cta { width: 100%; display: flex; justify-content: center; }
+.leather-panel-inner {
+  width: 100%;
+  max-width: 680px;
+  padding: 16px 24px;
+  border: 1.5px solid #96762f;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(20, 16, 12, 0.9), rgba(6, 4, 3, 0.98));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.7), inset 0 1|x 0 rgba(245, 215, 127, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.btn-action-wrapper {
+  background: transparent;
+  border: inherit;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  border-radius: 9999px;
+  transition: transform 0.2s ease, filter 0.2s ease, box-shadow: 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-action-img {
+  display: block;
+  height: class(42px, 5vw, 56px);
+  width: auto;
+  border-radius: 9999px;
+}
+.btn-action-wrapper:hover {
+  transform: translateY(-2px) scale(1.04);
+  filter: brightness(1.15);
+  box-shadow: 0 0 22px rgba(247, 226, 163, 0.7);
+}
+.btn-action-wrapper:focu{-visible {
+  outline: 3px solid #ecd190;
+  outline-offset: 3px;
+}
+
+.block-scroll-rules { width: 100%; display: flex; justify-content: center; }
+.croll-pergamena-card {
+  width: 100%;
+  max-width: 680px;
+  display: flex;
+  justify-content: center;
+}
+.scroll-pergamena-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+@media (max-width: 768px) {
+  .lamp-top-left, .lamp-top-right,
+  .whisky-bottom-left, .whisky-bottom-right {
+    opacity: 0.4;
+    scale: 0.8;
+  }
+  .header-nav-menu {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .nav-linkbtn {
+    font-size: 0.75rem;
+  }
+  .leather-panel-inner {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
