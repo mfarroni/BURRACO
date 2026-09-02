@@ -19,26 +19,36 @@ export function Landing({ onOpenAuth }: Props) {
 
   return (
     <div className="landing-container">
-      {/* Cornice Decorativa Fissa */}
+      {/* ===== LAYER 1: SFONDO BOISERIE (z:1) ===== */}
+      <div className="background-boiserie" />
+
+      {/* ===== LAYER 2: LAMPADARI E BICCHIERI (z:10) ===== */}
       <img
         src="/images/cornice-grandeo.png"
-        alt="Decorative Frame"
-        className="frame-border"
+        alt="Chandelier Top Left"
+        className="decorative-chandelier chandelier-tl"
+      />
+      <img
+        src="/images/cornice-grandeo.png"
+        alt="Chandelier Top Right"
+        className="decorative-chandelier chandelier-tr"
       />
 
-      {/* Bicchieri Fissi */}
       <img
         src="/images/bicchiere.png"
-        alt="Whisky Glass"
+        alt="Whisky Glass Left"
         className="whisky-glass whisky-left"
       />
       <img
         src="/images/bicchiere.png"
-        alt="Whisky Glass"
+        alt="Whisky Glass Right"
         className="whisky-glass whisky-right"
       />
 
-      {/* Header Fisso */}
+      {/* ===== LAYER 3: CORNICE DECORATIVA (z:40) ===== */}
+      <div className="frame-border" aria-hidden="true" />
+
+      {/* ===== LAYER 4: HEADER FISSO (z:50) ===== */}
       <header className="header-fixed">
         <div className="logo-section">
           <h1>Burraco</h1>
@@ -70,9 +80,9 @@ export function Landing({ onOpenAuth }: Props) {
         </button>
       </header>
 
-      {/* Contenuto Scrollabile */}
+      {/* ===== LAYER 5: CONTENUTO SCROLLABILE (z:30) ===== */}
       <main className="content-wrapper">
-        {/* HERO: Tavolo */}
+        {/* === BLOCCO 1: HERO === */}
         <section className="hero-section">
           <div className="hero-container">
             <img
@@ -83,12 +93,12 @@ export function Landing({ onOpenAuth }: Props) {
           </div>
         </section>
 
-        {/* CTA: Bottoni */}
+        {/* === BLOCCO 2: CTA === */}
         <section className="cta-section">
           <div className="cta-bar">
             <button
               type="button"
-              className="cta-button cta-accedi"
+              className="cta-button"
               onClick={handleLogin}
               title="Accedi al tuo account"
             >
@@ -101,7 +111,7 @@ export function Landing({ onOpenAuth }: Props) {
 
             <button
               type="button"
-              className="cta-button cta-registrati cta-primary"
+              className="cta-button cta-primary"
               onClick={handleSignup}
               title="Crea un nuovo account"
             >
@@ -114,7 +124,7 @@ export function Landing({ onOpenAuth }: Props) {
 
             <button
               type="button"
-              className="cta-button cta-ospite"
+              className="cta-button"
               onClick={handleGuest}
               title="Gioca subito senza registrazione"
             >
@@ -127,7 +137,7 @@ export function Landing({ onOpenAuth }: Props) {
           </div>
         </section>
 
-        {/* RULES: Regolamento */}
+        {/* === BLOCCO 3: RULES === */}
         <section className="rules-section">
           <div className="parchment">
             <h2>REGOLE DEL GIOCO - BURRACO</h2>
