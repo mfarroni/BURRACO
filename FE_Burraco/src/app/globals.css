@@ -210,7 +210,7 @@ body {
   filter: brightness(1.15);
   box-shadow: 0 0 22px rgba(247, 226, 163, 0.7);
 }
-.btn-action-wrapper:focu{-visible {
+.btn-action-wrapper:focus-visible {
   outline: 3px solid #ecd190;
   outline-offset: 3px;
 }
