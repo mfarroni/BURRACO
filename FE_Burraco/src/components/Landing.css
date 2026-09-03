@@ -921,3 +921,25 @@
     scroll-behavior: auto;
   }
 }
+
+/* ── Mobile stretto (≤480px): il logo va a capo e si rimpicciolisce ───────
+   A larghezze molto ridotte il titolo grande accanto alle 4 carte eccedeva
+   la riga e, con il container centrato, il logo veniva troncato ai bordi.
+   Qui il logo-container va a capo (titolo sopra, carte sotto) e le misure
+   calano ancora, così "Burraco" resta interamente visibile. */
+@media (max-width: 480px) {
+  .landing-root .logo-container {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .landing-root .logo-title {
+    font-size: 2rem;
+    letter-spacing: 2px;
+  }
+
+  .landing-root .logo-card {
+    width: 42px;
+    height: 62px;
+  }
+}
