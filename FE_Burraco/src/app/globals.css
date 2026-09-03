@@ -1,434 +1,2289 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* =====================================================================
+ * BURRACO — DESIGN SYSTEM "CIRCOLO NOTTURNO"
+ * Direzione artistica: club di carte elegante e notturno.
+ * Feltro verde profondo, cornici in legno/ottone, carte avorio ad alto
+ * contrasto con indici classici, oro usato con parsimonia.
+ *
+ * Questo file è la FONTE UNICA dei token visivi: colori (con ruoli
+ * semantici), tipografia, spaziature, raggi, ombre, z-index e le durate/
+ * easing delle animazioni. Ogni componente/stato attinge da qui, mai da
+ * valori sparsi (requisito D del brief).
+ *
+ * Accessibilità: contrasti verificati AA sui testi (valori annotati),
+ * focus sempre visibile, rispetto di prefers-reduced-motion.
+ * ===================================================================== */
 
-* {
-  margin: 0;
-  padding: 0;
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-html, body {
-  width: 100%;
-  height: 100%;
-  background: #0a0a0a;
-  color: #f5f5f5;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  overflow-x: hidden;
+:root {
+  /* ---------------------------------------------------------------
+   * COLORE — Feltro (superfici del tavolo)
+   * Base NOTTURNA: il tavolo è la superficie dominante.
+   * --------------------------------------------------------------- */
+  --felt-900: #0e2a22; /* fondo tavolo, il più profondo */
+  --felt-800: #123a2c; /* pannelli su feltro */
+  --felt-700: #174a38; /* pannelli sollevati */
+  --felt-600: #1e5a44; /* highlight feltro (hover leggero) */
+
+  /* Legno — cornici, bordi strutturali, separatori */
+  --wood-900: #241608;
+  --wood-800: #3b2617;
+  --wood-700: #573619;
+  --wood-600: #6d4a25;
+
+  /* Ottone / Oro — accenti PREZIOSI, usati con parsimonia
+   * (bordi di pregio, indicatore di turno, titoli chiave) */
+  --brass-600: #a9853a;
+  --brass-500: #c8a24a; /* oro primario — testo/bordo su feltro: ~6.2:1 AA */
+  --brass-400: #d9ba6a;
+  --brass-300: #e7d097; /* oro chiaro — focus ring, glow */
+
+  /* Avorio — facce delle carte */
+  --ivory-50: #f7f3e7; /* faccia carta */
+  --ivory-100: #efe9d6;
+  --ivory-200: #e3dcc4; /* bordo interno carta */
+
+  /* Inchiostro — testo scuro (su avorio) */
+  --ink-900: #1a1712; /* nero caldo — su avorio ~15:1 AAA */
+  --ink-700: #4a4237;
+
+  /* Semi delle carte */
+  --card-red: #b01b2e;  /* cuori/quadri su avorio: ~6.0:1 AA */
+  --card-black: var(--ink-900);
+
+  /* Testo su feltro */
+  --text-strong: #f3eedf; /* su --felt-900: ~13:1 AAA */
+  --text: #e6e2d3;        /* su --felt-900: ~11:1 AAA */
+  --text-muted: #b9c6bc;  /* su --felt-900: ~8.4:1 AAA */
+  --text-faint: #8ea295;  /* etichette secondarie: ~5:1 AA */
+
+  /* Colori semantici (ruoli, non decorazione) */
+  --success-500: #3ea46b; /* turno proprio / esito positivo */
+  --success-300: #7fd6a4; /* testo positivo su superfici scure */
+  --danger-500: #e0574b;  /* mossa rifiutata / errore (fill) */
+  --danger-300: #f0a79b;  /* testo rosso su scuro: ~6.7:1 AA */
+  --warn-500: #e0a93a;    /* turno in scadenza / riconnessione (fill) */
+  --warn-300: #f0d08a;    /* testo ambra su scuro */
+  --info-500: #6fa8c7;
+  --info-300: #a9d0e4;
+
+  /* Superfici astratte (mappate al mood notturno) */
+  --surface: #123227;        /* pannelli/toast: feltro leggermente più chiaro */
+  --surface-raised: #17402f; /* card sollevate, overlay */
+  --surface-sunken: #0b241d; /* pozzi/monte, incassi */
+  --border: #2c5445;         /* bordo tenue su feltro */
+  --border-strong: var(--brass-600);
+  --scrim: rgba(6, 18, 14, 0.72); /* velo overlay */
+
+  /* Focus ring — visibile sia su feltro sia su avorio */
+  --focus: var(--brass-300);
+
+  /* ---------------------------------------------------------------
+   * TIPOGRAFIA
+   * Titoli serif (carattere da club) + UI sans + cifre tabellari.
+   * Stack robusti senza asset esterni (performance): sostituibili con
+   * un display serif su licenza via next/font in seguito.
+   * --------------------------------------------------------------- */
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+    "Times New Roman", serif;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+
+  /* Scala tipografica (modular ~1.25) */
+  --fs-display: 2rem;
+  --fs-h1: 1.5rem;
+  --fs-h2: 1.25rem;
+  --fs-body: 1rem;
+  --fs-sm: 0.875rem;
+  --fs-xs: 0.75rem;
+  --lh-tight: 1.15;
+  --lh-body: 1.5;
+
+  /* ---------------------------------------------------------------
+   * SPAZIATURA — griglia base 4px (ariosa: il concept respira)
+   * --------------------------------------------------------------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  /* RAGGI */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-card: 9px;
+  --r-pill: 999px;
+
+  /* OMBRE */
+  --sh-card: 0 2px 4px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.25) inset;
+  --sh-lift: 0 10px 22px rgba(0, 0, 0, 0.5);
+  --sh-panel: 0 6px 18px rgba(0, 0, 0, 0.35);
+  --sh-inset: inset 0 2px 8px rgba(0, 0, 0, 0.45);
+  --glow-turn: 0 0 0 2px var(--brass-300), 0 0 18px rgba(231, 208, 151, 0.35);
+  --glow-danger: 0 0 0 2px var(--danger-500), 0 0 16px rgba(224, 87, 75, 0.3);
+
+  /* Z-INDEX del tavolo — SCALA ESPLICITA (ladder). Risolve l'incoerenza storica
+     slot(3–4) ↔ carte(10). La zona-mano (.bottom-hand) è un contesto di
+     impilamento LOCALE (isolation:isolate): al suo interno active=15,
+     filo-inserimento=25, drag=30 non competono con i livelli globali. */
+  --z-table: 0; /* feltro / superficie */
+  --z-melds: 5; /* giochi calati (sollevati sul feltro) */
+  --z-cards: 10; /* carte a riposo */
+  --z-hand-card-active: 15; /* hover / selezione / press-preview */
+  --z-badges: 20; /* badge, focus ring */
+  --z-hand-drag: 30; /* carta trascinata: flotta sopra, mai clippata */
+  --z-banner: 40;
+  --z-toast: 60;
+  --z-overlay: 80;
+  --z-celebration: 90;
+
+  /* MOVIMENTO — durate/easing con SCOPO */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms; /* micro: sollevamento carta */
+  --dur-base: 200ms; /* toast, transizioni UI */
+  --dur-deal: 300ms; /* distribuzione/gioco carta */
+  --dur-slow: 1200ms; /* celebrazioni */
 }
 
-.landing-container {
+/* ===================================================================
+ * BASE
+ * =================================================================== */
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text);
+  /* Feltro notturno: radiale calda al centro (luce del tavolo) su fondo profondo,
+     con trama sottile a righe per dare "panno" senza immagini. */
+  background-color: var(--felt-900);
+  background-image:
+    radial-gradient(120% 90% at 50% 8%, rgba(46, 110, 86, 0.35) 0%, rgba(14, 42, 34, 0) 60%),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.012) 0 2px, rgba(0, 0, 0, 0.012) 2px 4px);
+  background-attachment: fixed;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-serif);
+  color: var(--text-strong);
+  line-height: var(--lh-tight);
+  margin: 0 0 var(--sp-3);
+  letter-spacing: 0.01em;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+.faint {
+  color: var(--text-faint);
+}
+
+/* Cifre tabellari ovunque servano allineamento (punteggi, contatori). */
+.num,
+.score-table td,
+.pile .num,
+.chip .val {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* Focus visibile e coerente su TUTTO ciò che è interattivo. */
+:where(button, a, input, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* ===================================================================
+ * BOTTONI
+ * =================================================================== */
+button {
+  font: inherit;
+  cursor: pointer;
+  color: var(--text-strong);
+  background: linear-gradient(180deg, var(--felt-700), var(--felt-800));
+  border: 1px solid var(--border);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-sm);
+  transition: background var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-base);
+}
+button:not(:disabled):hover {
+  background: linear-gradient(180deg, var(--felt-600), var(--felt-700));
+  border-color: var(--brass-600);
+}
+button:not(:disabled):active {
+  transform: translateY(1px);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Bottone primario "d'oro" — l'azione più importante del momento. */
+.btn-primary {
+  background: linear-gradient(180deg, var(--brass-400), var(--brass-600));
+  color: var(--ink-900);
+  border-color: var(--brass-300);
+  font-weight: 600;
+}
+.btn-primary:not(:disabled):hover {
+  background: linear-gradient(180deg, var(--brass-300), var(--brass-500));
+}
+.btn-discard {
+  background: linear-gradient(180deg, var(--warn-500), #b6842a);
+  color: var(--ink-900);
+  border-color: var(--warn-300);
+  font-weight: 600;
+}
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+}
+/* Pulsante "Annulla ultima mossa" — AZIONE DI CORREZIONE (secondaria).
+   Variante ghost/muted: fondo trasparente, testo attenuato, NESSUN oro/ambra,
+   così NON compete con l'azione primaria della fase (Pesca in must_draw, Scarta
+   in may_meld). Hover NEUTRO (non dorato): resta un "passo indietro" umile.
+   Disabilitato quando non c'è nulla da annullare -> opacità 0.4 ereditata da
+   `button:disabled`. Focus visibile ereditato da :focus-visible (ring d'ottone). */
+.btn-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-muted); /* su feltro: ~8.4:1 AAA */
+  font-weight: 500;
+}
+.btn-undo:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--text-faint);
+  color: var(--text-strong);
+}
+.btn-undo .undo-icon {
+  font-size: 1.15em;
+  line-height: 1;
+}
+/* Pulsante "termina/annulla tavolo" — AZIONE DISTRUTTIVA.
+   Variante ghost (bordo/testo rosso su fondo trasparente): resta secondaria e
+   NON compete con l'oro delle azioni primarie di gioco. La variante `.solid`
+   (rosso pieno) è riservata alla CONFERMA finale dentro il dialog. */
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  background: transparent;
+  border-color: var(--danger-300);
+  color: var(--danger-300); /* su feltro: ~6.7:1 AA */
+  font-weight: 600;
+}
+.btn-danger:not(:disabled):hover {
+  background: rgba(224, 87, 75, 0.14);
+  border-color: var(--danger-500);
+  color: var(--danger-300);
+}
+.btn-danger .btn-danger-icon {
+  font-size: 1em;
+  line-height: 1;
+}
+/* CONFERMA distruttiva: rosso pieno SCURO così il testo chiaro resta ≥ AA. */
+.btn-danger.solid {
+  background: linear-gradient(180deg, #a83226, #8a291f); /* testo chiaro: ~5.7:1 AA */
+  color: var(--text-strong);
+  border-color: var(--danger-300);
+}
+.btn-danger.solid:not(:disabled):hover {
+  background: linear-gradient(180deg, #b83a2c, #9a2f24);
+  border-color: var(--danger-300);
+  color: var(--text-strong);
+}
+.reset-table {
+  font-size: var(--fs-sm);
+  min-height: 40px;
+  padding: var(--sp-2) var(--sp-4);
+}
+/* Nel banner "avversario offline" il pulsante è spinto a destra; altrove
+   (es. schermata d'attesa) resta centrato dal contenitore. */
+.banner .reset-table {
+  margin-left: auto;
+}
+
+/* ===================================================================
+ * LOBBY / SCHERMATA D'INGRESSO — la prima impressione
+ * Ordine dello sguardo: titolo serif dorato → sottotitolo → campi → CTA.
+ * =================================================================== */
+.lobby {
+  max-width: 440px;
+  margin: 8vh auto;
+  padding: var(--sp-6) var(--sp-5) var(--sp-5);
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--brass-500);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-panel);
+}
+.lobby .brand {
+  text-align: center;
+  margin-bottom: var(--sp-5);
+}
+.lobby .brand .suits {
+  font-size: 1.4rem;
+  letter-spacing: 0.4em;
+  color: var(--brass-400);
+  margin-bottom: var(--sp-2);
+}
+.lobby h1 {
+  font-size: var(--fs-display);
+  margin: 0;
+  color: var(--brass-300);
+}
+.lobby .brand .tagline {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  margin-top: var(--sp-2);
+}
+.lobby label {
+  display: block;
+  margin: var(--sp-4) 0 var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.lobby input {
+  width: 100%;
+  padding: var(--sp-3);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+  font-size: var(--fs-body);
+}
+.lobby input::placeholder {
+  color: var(--text-faint);
+}
+.lobby .cta {
+  margin-top: var(--sp-5);
+  width: 100%;
+  padding: var(--sp-3);
+  font-size: var(--fs-body);
+}
+
+/* ===================================================================
+ * LAYOUT PARTITA
+ * =================================================================== */
+.game {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: var(--sp-4) var(--sp-4) 96px; /* spazio per action-bar sticky */
   position: relative;
-  width: 100%;
-  min-height: 100dvh;
+  z-index: var(--z-table);
 }
 
-/* LAYER 1: Sfondo Boiserie */
-.background-boiserie {
+/* ── Header / Scoreboard ─────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brass-600);
+  box-shadow: var(--sh-panel);
+}
+.status-line {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Scoreboard "targa d'ottone" con cifre tabellari. */
+.scoreboard {
+  display: flex;
+  gap: var(--sp-4);
+  align-items: center;
+}
+.scoreboard .chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+}
+.scoreboard .chip .lbl {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.scoreboard .chip .val {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  color: var(--brass-300);
+  font-weight: 600;
+}
+.scoreboard .chip.you .val {
+  color: var(--text-strong);
+}
+.scoreboard .vs {
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+}
+
+/* ── Badge di stato (turno, connessione…) ────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  color: var(--text);
+  z-index: var(--z-badges);
+}
+.badge .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex: none;
+}
+.badge[data-turn="mine"] {
+  background: linear-gradient(180deg, var(--success-500), #2c7d51);
+  border-color: var(--success-300);
+  color: #06251a;
+  font-weight: 600;
+}
+.badge[data-turn="mine"] .dot {
+  background: #06251a;
+}
+.badge[data-turn="theirs"] {
+  color: var(--text-muted);
+}
+.badge[data-conn="connected"] .dot {
+  background: var(--success-300);
+}
+.badge[data-conn="disconnected"] {
+  border-color: var(--danger-500);
+  color: var(--danger-300);
+}
+.badge[data-conn="disconnected"] .dot {
+  background: var(--danger-500);
+}
+.badge[data-conn="reconnecting"] {
+  border-color: var(--warn-500);
+  color: var(--warn-300);
+}
+.badge[data-conn="reconnecting"] .dot {
+  background: var(--warn-500);
+  animation: pulse-dot 1s var(--ease-in-out) infinite;
+}
+
+/* ── Countdown del turno (derivato da turnEndsAt) ─────────────────── */
+.countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.countdown[data-level="urgent"] {
+  border-color: var(--warn-500);
+  color: var(--warn-300);
+  animation: pulse-soft 1s var(--ease-in-out) infinite;
+}
+.countdown[data-level="expired"] {
+  border-color: var(--danger-500);
+  color: var(--danger-300);
+}
+.countdown .ring {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+}
+.countdown[data-level="urgent"] .ring {
+  animation: spin 1s linear infinite;
+}
+
+/* ===================================================================
+ * TAVOLO CENTRALE — mazzo, monte scarti, pozzetti, contatori
+ * =================================================================== */
+/* TAVOLO A GRIGLIA con POSTAZIONI — commutato da data-seats. L'ISOLA CENTRALE
+   (board-center) NON si sposta tra 2 e 4 postazioni: sono le postazioni a
+   disporsi attorno. Locale sempre a Sud. Cornice a doghe di legno per
+   incorniciare l'area come un tavolo da circolo. */
+.table-grid {
+  display: grid;
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0;
+  padding: var(--sp-3);
+  border: 2px solid var(--wood-700);
+  border-radius: var(--r-lg);
+  /* Feltro con VIGNETTATURA (angoli in ombra → profondità da tavolo reale) +
+     luce radiale calda al centro. La vignetta è un layer di background, quindi
+     resta DIETRO le postazioni: dà profondità senza velare i contenuti. */
+  background:
+    radial-gradient(135% 105% at 50% 42%, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, 0.42) 100%),
+    radial-gradient(120% 90% at 50% 40%, var(--felt-700), var(--felt-900)),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.25));
+  box-shadow: var(--sh-inset), 0 0 0 4px var(--wood-800) inset;
+}
+/* 2 postazioni (1v1): loro a Nord, isola al centro, giochi, tu a Sud. */
+.table-grid[data-seats="2"] {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "north"
+    "center"
+    "melds"
+    "south";
+}
+/* 4 postazioni (PREDISPOSIZIONE, non attiva in v1): compagno a Nord, avversari a
+   Est/Ovest, isola FERMA al centro, tu a Sud. Solo layout: nessuna regola 2v2. */
+.table-grid[data-seats="4"] {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-areas:
+    "north  north  north"
+    "west   center east"
+    "melds  melds  melds"
+    "south  south  south";
+}
+.seat-west { grid-area: west; }
+.seat-east { grid-area: east; }
+.seat-north { grid-area: north; }
+.seat-south { grid-area: south; }
+
+/* Targa di postazione — nome + tag squadra + crest + conteggio mano + turno.
+   Tre canali di distinzione squadra: posizione (area) + colore (data-team) +
+   etichetta/crest. Il glow d'oro segnala la postazione ATTIVA (di turno). */
+.seat-plate {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+.seat-plate .seat-name {
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.seat-plate .seat-hand {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+.seat-plate .crest {
+  font-size: 1rem;
+  line-height: 1;
+}
+.seat-plate .team-tag {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-pill);
+  border: 1px solid currentColor;
+}
+.seat-plate .seat-off {
+  font-size: var(--fs-xs);
+  color: var(--warn-500);
+}
+.seat-plate .turn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brass-300);
+  box-shadow: 0 0 8px var(--brass-300);
+  animation: pulse-dot 1.4s var(--ease-in-out) infinite;
+}
+/* Colore semantico di squadra (cieco-sicuro: oro vs blu). */
+.seat-plate[data-team="us"] {
+  border-color: var(--brass-500);
+}
+.seat-plate[data-team="us"] .crest,
+.seat-plate[data-team="us"] .team-tag {
+  color: var(--brass-300);
+}
+.seat-plate[data-team="them"] {
+  border-color: var(--info-500);
+}
+.seat-plate[data-team="them"] .crest,
+.seat-plate[data-team="them"] .team-tag {
+  color: var(--info-300);
+}
+/* Postazione ATTIVA (di turno): glow d'oro "a colpo d'occhio" + superficie
+   sollevata così la targa di turno EMERGE sulle altre anche in periferia visiva. */
+.seat-plate[data-active="true"] {
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  box-shadow: var(--glow-turn);
+}
+.seat-plate[data-active="true"] .seat-name {
+  color: var(--text-strong);
+}
+.seat-plate[data-active="true"] .seat-hand {
+  color: var(--text);
+}
+
+/* Isola centrale: la vecchia .tableau, ora fissa nell'area "center". */
+.board-center {
+  grid-area: center;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  background: radial-gradient(120% 120% at 50% 0%, rgba(23, 74, 56, 0.6), rgba(14, 42, 34, 0.6));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-inset);
+}
+.pile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  text-align: center;
+}
+.pile .lbl {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.pile .num {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  color: var(--text-strong);
+}
+.pile[data-actionable="true"] .slot {
+  cursor: pointer;
+}
+.pile[data-actionable="true"] .slot:hover {
+  transform: translateY(-3px);
+}
+
+/* "Slot" del tavolo — la sagoma dove poggia una carta/mazzo. */
+.slot {
+  width: 60px;
+  height: 84px;
+  border-radius: var(--r-card);
+  display: grid;
+  place-items: center;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.slot.empty {
+  border: 1.5px dashed var(--border);
+  color: var(--text-faint);
+  background: var(--surface-sunken);
+}
+/* Mazzo di pesca: pila di dorsi da club. */
+.slot.deck {
+  background:
+    repeating-linear-gradient(135deg, var(--brass-600) 0 3px, transparent 3px 8px),
+    linear-gradient(180deg, #7c1f2b, #5c141d);
+  border: 2px solid var(--brass-500);
+  box-shadow: 2px 2px 0 #4a1017, 4px 4px 0 #3a0d13, var(--sh-card);
+  color: var(--brass-300);
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+}
+/* Dorso impilato nel tavolo (mano avversario). */
+.slot.facedown {
+  background:
+    repeating-linear-gradient(135deg, rgba(200, 162, 74, 0.5) 0 3px, transparent 3px 8px),
+    linear-gradient(180deg, #7c1f2b, #5c141d);
+  border: 2px solid var(--brass-500);
+  box-shadow: 2px 2px 0 #4a1017, var(--sh-card);
+}
+.pozzetti {
+  display: flex;
+  gap: 4px;
+}
+.pozzetto-mini {
+  width: 26px;
+  height: 38px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #7c1f2b, #5c141d);
+  border: 1px solid var(--brass-600);
+}
+.pozzetto-mini[data-taken="true"] {
+  background: var(--surface-sunken);
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+/* ===================================================================
+ * CARTA — componente firma. Leggibilità = requisito non negoziabile.
+ * Faccia avorio, indici classici agli angoli, pip centrale.
+ * =================================================================== */
+.card {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 56px;
+  height: 80px;
+  padding: 4px 5px;
+  background: linear-gradient(180deg, var(--ivory-50), var(--ivory-100));
+  color: var(--card-black);
+  border: 1px solid var(--ivory-200);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-card);
+  font-weight: 700;
+  line-height: 1;
+  z-index: var(--z-cards);
+  transition: transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out), outline-color var(--dur-base);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+.card[data-small="true"] {
+  width: 44px;
+  height: 62px;
+  padding: 3px 4px;
+}
+.card[data-color="red"] {
+  color: var(--card-red);
+}
+
+/* Indici angolari (rank sopra il seme), classici. */
+.card .index {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.9rem;
+  width: 1.2em;
+}
+.card[data-small="true"] .index {
+  font-size: 0.72rem;
+}
+.card .index .r {
+  font-weight: 800;
+}
+.card .index .s {
+  font-size: 0.85em;
+}
+.card .index.br {
+  align-self: flex-end;
+  transform: rotate(180deg);
+}
+/* Pip centrale grande — riconoscibilità immediata del seme. */
+.card .pip {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  opacity: 0.9;
+  pointer-events: none;
+}
+.card[data-small="true"] .pip {
+  font-size: 1.15rem;
+}
+
+/* Stato selezionata — si solleva verso il giocatore. */
+.card[data-selected="true"] {
+  transform: translateY(-12px);
+  box-shadow: var(--sh-lift);
+  outline-color: var(--brass-400);
+  z-index: var(--z-hand-card-active);
+}
+.card.clickable:hover {
+  transform: translateY(-6px);
+  z-index: var(--z-hand-card-active);
+}
+/* PRESS-PREVIEW (touch): la carta bersaglio si evidenzia PRIMA del commit; il
+   toggle avviene al rilascio (si può scorrere il dito per correggere). */
+.card[data-pressed="true"] {
+  transform: translateY(-8px);
+  box-shadow: var(--sh-lift);
+  outline-color: var(--brass-300);
+  z-index: var(--z-hand-card-active);
+}
+
+/* FOCUS DA TASTIERA sulle carte — regola dedicata: la carta imposta un proprio
+ * `outline` di base (usato per selezione/matta) che, a parità di specificità,
+ * coprirebbe il focus-ring globale rendendolo invisibile. Qui lo ripristiniamo
+ * con specificità maggiore. Anello d'oro chiaro (alto contrasto sul feltro) con
+ * ALONE scuro esterno: garantisce ≥3:1 anche quando l'anello sfiora l'avorio o
+ * una carta adiacente. */
+.card:focus-visible {
+  outline: 3px solid var(--brass-300);
+  outline-offset: 2px;
+  box-shadow: var(--sh-lift), 0 0 0 5px rgba(11, 36, 29, 0.92);
+  z-index: var(--z-badges);
+}
+
+/* Carta "in volo" / attendo conferma (pending per-carta). */
+.card[data-pending="true"] {
+  animation: card-pending 1s var(--ease-in-out) infinite;
+}
+.card[data-pending="true"]::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--brass-600);
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+}
+
+/* MATTE: jolly e pinella hanno IDENTITÀ visiva distinta.
+ * (wildKind = identità della carta; il RUOLO in un gioco è a parte.) */
+.card[data-wildkind="joker"] {
+  background: linear-gradient(180deg, #efe9d6, #e3dcc4);
+}
+.card[data-wildkind="joker"] .jolly {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  color: #7a3fb0; /* jolly = viola regale */
+}
+.card[data-wildkind="joker"] .index .r {
+  color: #7a3fb0;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+}
+/* pinella = il 2: indici del "2" SEMPRE leggibili (non coperti). L'identità di
+   matta è marcata da una cornice interna d'ottone + una gemma d'ottone in
+   alto a destra, lontano dagli indici. */
+.card[data-wildkind="pinella"] {
+  box-shadow: var(--sh-card), inset 0 0 0 2px var(--brass-400);
+}
+.card[data-wildkind="pinella"]::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--brass-300), var(--brass-600));
+  border: 1px solid var(--brass-500);
+}
+.card[data-small="true"][data-wildkind="pinella"]::before {
+  width: 7px;
+  height: 7px;
+}
+
+/* Evidenza: questa carta funge da MATTA in un gioco (da wildIndices). */
+.card[data-wildrole="true"] {
+  outline-color: var(--brass-300);
+  box-shadow: var(--sh-card), 0 0 10px rgba(231, 208, 151, 0.55);
+}
+
+/* Dorso carta (avversario / faccia coperta). */
+.card.back {
+  background:
+    repeating-linear-gradient(135deg, rgba(200, 162, 74, 0.5) 0 3px, transparent 3px 8px),
+    linear-gradient(180deg, #7c1f2b, #5c141d);
+  border: 2px solid var(--brass-500);
+  color: transparent;
+}
+.card.back .pip,
+.card.back .index {
+  display: none;
+}
+
+/* La mano del giocatore — leggermente sovrapposta, a ventaglio piatto. */
+.hand-zone h4 {
+  margin: var(--sp-4) 0 var(--sp-2);
+  font-size: var(--fs-h2);
+  color: var(--text-strong);
+}
+.hand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  min-height: 96px;
+}
+
+/* ===================================================================
+ * GIOCHI CALATI (MELDS) — con badge burraco pulito/sporco
+ * =================================================================== */
+.melds {
+  grid-area: melds;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .melds {
+    grid-template-columns: 1fr;
+  }
+}
+/* Gruppo giochi PER SQUADRA: bordo/accento colorato per data-team (oro Noi,
+   acciaio Loro), oltre a crest + etichetta nell'intestazione. */
+.meld-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+}
+.meld-group[data-team="us"] {
+  border-left-color: var(--brass-500);
+}
+.meld-group[data-team="them"] {
+  border-left-color: var(--info-500);
+}
+/* Al tuo turno, il gruppo "Noi" si accende (coerente con la zona-mano). */
+.meld-group[data-active="true"] {
+  box-shadow: var(--glow-turn);
+}
+.meld-group h4 {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+}
+.meld-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.meld-group-head .crest {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.meld-group[data-team="us"] .crest {
+  color: var(--brass-300);
+}
+.meld-group[data-team="them"] .crest {
+  color: var(--info-300);
+}
+.meld-group-head .team-tag {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.meld-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.meld {
+  position: relative;
+  z-index: var(--z-melds); /* giochi calati: sollevati sul feltro, sotto le carte in mano */
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+  transition: box-shadow var(--dur-base), border-color var(--dur-base);
+}
+.meld[data-selectable="true"] {
+  cursor: pointer;
+}
+.meld[data-selectable="true"]:hover {
+  border-color: var(--brass-600);
+}
+.meld[data-selected="true"] {
+  border-color: var(--brass-400);
+  box-shadow: var(--glow-turn);
+}
+.meld-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.meld-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-1);
+}
+.meld-tags {
+  margin-top: var(--sp-2);
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.tag {
+  font-size: var(--fs-xs);
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.tag-burraco {
+  font-weight: 700;
+  border: none;
+}
+/* Burraco PULITO = oro pieno; SPORCO = oro brunito con bordo (distinguibili
+   anche senza colore grazie all'icona ✦/✧ e al testo). */
+.tag-burraco[data-clean="true"] {
+  background: linear-gradient(180deg, var(--brass-400), var(--brass-600));
+  color: var(--ink-900);
+}
+.tag-burraco[data-clean="false"] {
+  background: var(--surface-sunken);
+  color: var(--brass-300);
+  border: 1px solid var(--brass-500);
+}
+
+/* ===================================================================
+ * BARRA AZIONI (sticky) — l'azione del momento risalta in oro.
+ * =================================================================== */
+.action-bar {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  align-items: center;
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--brass-600);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  padding: var(--sp-3);
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-badges);
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.35);
+}
+.action-bar .sep {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+}
+.action-bar .hint {
+  margin-left: auto;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+/* Quando NON è il tuo turno la barra è visibilmente "a riposo". */
+.action-bar[data-my-turn="false"] {
+  opacity: 0.75;
+  filter: saturate(0.7);
+}
+
+/* ===================================================================
+ * BANNER DI STATO (in linea, sopra il tavolo)
+ * Superfici scure con accento colorato: nessun testo colore-su-colore.
+ * =================================================================== */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--brass-500);
+  margin: var(--sp-3) 0;
+  z-index: var(--z-banner);
+}
+.banner .banner-icon {
+  font-size: 1.2rem;
+  flex: none;
+}
+.banner .banner-body {
+  display: flex;
+  flex-direction: column;
+}
+.banner .banner-title {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.banner .banner-sub {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.banner[data-tone="warn"] {
+  border-left-color: var(--warn-500);
+}
+.banner[data-tone="warn"] .banner-title {
+  color: var(--warn-300);
+}
+.banner[data-tone="danger"] {
+  border-left-color: var(--danger-500);
+}
+.banner[data-tone="danger"] .banner-title {
+  color: var(--danger-300);
+}
+.banner[data-tone="info"] {
+  border-left-color: var(--info-500);
+}
+.banner[data-tone="success"] {
+  border-left-color: var(--success-500);
+}
+.banner[data-tone="success"] .banner-title {
+  color: var(--success-300);
+}
+.banner .spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+  color: var(--warn-300);
+}
+
+/* ===================================================================
+ * TOAST — mossa rifiutata (effimero, sopra tutto)
+ * =================================================================== */
+.toast {
+  position: fixed;
+  top: var(--sp-4);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--danger-500);
+  box-shadow: var(--sh-lift), var(--glow-danger);
+  z-index: var(--z-toast);
+  max-width: min(92vw, 480px);
+  animation: toast-in var(--dur-base) var(--ease-out);
+}
+.toast .toast-icon {
+  color: var(--danger-300);
+  font-size: 1.2rem;
+  flex: none;
+}
+.toast .toast-body {
+  color: var(--text-strong);
+}
+.toast .toast-body strong {
+  color: var(--danger-300);
+}
+.toast .toast-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  padding: 0 var(--sp-1);
+  margin-left: var(--sp-2);
+}
+
+/* Pillola "mossa in volo" globale (fallback quando il pending non è
+   agganciato a una carta specifica). */
+.pending-badge {
+  position: fixed;
+  bottom: 88px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--brass-600);
+  color: var(--text-strong);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-pill);
+  z-index: var(--z-banner);
+  box-shadow: var(--sh-panel);
+}
+.pending-badge .spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--brass-400);
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ===================================================================
+ * OVERLAY (fine mano / fine partita) + CELEBRAZIONI
+ * =================================================================== */
+.overlay {
   position: fixed;
   inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background: linear-gradient(90deg, #180b06 0%, #0a0402 50%, #180b06 100%);
-  background-image: repeating-linear-gradient(90deg, transparent 0px, rgba(139, 69, 19, 0.05) 4px, transparent 8px);
+  background: var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-overlay);
+  padding: var(--sp-4);
+  animation: fade-in var(--dur-base) var(--ease-out);
+}
+.overlay-card {
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--brass-500);
+  border-radius: var(--r-lg);
+  padding: var(--sp-6) var(--sp-5);
+  max-width: 600px;
+  width: 100%;
+  box-shadow: var(--sh-lift);
+}
+.overlay-card h2 {
+  font-size: var(--fs-display);
+  color: var(--brass-300);
+  text-align: center;
+}
+.overlay-card .verdict {
+  text-align: center;
+  font-family: var(--font-serif);
+  font-size: var(--fs-h1);
+  margin-bottom: var(--sp-4);
+}
+.score-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--sp-4) 0;
+  font-size: var(--fs-sm);
+}
+.score-table th,
+.score-table td {
+  border: 1px solid var(--border);
+  padding: var(--sp-2);
+  text-align: center;
+}
+.score-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  background: var(--surface-sunken);
+}
+.score-table td.delta-pos {
+  color: var(--success-300);
+}
+.score-table td.delta-neg {
+  color: var(--danger-300);
+}
+.cumulative {
+  margin-top: var(--sp-3);
+  text-align: center;
+  color: var(--text);
 }
 
-/* LAYER 2: Decorativi (Lampadari, Bicchieri) */
-.decorative-chandelier {
+/* ── Esiti TERMINALI senza vincitore (RoomClosedOverlay) ──────────────
+   Tre chiusure DISTINGUIBILI a colpo d'occhio grazie all'accento:
+   · vittoria/fine partita → oro (default .overlay-card, invariato);
+   · interrupted (tavolo chiuso) → blu informativo, neutro;
+   · abandoned (abbandono)  → ambra d'attenzione, MAI rosso (non è una colpa).
+   Distinzione anche senza colore: occhiello di categoria + icona + testo. */
+.overlay-eyebrow {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-1);
+}
+.outcome-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  text-align: center;
+  margin-bottom: var(--sp-2);
+}
+.overlay-card[data-outcome="interrupted"] {
+  border-top-color: var(--info-500);
+}
+.overlay-card[data-outcome="interrupted"] h2,
+.overlay-card[data-outcome="interrupted"] .overlay-eyebrow,
+.overlay-card[data-outcome="interrupted"] .outcome-icon {
+  color: var(--info-300);
+}
+.overlay-card[data-outcome="abandoned"] {
+  border-top-color: var(--warn-500);
+}
+.overlay-card[data-outcome="abandoned"] h2,
+.overlay-card[data-outcome="abandoned"] .overlay-eyebrow,
+.overlay-card[data-outcome="abandoned"] .outcome-icon {
+  color: var(--warn-300);
+}
+
+/* ── Dialog di CONFERMA (azione distruttiva) ──────────────────────────
+   Riusa .overlay/.overlay-card; più stretto e centrato. */
+.overlay-card.confirm {
+  max-width: 440px;
+  text-align: center;
+}
+.confirm-title {
+  font-size: var(--fs-h1);
+  color: var(--text-strong);
+  text-align: center;
+}
+.confirm-body {
+  color: var(--text);
+  text-align: center;
+  margin-bottom: var(--sp-4);
+}
+.dialog-actions {
+  display: flex;
+  gap: var(--sp-3);
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: var(--sp-5);
+}
+.dialog-actions.single {
+  margin-top: var(--sp-5);
+}
+.dialog-actions button {
+  min-height: 44px;
+  padding-inline: var(--sp-5);
+}
+/* Mobile: azioni impilate; la SICURA resta in basso (a portata di pollice),
+   la distruttiva sopra, per ridurre i tocchi accidentali. */
+@media (max-width: 480px) {
+  .dialog-actions {
+    flex-direction: column-reverse;
+  }
+  .dialog-actions button {
+    width: 100%;
+  }
+}
+
+/* Celebrazione effimera (pozzetto / burraco). Non blocca il gioco. */
+.celebration {
   position: fixed;
-  z-index: 10;
+  inset: 0;
+  display: grid;
+  place-items: center;
   pointer-events: none;
-  object-fit: contain;
-  filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.4));
-  width: auto;
-  opacity: 1;
+  z-index: var(--z-celebration);
+}
+.celebration .banner-celebrate {
+  padding: var(--sp-4) var(--sp-6);
+  border-radius: var(--r-lg);
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  border: 2px solid var(--brass-400);
+  box-shadow: var(--sh-lift), 0 0 40px rgba(231, 208, 151, 0.35);
+  text-align: center;
+  animation: celebrate-pop var(--dur-slow) var(--ease-out);
+}
+.celebration .banner-celebrate .title {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h1);
+  color: var(--brass-300);
+}
+.celebration .banner-celebrate .sub {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+/* Burraco PULITO = celebrazione più intensa (scintille dorate). */
+.celebration[data-kind="burraco-clean"] .banner-celebrate {
+  border-color: var(--brass-300);
+  box-shadow: var(--sh-lift), 0 0 64px rgba(231, 208, 151, 0.6);
 }
 
-.chandelier-tl {
-  top: 30px;
-  left: 30px;
+/* ===================================================================
+ * ANIMAZIONI
+ * =================================================================== */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes pulse-soft {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(224, 169, 58, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(224, 169, 58, 0.25); }
+}
+@keyframes card-pending {
+  0%, 100% { transform: translateY(-2px); opacity: 0.85; }
+  50% { transform: translateY(-6px); opacity: 1; }
+}
+@keyframes toast-in {
+  from { transform: translate(-50%, -12px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes celebrate-pop {
+  0% { transform: scale(0.85); opacity: 0; }
+  15% { transform: scale(1.04); opacity: 1; }
+  80% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+/* Distribuzione carte: entrano dal mazzo. Applicata via classe .deal. */
+@keyframes deal-in {
+  from { transform: translateY(-40px) scale(0.9); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+.deal {
+  animation: deal-in var(--dur-deal) var(--ease-out) both;
 }
 
-.chandelier-tr {
-  top: 30px;
-  right: 30px;
+/* ===================================================================
+ * ACCESSIBILITÀ — riduzione del movimento
+ * Le celebrazioni e i loop restano come feedback STATICO (bordo/testo).
+ * =================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .card[data-selected="true"],
+  .card.clickable:hover {
+    transform: none;
+    outline-color: var(--brass-400);
+  }
+  /* Il pending resta comunicato dallo spinner statico + testo. */
+  .countdown[data-level="urgent"] {
+    box-shadow: 0 0 0 2px var(--warn-500);
+  }
 }
 
-.whisky-glass {
-  position: fixed;
-  width: 120px;
-  height: 180px;
-  z-index: 10;
-  pointer-events: none;
-  object-fit: contain;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+/* Utility screen-reader-only per etichette non visive. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.whisky-left {
-  bottom: 50px;
-  left: 35px;
+/* ===================================================================
+ * MACRO-CICLO 1 — AUTH + BOTTOM HAND
+ * Stili FUNZIONALI di base. La direzione visiva finale (curve del ventaglio,
+ * palette dei tab, motion, spaziature fini) è di competenza di agente_ui_ux:
+ * qui si garantisce solo che tutto sia usabile, leggibile e accessibile.
+ * =================================================================== */
+
+/* ── Schermata d'ingresso: selettore Accedi/Registrati/Ospite ────────
+ * Segmented control (pulsanti con aria-pressed, non tab ARIA): tre scelte
+ * di pari peso. La voce attiva emerge con superficie sollevata + FILO d'oro,
+ * distinguibile anche senza colore grazie al peso del testo. */
+.auth-tabs {
+  display: flex;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-4);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: var(--sp-1);
+}
+.auth-tab {
+  flex: 1;
+  min-height: 44px; /* target tattile WCAG 2.5.8 */
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-muted); /* su feltro: ~8.4:1 */
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--dur-base), color var(--dur-base), border-color var(--dur-base);
+}
+.auth-tab:not(:disabled):hover {
+  color: var(--text-strong);
+}
+.auth-tab[data-active="true"] {
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  border-color: var(--brass-600);
+  box-shadow: var(--sh-card);
+  font-weight: 600;
+}
+.auth-tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.auth-tab:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 
-.whisky-right {
-  bottom: 50px;
-  right: 35px;
+/* Il submit d'oro è a flex per centrare spinner + testo nello stato busy. */
+.lobby .cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 48px;
+}
+.cta-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(26, 23, 18, 0.35); /* su oro: scuro */
+  border-top-color: var(--ink-900);
+  animation: spin 0.8s linear infinite;
+  flex: none;
 }
 
-/* LAYER 3: Cornice Decorativa */
-.frame-border {
-  position: fixed;
-  inset: 15px;
-  z-index: 40;
-  pointer-events: none;
-  border: 2px solid #d4af37;
-  border-radius: 8px;
-  box-shadow: inset 0 0 0 1px #8b6914;
+/* Errore auth: NON colpevolizzante — pannello contenuto, icona neutra,
+ * bordo/testo rossi solo quanto basta per l'attenzione (AA su feltro). */
+.auth-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin: var(--sp-4) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  background: rgba(224, 87, 75, 0.1);
+  border: 1px solid var(--danger-500);
+  color: var(--danger-300); /* ~6.7:1 su feltro */
+}
+.auth-error-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--danger-500);
+  color: #2a0d0a;
+  font-weight: 800;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+.auth-hint {
+  margin-top: var(--sp-4);
+  text-align: center;
+  font-size: var(--fs-sm);
 }
 
-/* LAYER 4: Header Fisso */
-.header-fixed {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 80px;
-  z-index: 50;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.8));
-  backdrop-filter: blur(5px);
-  border-bottom: 1px solid #d4af37;
-  padding: 10px 30px;
+/* Aiuto sotto un campo (es. spiegazione del codice tavolo). */
+.field-hint {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+/* Avviso "sessione scaduta" nella lobby: banner ambra con azione a destra. */
+.auth-notice {
+  margin-top: var(--sp-4);
+}
+.auth-notice .btn-ghost {
+  margin-left: auto;
+  align-self: center;
+  flex: none;
+}
+
+/* ── Identità corrente + logout nella lobby ────────────────────────── */
+.whoami {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 15px;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
 }
-
-.logo-section h1 {
-  color: #d4af37;
-  font-size: 2rem;
-  font-family: Georgia, serif;
-  margin: 0;
-  letter-spacing: 2px;
-}
-
-.logo-subtitle {
-  color: #999;
-  font-size: 0.7rem;
-  margin: 0;
-  letter-spacing: 1px;
-}
-
-.navbar {
-  display: flex;
-  gap: 2rem;
-}
-
-.navbar a {
-  color: #d4af37;
-  text-decoration: none;
-  font-size: 0.9rem;
-  letter-spacing: 1px;
-  border-bottom: 2px solid transparent;
-  transition: all 0.3s ease;
-}
-
-.navbar a:hover {
-  border-bottom-color: #d4af37;
-  color: #fff;
-}
-
-.hamburger {
-  display: none;
-  background: none;
-  border: none;
-  color: #d4af37;
-  font-size: 1.5rem;
+.btn-ghost {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-sm);
+  font: inherit;
   cursor: pointer;
 }
-
-/* LAYER 5: Contenuto Scrollabile */
-.content-wrapper {
-  position: relative;
-  z-index: 30;
-  margin-top: 120px;
-  min-height: 100dvh;
+.btn-ghost:hover {
+  border-color: var(--brass-600);
+  color: var(--text-strong);
+}
+.btn-ghost:focus-visible {
+  outline: 2px solid var(--brass-400);
+  outline-offset: 2px;
 }
 
-/* BLOCCO 1: HERO */
-.hero-section {
-  padding: 60px 20px;
-  text-align: center;
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+/* ── BOTTOM HAND: mano ancorata in basso (postazione Sud) ──────────────
+   `isolation: isolate` ⇒ contesto di impilamento LOCALE: gli z della mano
+   (active 15, filo-inserimento 25, drag 30) non competono con i livelli
+   globali. Al proprio turno la zona-mano si ACCENDE (bordo oro): mano + turno
+   DOMINano lo sguardo. */
+.bottom-hand {
+  position: sticky;
+  bottom: 88px; /* sopra la action-bar sticky */
+  margin-top: var(--sp-5);
+  padding: var(--sp-3);
+  /* Zona-mano FLOTTANTE: velo caldo sottile dal basso (luce del giocatore) su
+     feltro incassato, così la mano legge come il piano più vicino/vivo. L'oro
+     acceso resta riservato allo stato di turno (data-active-turn). */
+  background:
+    radial-gradient(120% 140% at 50% 118%, rgba(200, 162, 74, 0.1), rgba(0, 0, 0, 0) 62%),
+    var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-top-color: var(--border-strong);
+  border-radius: var(--r-md);
+  isolation: isolate;
+  box-shadow: var(--sh-panel);
+  transition: box-shadow var(--dur-base), border-color var(--dur-base);
 }
-
-.hero-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  border: 2px solid #d4af37;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(212, 175, 55, 0.15);
+.bottom-hand[data-active-turn="true"] {
+  border-color: var(--brass-500);
+  box-shadow: var(--sh-panel), var(--glow-turn);
 }
-
-.hero-image {
-  width: 100%;
-  height: auto;
-  display: block;
-  aspect-ratio: 2 / 1;
-  object-fit: cover;
-}
-
-/* BLOCCO 2: CTA */
-.cta-section {
-  padding: 60px 20px;
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
-}
-
-.cta-bar {
-  max-width: 1000px;
-  margin: 0 auto;
+.bottom-hand-head {
   display: flex;
-  gap: 30px;
-  justify-content: center;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
   flex-wrap: wrap;
-  background: linear-gradient(135deg, #3a2f2f 0%, #2a1f1f 100%);
-  border: 2px solid #d4af37;
-  border-radius: 8px;
-  padding: 40px 30px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  margin-bottom: var(--sp-2);
 }
-
-.cta-button {
-  background: none;
-  border: none;
+.bottom-hand-head h4 {
+  margin: 0;
+  font-size: var(--fs-h2);
+  color: var(--text-strong);
+}
+.bottom-hand-head-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.bottom-hand-hint {
+  font-size: var(--fs-xs);
+}
+/* Contatore selezione: appare con N ≥ 1, azzera in una toccata (≥44px hit). */
+.selection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: 32px;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--brass-500);
+  background: linear-gradient(180deg, var(--brass-400), var(--brass-600));
+  color: var(--ink-900);
+  font-size: var(--fs-sm);
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s ease;
-  padding: 0;
-  display: block;
+}
+.selection-chip:focus-visible {
+  outline: 2px solid var(--brass-300);
+  outline-offset: 2px;
 }
 
-.btn-image {
-  width: 280px;
-  height: auto;
-  display: block;
-  object-fit: contain;
+/* MANO — DUE LAYOUT commutati da data-layout (calcolato nel componente):
+ *  - "arc"  = ventaglio ad arco (desktop, ≤15 carte): ogni carta ruota (--rot)
+ *    attorno al bordo inferiore e scende (--ty) verso i bordi; leggibilità prima
+ *    di tutto (indice alto-sinistra sempre scoperto).
+ *  - "rows" = GRIGLIA A FILE con wrap (smartphone e mani grandi): niente scroll
+ *    orizzontale, carte min 44×64, striscia esposta ≥30px, oltre ~2 file scroll
+ *    VERTICALE. È il layout che garantisce la PRECISIONE DEL TOCCO.
+ * `touch-action: none` sulle carte: controlliamo noi tap/drag (Pointer Events),
+ * evitando che il pan del browser sposti le carte durante la selezione. */
+.fan {
+  list-style: none;
+  margin: 0;
+  padding: var(--sp-6) var(--sp-4) var(--sp-2);
+  display: flex;
+  justify-content: center;
+  min-height: 116px;
 }
-
-.cta-primary {
-  filter: drop-shadow(0 6px 16px rgba(212, 175, 55, 0.3));
-}
-
-.cta-primary:hover {
-  transform: scale(1.05);
-  filter: drop-shadow(0 8px 24px rgba(212, 175, 55, 0.5));
-}
-
-.cta-primary:active {
-  transform: scale(0.98);
-}
-
-.cta-button:not(.cta-primary):hover {
-  transform: translateY(-3px);
-  filter: drop-shadow(0 4px 12px rgba(212, 175, 55, 0.2));
-}
-
-.cta-button:not(.cta-primary):active {
-  transform: translateY(-1px);
-}
-
-/* BLOCCO 3: RULES */
-.rules-section {
-  padding: 60px 20px;
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
-}
-
-.parchment {
-  max-width: 900px;
-  margin: 0 auto;
-  background: linear-gradient(135deg, #f5e6d3 0%, #f0dcc4 100%);
-  border: 3px solid #8b6914;
-  border-radius: 12px;
-  padding: 50px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.5);
+.fan-slot {
   position: relative;
+  transform-origin: bottom center;
+  transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-base);
+  touch-action: none;
+}
+.fan-slot .card {
+  touch-action: none;
 }
 
-.parchment::before,
-.parchment::after {
+/* ── Layout ARCO (desktop, poche carte) ── */
+.fan[data-layout="arc"] {
+  flex-wrap: nowrap;
+}
+.fan[data-layout="arc"] .fan-slot {
+  transform: translateY(var(--ty, 0px)) rotate(var(--rot, 0deg));
+  margin-left: -18px;
+}
+.fan[data-layout="arc"] .fan-slot:first-child {
+  margin-left: 0;
+}
+
+/* ── Layout A FILE (smartphone / mani grandi) ── carta 44×64, strip ≥30px. */
+.fan[data-layout="rows"] {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-content: flex-start;
+  gap: var(--sp-3) 0;
+  padding: var(--sp-4) var(--sp-3) var(--sp-3) calc(var(--sp-3) + 14px);
+  max-height: 220px; /* ~2 file di 64px + gap; oltre → scroll verticale (3ª fila) */
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Nota F (develop): con `touch-action:none` sulle carte lo scroll verticale
+     (>2 file) parte dalle AREE NON-CARTA. Non tocchiamo la logica del drag; qui
+     rendiamo lo scroll un AFFORDANCE: gutter stabile a destra = una striscia
+     non-carta sempre pannabile, + scrollbar tematizzata (ottone su feltro)
+     così l'utente vede che c'è dell'altro sotto. */
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--brass-600) transparent;
+}
+.fan[data-layout="rows"]::-webkit-scrollbar {
+  width: 10px;
+}
+.fan[data-layout="rows"]::-webkit-scrollbar-thumb {
+  background: var(--brass-600);
+  border-radius: var(--r-pill);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.fan[data-layout="rows"]::-webkit-scrollbar-thumb:hover {
+  background: var(--brass-500);
+  background-clip: padding-box;
+}
+.fan[data-layout="rows"] .fan-slot {
+  transform: none;
+  margin-left: -14px; /* 44 − 14 = 30px esposti */
+}
+.fan[data-layout="rows"] .card {
+  width: 44px;
+  height: 64px;
+  padding: 3px 4px;
+}
+/* Tipografia calibrata sul formato 44×64 (come le carte `small`, già validate):
+   indice ~0.72rem ≈ 11.5px e pip ~1.15rem restano leggibili senza affollare la
+   faccia. La striscia esposta ≥30px mostra l'indice alto-sinistra ben nitido. */
+.fan[data-layout="rows"] .card .index {
+  font-size: 0.72rem;
+}
+.fan[data-layout="rows"] .card .pip {
+  font-size: 1.15rem;
+}
+.fan[data-layout="rows"] .card .jolly {
+  font-size: 1.1rem;
+}
+/* Schermi molto stretti (<340px): strip esposto ≥28px, mai meno. */
+@media (max-width: 340px) {
+  .fan[data-layout="rows"] {
+    padding-left: calc(var(--sp-3) + 16px);
+  }
+  .fan[data-layout="rows"] .fan-slot {
+    margin-left: -16px; /* 44 − 16 = 28px esposti */
+  }
+}
+
+/* Carta a fuoco / sotto il puntatore: si RADDRIZZA e sale, indici ben leggibili. */
+.fan-slot:hover,
+.fan-slot:focus-within {
+  transform: translateY(-12px) rotate(0deg);
+  z-index: var(--z-hand-card-active);
+}
+.fan[data-layout="rows"] .fan-slot:hover,
+.fan[data-layout="rows"] .fan-slot:focus-within {
+  transform: translateY(-8px);
+}
+/* Carta SELEZIONATA / in PRESS-PREVIEW: in evidenza sopra le vicine. */
+.fan-slot[data-selected="true"] {
+  transform: translateY(-4px) rotate(0deg);
+  z-index: var(--z-hand-card-active);
+}
+.fan[data-layout="rows"] .fan-slot[data-selected="true"] {
+  transform: translateY(-4px);
+}
+/* RIORDINO: la carta trascinata si stacca (lift/scala), sopra tutto, mai clippata. */
+.fan-slot[data-dragging="true"] {
+  transform: translateY(-14px) rotate(0deg) scale(1.06);
+  opacity: 0.95;
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.5));
+  z-index: var(--z-hand-drag);
+  /* NB: niente pointer-events:none qui: interromperebbe il pointer capture su
+     alcuni browser. Il drop individua la carta sotto via elementsFromPoint. */
+}
+/* Il resto della mano si attenua mentre si riordina. */
+.fan[data-layout] .fan-slot[data-dragging="true"] ~ .fan-slot,
+.fan:has(.fan-slot[data-dragging="true"]) .fan-slot:not([data-dragging="true"]) {
+  opacity: 0.7;
+}
+/* VARCO nella posizione d'origine + filo d'oro d'inserimento sul gap bersaglio. */
+.fan-slot[data-over="true"] {
+  transform: translateY(-6px) rotate(0deg);
+}
+.fan-slot[data-over="true"]::before {
   content: "";
   position: absolute;
-  top: -8px;
-  width: 40%;
-  height: 40px;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.1), transparent);
-  border-radius: 50% 50% 0 0;
+  left: -9px;
+  top: -2px;
+  bottom: 2px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--brass-300);
+  box-shadow: 0 0 8px rgba(231, 208, 151, 0.7);
+  z-index: 25; /* filo d'inserimento: locale alla .bottom-hand, sotto il drag */
 }
 
-.parchment::before {
-  left: 5%;
+/* SELEZIONE nel layout a FILE — marcatore d'oro PERSISTENTE sulla striscia
+   esposta. Con l'overlap (30px visibili) il solo lift non basta: una carta
+   sollevata può essere in parte coperta dalla vicina. Un filo d'oro sul bordo
+   SINISTRO (che cade dentro la striscia sempre visibile) rende la selezione
+   inequivocabile anche a colpo d'occhio su una fila fitta, indipendentemente dal
+   sollevamento. Coerente col linguaggio "oro = scelto/prezioso". */
+.fan[data-layout="rows"] .fan-slot[data-selected="true"] .card {
+  box-shadow: var(--sh-lift), inset 3px 0 0 0 var(--brass-400);
+}
+/* Rinforzo del contrasto dell'anello di selezione (≥3:1 anche se sfiora l'avorio
+   di una carta adiacente): anello d'oro chiaro con alone scuro esterno. */
+.fan-slot[data-selected="true"] .card[data-selected="true"] {
+  outline-color: var(--brass-300);
 }
 
-.parchment::after {
-  right: 5%;
+/* Riduzione del movimento: nessun lift/scala/dim/arco animati. La modalità
+ * riordino resta comunicata da BORDO d'oro statico + VARCO + annuncio SR; la
+ * selezione dal sollevamento statico della carta. In assenza di movimento il
+ * filo d'oro sul bordo sinistro (regola sopra) diventa il segnale primario. */
+@media (prefers-reduced-motion: reduce) {
+  .fan[data-layout="arc"] .fan-slot {
+    --rot: 0deg;
+    --ty: 0px;
+    transform: none;
+  }
+  .fan {
+    padding-top: var(--sp-4);
+    min-height: 100px;
+  }
+  .fan-slot[data-dragging="true"] {
+    transform: none;
+    scale: 1;
+    filter: none;
+    outline: 2px solid var(--brass-300);
+    outline-offset: 2px;
+  }
+  .fan:has(.fan-slot[data-dragging="true"]) .fan-slot:not([data-dragging="true"]) {
+    opacity: 1;
+  }
 }
 
-.parchment h2 {
-  color: #4a3728;
-  font-family: Georgia, serif;
-  font-size: 1.8rem;
-  letter-spacing: 2px;
-  margin: 0 0 30px 0;
+/* ===================================================================
+ * MACRO-CICLO 3 — SCHERMATA PROFILO (sola lettura)
+ * Riusa la "targa" della lobby (feltro sollevato + filo d'oro), allargata
+ * per far respirare la griglia statistiche e lo storico. Gerarchia dello
+ * sguardo: titolo serif → identità (nome + badge) → 2 metriche CHIAVE in oro
+ * → conteggi di supporto → storico partite. Accento d'oro con parsimonia.
+ * =================================================================== */
+.profile-panel {
+  max-width: 560px;
+}
+
+/* ── Identità: nome grande + badge stato account ─────────────────────── */
+.profile-identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-5);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+.profile-name {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h1);
+  color: var(--text-strong);
+  font-weight: 600;
+  word-break: break-word;
+}
+/* Badge: distinguibile ANCHE senza colore (icona + parola diverse).
+   Registrato = filo/accento d'ottone (identità "di pregio"); Ospite = neutro. */
+.profile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  flex: none;
+}
+.profile-badge-icon {
+  font-size: 0.9em;
+  line-height: 1;
+}
+.profile-badge[data-guest="false"] {
+  background: linear-gradient(180deg, var(--brass-400), var(--brass-600));
+  color: var(--ink-900); /* su oro pieno: alto contrasto, come btn-primary */
+  border-color: var(--brass-300);
+}
+.profile-badge[data-guest="true"] {
+  background: var(--surface-sunken);
+  color: var(--text-muted); /* su feltro: ~8.4:1 */
+  border-color: var(--border);
+}
+
+/* ── Ospite: invito a registrarsi (valorizzante, non colpevolizzante) ── */
+.profile-guest-note {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  padding: var(--sp-4);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brass-500);
+  border-radius: var(--r-md);
+}
+.profile-guest-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--brass-400);
+  flex: none;
+}
+.profile-guest-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.profile-guest-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.profile-guest-text {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  line-height: var(--lh-body);
+}
+
+/* ── Griglia statistiche (5 metriche) ────────────────────────────────
+   6 colonne proporzionali: le 2 metriche CHIAVE occupano mezza riga
+   ciascuna (span 3), i 3 conteggi un terzo ciascuno (span 2). */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+.stat-card {
+  grid-column: span 2; /* conteggi: 3 per riga */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-4) var(--sp-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  text-align: center;
+}
+.stat-card[data-highlight="true"] {
+  grid-column: span 3; /* metriche chiave: 2 per riga, in alto */
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  border-top: 2px solid var(--brass-500);
+  box-shadow: var(--sh-card);
+}
+.stat-value {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  line-height: 1.1;
+}
+.stat-card[data-highlight="true"] .stat-value {
+  font-size: 2rem;
+  color: var(--brass-300); /* oro chiaro su superficie scura: alto contrasto */
+}
+.stat-label {
+  font-size: var(--fs-xs);
   text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.stat-card[data-highlight="true"] .stat-label {
+  color: var(--text-muted);
 }
 
-.parchment h3 {
-  color: #6b5344;
-  font-family: Georgia, serif;
-  font-size: 1.2rem;
-  margin-top: 20px;
-  margin-bottom: 10px;
-  letter-spacing: 1px;
+/* Mobile: la griglia collassa a 2 colonne; le chiave restano a piena
+   larghezza in alto per mantenere la gerarchia. */
+@media (max-width: 520px) {
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .stat-card {
+    grid-column: span 1;
+  }
+  .stat-card[data-highlight="true"] {
+    grid-column: span 2;
+  }
 }
 
-.parchment p {
-  color: #5a4536;
-  font-family: Georgia, serif;
-  font-size: 0.95rem;
-  line-height: 1.8;
-  text-align: justify;
-  margin: 0 0 15px 0;
+/* ── Titolo di sezione (storico) ─────────────────────────────────────── */
+.profile-section-title {
+  font-size: var(--fs-h2);
+  color: var(--text-strong);
+  margin: 0 0 var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
 }
 
-.rules-content {
-  max-height: 500px;
-  overflow-y: auto;
+/* ── Storico partite: lista di righe esito/avversario/punteggio/data ──── */
+.match-history {
+  list-style: none;
+  margin: 0 0 var(--sp-4);
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.match-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+/* Filo laterale semantico (rinforza l'esito oltre alla pill). */
+.match-row[data-result="won"] {
+  border-left: 3px solid var(--success-500);
+}
+.match-row[data-result="lost"] {
+  border-left: 3px solid var(--danger-500);
+}
+/* Pill esito: colore + icona (▲/▼) + parola → mai solo colore. */
+.match-result {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.match-result-icon {
+  font-size: 0.8em;
+  line-height: 1;
+}
+.match-result[data-result="won"] {
+  background: rgba(62, 164, 107, 0.16);
+  color: var(--success-300); /* su feltro: AA */
+  border-color: var(--success-500);
+}
+.match-result[data-result="lost"] {
+  background: rgba(224, 87, 75, 0.12);
+  color: var(--danger-300); /* su feltro: ~6.7:1 AA */
+  border-color: var(--danger-500);
+}
+.match-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* consente il troncamento del nome */
+}
+.match-opponent {
+  color: var(--text-strong);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.match-vs {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+.match-date {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+.match-score {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h2);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  white-space: nowrap;
+  justify-self: end;
+}
+.match-score .ms-you {
+  color: var(--text-strong); /* il TUO punteggio in evidenza */
+  font-weight: 600;
+}
+.match-score .ms-sep {
+  color: var(--text-faint);
+  margin: 0 var(--sp-1);
 }
 
-.rules-content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.rules-content::-webkit-scrollbar-track {
-  background: #e8d7c3;
-}
-
-.rules-content::-webkit-scrollbar-thumb {
-  background: #8b6914;
-  border-radius: 4px;
-}
-
-/* ===== RESPONSIVE ===== */
-@media (max-width: 768px) {
-  .decorative-chandelier {
-    width: 70%;
-    opacity: 0.9;
+/* Storico su schermi molto stretti: la data scende sotto, il punteggio resta
+   allineato a destra e leggibile. */
+@media (max-width: 420px) {
+  .match-row {
+    gap: var(--sp-2);
   }
-
-  .whisky-glass {
-    width: 100px;
-    height: 150px;
-    opacity: 0.8;
-  }
-
-  .navbar {
-    display: none;
-  }
-
-  .navbar.open {
-    display: flex;
-    flex-direction: column;
-    position: absolute;
-    top: 80px;
-    left: 0;
-    right: 0;
-    background: rgba(0, 0, 0, 0.95);
-    border-bottom: 1px solid #d4af37;
-    padding: 20px;
-    gap: 15px;
-  }
-
-  .hamburger {
-    display: block;
-  }
-
-  .header-fixed {
-    margin: 10px;
-  }
-
-  .hero-section {
-    padding: 40px 15px;
-  }
-
-  .cta-bar {
-    gap: 20px;
-    padding: 30px 20px;
-    flex-direction: column;
-  }
-
-  .btn-image {
-    width: 100%;
-    max-width: 240px;
-  }
-
-  .parchment {
-    padding: 30px;
-  }
-
-  .parchment h2 {
-    font-size: 1.4rem;
-  }
-
-  .parchment h3 {
-    font-size: 1rem;
-  }
-
-  .parchment p {
-    font-size: 0.9rem;
-  }
-
-  .frame-border {
-    inset: 10px;
+  .match-result {
+    padding: var(--sp-1) var(--sp-2);
   }
 }
 
-@media (max-width: 640px) {
-  .decorative-chandelier {
-    display: none;
-  }
+/* ── "Carica altre" / "Riprova": target comodo, coerente coi ghost ────── */
+.match-more {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--sp-4);
+}
+.profile-more,
+.profile-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px; /* target tattile comodo (AAA), oltre l'AA */
+  padding: var(--sp-2) var(--sp-5);
+}
 
-  .whisky-glass {
-    display: none;
-  }
+/* ── Stato ERRORE: pannello con azione di recupero ───────────────────── */
+.profile-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+.profile-error .auth-error {
+  margin: 0;
+  width: 100%;
+}
 
-  .header-fixed {
-    height: 70px;
-    padding: 5px 15px;
-    margin: 5px;
-  }
+/* ── Stato VUOTO: invito a giocare la prima partita ──────────────────── */
+.profile-empty {
+  text-align: center;
+  padding: var(--sp-5) var(--sp-4);
+  background: var(--surface-sunken);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  margin-bottom: var(--sp-4);
+}
+.profile-empty-icon {
+  font-size: 1.4rem;
+  letter-spacing: 0.35em;
+  color: var(--brass-400);
+  display: block;
+  margin-bottom: var(--sp-2);
+}
+.profile-empty-title {
+  margin: 0 0 var(--sp-1);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.profile-empty-text {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
 
-  .logo-section h1 {
-    font-size: 1.5rem;
-  }
+/* ── Stato LOADING: skeleton coerente col mood (feltro sollevato) ─────── */
+.profile-loading-text {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-4);
+  font-size: var(--fs-sm);
+}
+.spinner-inline {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--brass-400);
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+  flex: none;
+  display: inline-block;
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    var(--surface-raised) 37%,
+    var(--surface) 63%
+  );
+  background-size: 400% 100%;
+  border-radius: var(--r-sm);
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-card {
+  /* eredita layout da .stat-card; qui solo i placeholder interni */
+  min-height: 84px;
+  justify-content: center;
+}
+.skeleton-value {
+  width: 60%;
+  height: 1.6rem;
+}
+.skeleton-label {
+  width: 45%;
+  height: 0.7rem;
+}
+.match-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.skeleton-row {
+  height: 56px;
+  border-radius: var(--r-md);
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
 
-  .content-wrapper {
-    margin-top: 100px;
-  }
+/* ── Azioni del profilo ──────────────────────────────────────────────── */
+.profile-actions {
+  margin-top: var(--sp-5);
+}
+.profile-actions .cta {
+  margin-top: 0;
+}
 
-  .frame-border {
-    inset: 5px;
-    opacity: 0.7;
+/* Riduzione del movimento: niente shimmer/spin, lo skeleton resta come blocco
+   STATICO (superficie sollevata) e lo stato è comunque annunciato via aria-live. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--surface-raised);
   }
-
-  .cta-bar {
-    gap: 15px;
-  }
-
-  .btn-image {
-    max-width: 200px;
-  }
-
-  .parchment {
-    padding: 20px;
+  .spinner-inline {
+    animation: none;
   }
 }

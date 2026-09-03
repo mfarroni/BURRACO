@@ -1,175 +1,318 @@
 "use client";
 
-import React, { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AuthMode } from "@/components/AuthPanel";
+import "./Landing.css";
+
+/**
+ * VETRINA (landing marketing) — riproduzione fedele del mockup approvato
+ * ("Circolo Nettuno", vintage-lusso) dentro l'architettura React esistente.
+ *
+ * Il client è muto sulle regole: qui non c'è dominio di gioco. I tre pulsanti
+ * azione NON navigano a route: aprono l'AuthPanel sul percorso scelto
+ * (login/register/guest) tramite `onOpenAuth`. L'autenticazione vera vive in
+ * AuthPanel, perciò i modali login/register del mockup NON sono riprodotti.
+ *
+ * Isolamento totale: ogni stile discende da `.landing-root` (vedi Landing.css);
+ * nessuna regola tocca body/html, così la vetrina non contamina il design
+ * system del gioco.
+ */
 
 interface Props {
-  /** Abre AuthPanel sul percorso scelto (login, register, guest). */
+  /** Apre AuthPanel sul percorso scelto (login, register, guest). */
   onOpenAuth: (mode: AuthMode) => void;
 }
 
-const NAV_ITEMS = ["HOME", "CHI SIAMO", "REGOLE", "TORNEI", "SHOP", "CONTATTI"] as const;
+const LOGO_CARDS = [
+  { src: "/images/landing/asso-picche.png", alt: "Asso di Picche" },
+  { src: "/images/landing/asso-cuori.png", alt: "Asso di Cuori" },
+  { src: "/images/landing/asso-quadri.png", alt: "Asso di Quadri" },
+  { src: "/images/landing/asso-fiori.png", alt: "Asso di Fiori" },
+] as const;
+
+const NAV_ITEMS = [
+  { id: "home", label: "Home" },
+  { id: "chi-siamo", label: "Chi Siamo" },
+  { id: "regole", label: "Regole" },
+  { id: "tornei", label: "Tornei" },
+  { id: "shop", label: "Shop" },
+  { id: "contatti", label: "Contatti" },
+] as const;
+
+const HERO_SLIDES = [
+  { src: "/images/landing/tavolo.png", alt: "Tavolo da gioco" },
+  { src: "/images/landing/tavolo2.png", alt: "Mani del giocatore sul tavolo verde" },
+  { src: "/images/landing/tavolo3.png", alt: "Tavolo da gioco con fiches" },
+] as const;
+
+const SHOP_ITEMS = [
+  { icon: "", title: "Mazzo Carte Premium", desc: "Carte francesi professionali" },
+  { icon: "🎴", title: "Tappetino da Gioco", desc: "Feltro verde premium 120x80cm" },
+  { icon: "", title: "Guida Completa Burraco", desc: "Manuale illustrato 200 pagine" },
+  { icon: "", title: "Set Torneo Completo", desc: "2 mazzi + tappetino + segnapunti" },
+] as const;
+
+const TOURNAMENTS = [
+  { title: "Torneo Settimanale", lines: ["Ogni venerdì sera dalle 21:00", "Formula: 2 giocatori individuale", "Montepremi: €500"] },
+  { title: "Campionato Mensile", lines: ["Ultimo sabato del mese", "Formula: 4 giocatori a coppie", "Montepremi: €2000"] },
+  { title: "Torneo Speciale Estate", lines: ["Serata esclusiva con cena", "Formula: 6 giocatori", "Montepremi: €5000"] },
+] as const;
 
 export function Landing({ onOpenAuth }: Props) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Slider hero: indice corrente + pausa su hover; l'avanzamento è governato da
+  // un solo interval con cleanup (functional update → nessuna dipendenza sfuggente).
+  const [slide, setSlide] = useState(0);
+  const [paused, setPaused] = useState(false);
+  // Rispetto di prefers-reduced-motion: se l'utente chiede meno movimento
+  // fermiamo l'autoplay dello slider (le animazioni CSS sono gate-ate in
+  // Landing.css). Lo stato si aggiorna anche se la preferenza cambia a runtime.
+  const [reduceMotion, setReduceMotion] = useState(false);
 
-  const handleLogin = () => onOpenAuth("login");
-  const handleSignup = () => onOpenAuth("register");
-  const handleGuest = () => onOpenAuth("guest");
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReduceMotion(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (paused || reduceMotion || HERO_SLIDES.length <= 1) return;
+    const id = setInterval(() => {
+      setSlide((i) => (i + 1) % HERO_SLIDES.length);
+    }, 5000);
+    return () => clearInterval(id);
+  }, [paused, reduceMotion]);
+
+  // Nav attiva allo scroll: evidenzia la voce della sezione visibile nel
+  // contenitore scrollabile (non nella window).
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeSection, setActiveSection] = useState<string>("home");
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      let current = "home";
+      for (const item of NAV_ITEMS) {
+        const section = el.querySelector<HTMLElement>(`#${item.id}`);
+        if (section && el.scrollTop >= section.offsetTop - 100) current = item.id;
+      }
+      setActiveSection(current);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
-    <div className="landing-container">
-      {/* ===== LAYER 1: SFONDO BOISERIE (z:1) ===== */}
-      <div className="background-boiserie" />
+    <div className="landing-root">
+      <div className="room-background" aria-hidden="true" />
 
-      {/* ===== LAYER 2: LAMPADARI E BICCHIERI (z:10) ===== */}
-      <img
-        src="/images/cornice-grandeo.png"
-        alt="Chandelier Top Left"
-        className="decorative-chandelier chandelier-tl"
-      />
-      <img
-        src="/images/cornice-grandeo.png"
-        alt="Chandelier Top Right"
-        className="decorative-chandelier chandelier-tr"
-      />
+      <div className="frame-overlay" aria-hidden="true">
+        <div className="frame-decorative" />
+        <div className="frame-corner tl" />
+        <div className="frame-corner tr" />
+        <div className="frame-corner bl" />
+        <div className="frame-corner br" />
+      </div>
 
-      <img
-        src="/images/bicchiere.png"
-        alt="Whisky Glass Left"
-        className="whisky-glass whisky-left"
-      />
-      <img
-        src="/images/bicchiere.png"
-        alt="Whisky Glass Right"
-        className="whisky-glass whisky-right"
-      />
-
-      {/* ===== LAYER 3: CORNICE DECORATIVA (z:40) ===== */}
-      <div className="frame-border" aria-hidden="true" />
-
-      {/* ===== LAYER 4: HEADER FISSO (z:50) ===== */}
-      <header className="header-fixed">
-        <div className="logo-section">
-          <h1>Burraco</h1>
-          <p className="logo-subtitle">Circolo Nettuno</p>
-        </div>
-
-        <nav className={`navbar ${mobileMenuOpen ? "open" : ""}`}>
-          {NAV_ITEMS.map((item) => (
-            <a
-              key={item}
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                setMobileMenuOpen(false);
-              }}
-            >
-              {item}
-            </a>
-          ))}
-        </nav>
-
-        <button
-          type="button"
-          className="hamburger"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label="Toggle navigation menu"
-        >
-          ☰
-        </button>
-      </header>
-
-      {/* ===== LAYER 5: CONTENUTO SCROLLABILE (z:30) ===== */}
-      <main className="content-wrapper">
-        {/* === BLOCCO 1: HERO === */}
-        <section className="hero-section">
-          <div className="hero-container">
-            <img
-              src="/images/Tavolo.png"
-              alt="Burraco Table"
-              className="hero-image"
-            />
-          </div>
-        </section>
-
-        {/* === BLOCCO 2: CTA === */}
-        <section className="cta-section">
-          <div className="cta-bar">
-            <button
-              type="button"
-              className="cta-button"
-              onClick={handleLogin}
-              title="Accedi al tuo account"
-            >
-              <img
-                src="/images/pulsante-accedi.png"
-                alt="Accedi"
-                className="btn-image"
-              />
-            </button>
-
-            <button
-              type="button"
-              className="cta-button cta-primary"
-              onClick={handleSignup}
-              title="Crea un nuovo account"
-            >
-              <img
-                src="/images/pulsante-registrati.png"
-                alt="Registrati"
-                className="btn-image"
-              />
-            </button>
-
-            <button
-              type="button"
-              className="cta-button"
-              onClick={handleGuest}
-              title="Gioca subito senza registrazione"
-            >
-              <img
-                src="/images/pulsante-ospite.png"
-                alt="Gioca Come Ospite"
-                className="btn-image"
-              />
-            </button>
-          </div>
-        </section>
-
-        {/* === BLOCCO 3: RULES === */}
-        <section className="rules-section">
-          <div className="parchment">
-            <h2>REGOLE DEL GIOCO - BURRACO</h2>
-            <div className="rules-content">
-              <h3>INTRODUZIONE</h3>
-              <p>
-                Burraco è un affascinante gioco di carte per 2 o 4 giocatori. L&apos;obiettivo è formare sequenze di carte (scale e tris) e chiudere la mano prima dell&apos;avversario.
-              </p>
-
-              <h3>PREPARAZIONE</h3>
-              <p>
-                Si utilizzano 2 mazzi di carte francesi (104 carte + 4 jolly). Ogni giocatore riceve 13 carte. Il resto forma il mazzo centrale e il pozzetto.
-              </p>
-
-              <h3>SVOLGIMENTO DEL GIOCO</h3>
-              <p>
-                Durante il turno: pesca una carta dal mazzo, organizza la mano, calala se possibile, e scarta una carta. Il gioco procede in senso orario.
-              </p>
-
-              <h3>BURRACO PULITO E SPORCO</h3>
-              <p>
-                PULITO (Canasta): sequenza di 7+ carte dello stesso seme senza jolly. Vale 200 punti. SPORCO: sequenza con jolly o pinelle. Vale 100 punti.
-              </p>
-
-              <h3>PUNTEGGI</h3>
-              <p>
-                Figure (K,Q,J): 10 punti. Assi: 1 o 15 punti. Numeri: valore nominale. Bonus chiusura: 100 punti. Jolly: 50 punti.
-              </p>
+      <div className="scroll-container" ref={scrollRef}>
+        <div className="content-wrapper">
+          <header className="site-header" id="home">
+            <div className="logo-container">
+              <h1 className="logo-title">Burraco</h1>
+              <div className="logo-cards">
+                {LOGO_CARDS.map((card) => (
+                  <div className="logo-card" key={card.alt}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={card.src} alt={card.alt} />
+                  </div>
+                ))}
+              </div>
             </div>
+            <p className="logo-subtitle">Circolo Nettuno</p>
+          </header>
+
+          <nav className="main-nav" aria-label="Navigazione della vetrina">
+            {NAV_ITEMS.map((item) => (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                className={`nav-link${activeSection === item.id ? " active" : ""}`}
+                aria-current={activeSection === item.id ? "true" : undefined}
+                onClick={() => setActiveSection(item.id)}
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
+
+          <section
+            className="hero-section"
+            onMouseEnter={() => setPaused(true)}
+            onMouseLeave={() => setPaused(false)}
+          >
+            <div className="hero-slider">
+              {HERO_SLIDES.map((s, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={s.src}
+                  src={s.src}
+                  alt={s.alt}
+                  className={`hero-image hero-slide${i === slide ? " active" : ""}`}
+                />
+              ))}
+            </div>
+            <div className="hero-overlay">
+              <div className="hero-badge">
+                <div className="hero-badge-text">BURRACO</div>
+              </div>
+              <div className="dealer-button">DEALER</div>
+            </div>
+            <div className="hero-dots">
+              {HERO_SLIDES.map((s, i) => (
+                <button
+                  key={s.src}
+                  type="button"
+                  className={`hero-dot${i === slide ? " active" : ""}`}
+                  aria-label={`Mostra immagine ${i + 1} di ${HERO_SLIDES.length}`}
+                  aria-pressed={i === slide}
+                  onClick={() => setSlide(i)}
+                />
+              ))}
+            </div>
+          </section>
+
+          <div className="action-buttons">
+            <button type="button" className="btn btn-access" onClick={() => onOpenAuth("login")}>
+              Accedi
+            </button>
+            <button type="button" className="btn btn-register" onClick={() => onOpenAuth("register")}>
+              Registrati
+            </button>
+            <button type="button" className="btn btn-guest" onClick={() => onOpenAuth("guest")}>
+              Gioca come Ospite
+            </button>
           </div>
-        </section>
-      </main>
+
+          <section className="section" id="chi-siamo">
+            <h2 className="section-title">Chi Siamo</h2>
+            <div className="about-content">
+              <div className="about-text">
+                <p>
+                  Benvenuti al <strong>Circolo Nettuno</strong>, il punto di riferimento per gli
+                  appassionati di Burraco in Italia. Dal 2010 organizziamo tornei, eventi e serate
+                  dedicate a questo affascinante gioco di carte.
+                </p>
+                <p>
+                  Il nostro circolo offre un ambiente elegante e accogliente, dove tradizione e
+                  passione si incontrano per creare esperienze di gioco indimenticabili.
+                </p>
+                <p>
+                  Che tu sia un principiante o un giocatore esperto, qui troverai la tua casa.
+                  Unisciti alla nostra community e scopri il piacere del Burraco!
+                </p>
+              </div>
+              <div className="about-image">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/images/landing/sala.png" alt="Sala del circolo" />
+              </div>
+            </div>
+          </section>
+
+          <section className="section" id="regole" aria-label="Regole del gioco">
+            {/* Le regole sono rese come immagine (pergamena): forniamo heading e
+                testo alternativo per screen reader, altrimenti la sezione sarebbe
+                muta all'accessibilità (WCAG 1.1.1 / 1.4.5). */}
+            <h2 className="lp-visually-hidden">Regole del Gioco</h2>
+            <p className="lp-visually-hidden">
+              Le regole del Burraco sono illustrate sulla pergamena: introduzione,
+              preparazione, svolgimento del gioco, burraco pulito e sporco, punteggi.
+            </p>
+            <div className="rules-section">
+              <div className="parchment-container">
+                <div className="whiskey-glass-left">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/images/landing/bicchiere.png" alt="" />
+                </div>
+                <div className="whiskey-glass-right">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/images/landing/bicchiere.png" alt="" />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="section" id="tornei">
+            <h2 className="section-title">
+              Tornei <span className="soon-badge">Prossimamente</span>
+            </h2>
+            <div className="tournaments-grid">
+              {TOURNAMENTS.map((t) => (
+                <div className="tournament-card" key={t.title}>
+                  <h3>{t.title}</h3>
+                  {t.lines.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                  <div className="tournament-date">Prossimamente</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="section" id="shop">
+            <h2 className="section-title">
+              Shop <span className="soon-badge">Prossimamente</span>
+            </h2>
+            <div className="shop-grid">
+              {SHOP_ITEMS.map((item) => (
+                <div className="shop-item" key={item.title}>
+                  <div className="shop-item-image" aria-hidden="true">{item.icon}</div>
+                  <h4>{item.title}</h4>
+                  <p>{item.desc}</p>
+                  <button type="button" className="btn-buy" disabled>
+                    Aggiungi al Carrello
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="section" id="contatti">
+            <h2 className="section-title">
+              Contatti <span className="soon-badge">Prossimamente</span>
+            </h2>
+            <div className="contact-container">
+              <form className="contact-form" aria-label="Modulo contatti (non attivo)">
+                <div className="form-group">
+                  <label htmlFor="contact-name">Nome</label>
+                  <input id="contact-name" type="text" autoComplete="off" disabled />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="contact-email">Email</label>
+                  <input id="contact-email" type="email" autoComplete="off" disabled />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="contact-message">Messaggio</label>
+                  <textarea id="contact-message" disabled />
+                </div>
+                <button type="button" className="btn btn-register contact-submit" disabled>
+                  Invia Messaggio
+                </button>
+                <p className="contact-note">Modulo in arrivo prossimamente</p>
+              </form>
+            </div>
+          </section>
+
+          <footer className="site-footer">
+            <p>© 2026 Circolo Nettuno - Burraco. Tutti i diritti riservati.</p>
+            <p className="footer-fine-print">
+              Il gioco è vietato ai minori di 18 anni. Gioca responsabilmente.
+            </p>
+          </footer>
+        </div>
+      </div>
     </div>
   );
 }

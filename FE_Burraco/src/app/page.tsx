@@ -38,6 +38,9 @@ export default function Page() {
   const [showAuth, setShowAuth] = useState<AuthMode | null>(null);
   // Vista Profilo (sola lettura) sovrapposta alla lobby autenticata.
   const [showProfile, setShowProfile] = useState(false);
+  // Ingresso diretto al tavolo per l'ospite con codice: la vetrina/AuthPanel
+  // deposita qui il codice; l'effetto sotto lo consuma appena l'auth è pronta.
+  const [pendingRoom, setPendingRoom] = useState<string | null>(null);
 
   // Stato di SELEZIONE locale (nessuna regola: solo UI).
   const [selectedCards, setSelectedCards] = useState<string[]>([]);
@@ -103,6 +106,21 @@ export default function Page() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  /* ── Ingresso diretto al tavolo (ospite con codice) ─────────────────────
+   * Quando AuthPanel deposita un codice tavolo dopo un accesso Ospite riuscito,
+   * appena l'auth è pronta e non siamo già seduti, entriamo dritti nel tavolo
+   * saltando la lobby. La guardia `pendingRoom === null` + l'azzeramento
+   * garantiscono UNA sola esecuzione (niente `g` nelle deps: è nuovo a ogni
+   * render). Ospite SENZA codice non passa di qui: setPendingRoom non è invocato. */
+  useEffect(() => {
+    if (pendingRoom === null) return;
+    if (auth.status !== "authenticated" || g.joined) return;
+    setRoomCode(pendingRoom);
+    g.join(pendingRoom, auth.user?.displayName ?? "");
+    setPendingRoom(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRoom, auth.status, g.joined]);
+
   /* ── Ripristino sessione in corso ──────────────────────────────────── */
   if (auth.status === "initializing") {
     return (
@@ -122,7 +140,12 @@ export default function Page() {
    * corrispondente. `onBack` riporta alla vetrina senza toccare lo stato auth. */
   if (auth.status === "anonymous") {
     return showAuth ? (
-      <AuthPanel auth={auth} initialMode={showAuth} onBack={() => setShowAuth(null)} />
+      <AuthPanel
+        auth={auth}
+        initialMode={showAuth}
+        onBack={() => setShowAuth(null)}
+        onRequestTable={setPendingRoom}
+      />
     ) : (
       <Landing onOpenAuth={setShowAuth} />
     );

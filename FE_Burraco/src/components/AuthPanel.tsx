@@ -32,6 +32,13 @@ interface Props {
   initialMode?: AuthMode;
   /** Se fornito, mostra un ritorno alla vetrina (stato locale in page.tsx). */
   onBack?: () => void;
+  /**
+   * Ingresso diretto al tavolo dopo un accesso Ospite riuscito. Riceve il codice
+   * tavolo digitato (già normalizzato) oppure `null` se lasciato vuoto (in tal
+   * caso resta il flusso normale dalla lobby). Chiamato SOLO su ospite andato a
+   * buon fine; login/register non lo usano.
+   */
+  onRequestTable?: (roomCode: string | null) => void;
 }
 
 const MODES: { id: Mode; label: string }[] = [
@@ -40,11 +47,13 @@ const MODES: { id: Mode; label: string }[] = [
   { id: "guest", label: "Ospite" },
 ];
 
-export function AuthPanel({ auth, initialMode = "login", onBack }: Props) {
+export function AuthPanel({ auth, initialMode = "login", onBack, onRequestTable }: Props) {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  // Codice tavolo facoltativo per l'ingresso diretto da Ospite (vuoto = lobby).
+  const [table, setTable] = useState("");
 
   const busy = auth.busy;
 
@@ -52,11 +61,16 @@ export function AuthPanel({ auth, initialMode = "login", onBack }: Props) {
   const emailOk = email.trim().length > 3 && email.includes("@");
   const passwordOk = password.length >= 8;
   const canSubmit =
-    mode === "guest" ? true : mode === "login" ? emailOk && password.length > 0 : emailOk && passwordOk;
+    mode === "guest"
+      ? name.trim().length > 0
+      : mode === "login"
+        ? emailOk && password.length > 0
+        : emailOk && passwordOk;
 
   const switchMode = (m: Mode) => {
     if (busy) return; // niente cambio percorso a richiesta in volo
     setMode(m);
+    setTable(""); // il codice tavolo è pertinente solo al percorso Ospite
     auth.clearError();
   };
 
@@ -65,7 +79,10 @@ export function AuthPanel({ auth, initialMode = "login", onBack }: Props) {
     if (busy || !canSubmit) return;
     if (mode === "login") await auth.login(email, password);
     else if (mode === "register") await auth.register(email, password, name.trim() || undefined);
-    else await auth.guest(name.trim() || undefined);
+    else {
+      const ok = await auth.guest(name.trim() || undefined);
+      if (ok) onRequestTable?.(table.trim().toUpperCase() || null);
+    }
   };
 
   const submitLabel =
@@ -152,6 +169,26 @@ export function AuthPanel({ auth, initialMode = "login", onBack }: Props) {
               autoComplete="off"
               disabled={busy}
             />
+          </>
+        )}
+
+        {mode === "guest" && (
+          <>
+            <label htmlFor="auth-table">Codice tavolo (facoltativo)</label>
+            <input
+              id="auth-table"
+              type="text"
+              value={table}
+              onChange={(e) => setTable(e.target.value.toUpperCase())}
+              placeholder="es. TAVOLO1"
+              maxLength={12}
+              autoComplete="off"
+              disabled={busy}
+              aria-describedby="auth-table-hint"
+            />
+            <p id="auth-table-hint" className="field-hint">
+              Se lo hai già, ti siedi subito a quel tavolo. Lascia vuoto per sceglierlo dopo.
+            </p>
           </>
         )}
 
