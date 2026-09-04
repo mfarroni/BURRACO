@@ -1,0 +1,945 @@
+/* =====================================================================
+   Landing.css — stili ESCLUSIVI della vetrina (marketing).
+   ISOLAMENTO TOTALE: ogni selettore discende da `.landing-root`.
+   Nessuna regola tocca body/html, così la vetrina non contamina il
+   design system del gioco (che vive in globals.css).
+
+   CSP: nessuna risorsa esterna. Font di SISTEMA (font-src 'self'):
+   niente @import Google Fonts, niente @font-face. Immagini locali
+   (img-src 'self' data:) con percorsi assoluti /images/landing/*.
+   ===================================================================== */
+
+/* Reset scopato (equivale al `*` globale del mockup, ma confinato). */
+.landing-root *,
+.landing-root *::before,
+.landing-root *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Root della vetrina: eredita ciò che il mockup metteva su `body`.
+   position: fixed ancora la vetrina al viewport; NIENTE transform/filter
+   qui, così i `position: fixed` interni (sfondo, cornice) restano ancorati. */
+.landing-root {
+  --lp-gold-primary: #d4af37;
+  --lp-gold-light: #f4d03f;
+  --lp-gold-dark: #8b6914;
+  --lp-wood-dark: #2c1810;
+  --lp-wood-medium: #4a2c1a;
+  --lp-felt-green: #1a4d2e;
+  --lp-felt-dark: #0d2818;
+  --lp-cream: #f5e6d3;
+  --lp-cream-dark: #d4b896;
+
+  /* Catene di fallback REALI su font di sistema (nessun webfont). */
+  --lp-font-display: Georgia, "Times New Roman", serif;
+  --lp-font-body: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+    "Times New Roman", serif;
+
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: #0a0504;
+  color: var(--lp-cream);
+  font-family: var(--lp-font-body);
+}
+
+.landing-root .room-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: url("/images/landing/sala.png") center center / cover no-repeat;
+  z-index: 1;
+}
+
+.landing-root .room-background::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.3) 0%,
+    rgba(0, 0, 0, 0.7) 100%
+  );
+}
+
+.landing-root .frame-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.landing-root .frame-decorative {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 3px solid var(--lp-gold-primary);
+  box-shadow:
+    inset 0 0 0 1px rgba(212, 175, 55, 0.3),
+    inset 0 0 0 8px rgba(44, 24, 16, 0.8),
+    inset 0 0 0 10px var(--lp-gold-dark),
+    inset 0 0 0 18px rgba(44, 24, 16, 0.9),
+    inset 0 0 0 20px var(--lp-gold-primary),
+    0 0 0 3px var(--lp-gold-dark),
+    0 0 0 6px rgba(44, 24, 16, 0.9),
+    0 0 0 8px var(--lp-gold-primary);
+  pointer-events: none;
+}
+
+.landing-root .frame-corner {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  background: var(--lp-gold-primary);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  z-index: 101;
+}
+
+.landing-root .frame-corner.tl { top: 0; left: 0; }
+.landing-root .frame-corner.tr { top: 0; right: 0; transform: rotate(90deg); }
+.landing-root .frame-corner.bl { bottom: 0; left: 0; transform: rotate(-90deg); }
+.landing-root .frame-corner.br { bottom: 0; right: 0; transform: rotate(180deg); }
+
+.landing-root .scroll-container {
+  position: relative;
+  z-index: 10;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 40px 60px;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--lp-gold-dark) transparent;
+}
+
+.landing-root .scroll-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.landing-root .scroll-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.landing-root .scroll-container::-webkit-scrollbar-thumb {
+  background: var(--lp-gold-dark);
+  border-radius: 4px;
+}
+
+.landing-root .content-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-bottom: 100px;
+}
+
+.landing-root .site-header {
+  text-align: center;
+  padding: 20px 0 10px;
+  position: relative;
+}
+
+.landing-root .logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 5px;
+}
+
+.landing-root .logo-title {
+  font-family: var(--lp-font-display);
+  font-size: 4rem;
+  font-weight: 900;
+  color: var(--lp-gold-light);
+  text-shadow:
+    2px 2px 4px rgba(0, 0, 0, 0.8),
+    0 0 20px rgba(212, 175, 55, 0.3);
+  letter-spacing: 3px;
+}
+
+.landing-root .logo-cards {
+  display: flex;
+  gap: 10px;
+  transform: rotate(-5deg);
+}
+
+.landing-root .logo-card {
+  width: 70px;
+  height: 100px;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.5);
+  border: 2px solid #ddd;
+  position: relative;
+  transition: transform 0.3s ease;
+}
+
+.landing-root .logo-card:hover {
+  transform: translateY(-10px);
+}
+
+.landing-root .logo-card:nth-child(1) { transform: rotate(-12deg); }
+.landing-root .logo-card:nth-child(2) { transform: rotate(-4deg); }
+.landing-root .logo-card:nth-child(3) { transform: rotate(4deg); }
+.landing-root .logo-card:nth-child(4) { transform: rotate(12deg); }
+
+.landing-root .logo-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.landing-root .logo-subtitle {
+  font-family: var(--lp-font-body);
+  font-size: 1.1rem;
+  color: var(--lp-cream-dark);
+  font-style: italic;
+  letter-spacing: 2px;
+  /* Ombra per leggibilità sopra l'immagine della sala (nessuno scrim qui). */
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+.landing-root .main-nav {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  padding: 15px 0;
+  border-top: 1px solid rgba(212, 175, 55, 0.3);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+  margin: 15px 0 30px;
+  /* Un filo più opaco del mockup: garantisce il contrasto AA del testo nav
+     (crema/oro) anche sui punti più chiari dell'immagine di sfondo. */
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(5px);
+}
+
+.landing-root .nav-link {
+  font-family: var(--lp-font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--lp-cream);
+  text-decoration: none;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+  position: relative;
+  padding: 5px 0;
+}
+
+.landing-root .nav-link::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 2px;
+  background: var(--lp-gold-primary);
+  transition: width 0.3s ease;
+}
+
+.landing-root .nav-link:hover {
+  color: var(--lp-gold-light);
+}
+
+.landing-root .nav-link:hover::after {
+  width: 100%;
+}
+
+.landing-root .nav-link.active {
+  color: var(--lp-gold-light);
+}
+
+/* Non-color cue (WCAG 1.4.1): la voce attiva mostra SEMPRE la sottolineatura
+   oro, non solo il cambio di colore. Distinguibile anche senza percezione del
+   colore, coerente con l'affordance di hover. */
+.landing-root .nav-link.active::after {
+  width: 100%;
+}
+
+.landing-root .section {
+  margin-bottom: 60px;
+  scroll-margin-top: 40px;
+  animation: lp-fadeIn 0.8s ease-out;
+}
+
+.landing-root .section-title {
+  font-family: var(--lp-font-display);
+  font-size: 2rem;
+  color: var(--lp-gold-light);
+  text-align: center;
+  margin-bottom: 30px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+  letter-spacing: 2px;
+}
+
+.landing-root .hero-section {
+  position: relative;
+  margin: 20px 0 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  border: 2px solid var(--lp-gold-dark);
+}
+
+.landing-root .hero-image {
+  width: 100%;
+  height: 400px;
+  object-fit: cover;
+  display: block;
+}
+
+.landing-root .hero-slider {
+  position: relative;
+  width: 100%;
+  height: 400px;
+  overflow: hidden;
+}
+
+.landing-root .hero-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  transition: opacity 1.4s ease-in-out;
+  will-change: opacity;
+}
+
+.landing-root .hero-slide.active {
+  opacity: 1;
+}
+
+.landing-root .hero-dots {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  z-index: 5;
+}
+
+.landing-root .hero-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid var(--lp-gold-primary);
+  background: rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+.landing-root .hero-dot:hover {
+  background: rgba(212, 175, 55, 0.5);
+  border-color: var(--lp-gold-primary);
+}
+
+.landing-root .hero-dot.active {
+  background: var(--lp-gold-light);
+  border-color: var(--lp-gold-light);
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.8);
+}
+
+.landing-root .hero-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 30px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.landing-root .hero-badge {
+  background: linear-gradient(135deg, var(--lp-gold-dark), var(--lp-gold-primary));
+  padding: 15px 30px;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+.landing-root .hero-badge::before {
+  content: " \002660 \002665 \002666 ";
+  position: absolute;
+  top: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.2rem;
+  color: var(--lp-gold-light);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.landing-root .hero-badge-text {
+  font-family: var(--lp-font-display);
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+  letter-spacing: 3px;
+}
+
+.landing-root .dealer-button {
+  background: white;
+  color: #333;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-family: var(--lp-font-display);
+  font-size: 0.8rem;
+  font-weight: bold;
+  letter-spacing: 1px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+}
+
+.landing-root .action-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 25px;
+  padding: 30px 0;
+  flex-wrap: wrap;
+}
+
+.landing-root .btn {
+  font-family: var(--lp-font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 15px 40px;
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-root .btn::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.landing-root .btn:hover::before {
+  left: 100%;
+}
+
+.landing-root .btn-access {
+  background: linear-gradient(135deg, #1a1a1a, #333);
+  color: var(--lp-gold-light);
+  border: 2px solid var(--lp-gold-dark);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+}
+
+.landing-root .btn-access:hover {
+  background: linear-gradient(135deg, #333, #444);
+  border-color: var(--lp-gold-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(212, 175, 55, 0.3);
+}
+
+.landing-root .btn-register {
+  background: linear-gradient(135deg, var(--lp-gold-dark), var(--lp-gold-primary));
+  color: white;
+  border: 2px solid var(--lp-gold-light);
+  box-shadow: 0 5px 15px rgba(212, 175, 55, 0.4);
+  background-size: 200% auto;
+  animation: lp-shimmer 3s linear infinite;
+}
+
+.landing-root .btn-register:hover {
+  background: linear-gradient(135deg, var(--lp-gold-primary), var(--lp-gold-light));
+  border-color: var(--lp-gold-light);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(212, 175, 55, 0.6);
+}
+
+.landing-root .btn-guest {
+  background: linear-gradient(135deg, var(--lp-wood-dark), var(--lp-wood-medium));
+  color: var(--lp-cream);
+  border: 2px solid var(--lp-gold-dark);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+}
+
+.landing-root .btn-guest:hover {
+  background: linear-gradient(135deg, var(--lp-wood-medium), #5a3a20);
+  border-color: var(--lp-gold-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(212, 175, 55, 0.3);
+}
+
+.landing-root .rules-section {
+  position: relative;
+  margin: 40px 0;
+  min-height: 800px;
+}
+
+.landing-root .parchment-container {
+  position: relative;
+  background: url("/images/landing/pergamena.png") center top / 100% 100% no-repeat;
+  padding: 65px 80px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  border-radius: 5px;
+  overflow: hidden;
+  min-height: 1200px;
+}
+
+.landing-root .whiskey-glass-left,
+.landing-root .whiskey-glass-right {
+  position: absolute;
+  bottom: 20px;
+  width: 140px;
+  height: 175px;
+  z-index: 10;
+  filter: drop-shadow(0 5px 15px rgba(0, 0, 0, 0.5));
+}
+
+.landing-root .whiskey-glass-left {
+  left: 30px;
+}
+
+.landing-root .whiskey-glass-right {
+  right: 30px;
+}
+
+.landing-root .whiskey-glass-left img,
+.landing-root .whiskey-glass-right img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.landing-root .about-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  align-items: center;
+}
+
+.landing-root .about-text {
+  font-size: 1.15rem;
+  line-height: 1.9;
+  color: var(--lp-cream);
+  /* Testo lungo sopra l'immagine della sala: ombra morbida per garantire
+     leggibilità senza introdurre uno scrim (l'immagine è comunque scura). */
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.landing-root .about-text p {
+  margin-bottom: 20px;
+}
+
+.landing-root .about-image {
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  border: 3px solid var(--lp-gold-dark);
+}
+
+.landing-root .about-image img {
+  width: 100%;
+  height: 300px;
+  object-fit: cover;
+  display: block;
+}
+
+.landing-root .tournaments-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px;
+}
+
+.landing-root .tournament-card {
+  background: linear-gradient(
+    135deg,
+    rgba(44, 24, 16, 0.9),
+    rgba(74, 44, 26, 0.9)
+  );
+  border: 2px solid var(--lp-gold-dark);
+  border-radius: 10px;
+  padding: 30px;
+  text-align: center;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.landing-root .tournament-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--lp-gold-primary);
+  box-shadow: 0 10px 30px rgba(212, 175, 55, 0.3);
+}
+
+.landing-root .tournament-card h3 {
+  font-family: var(--lp-font-display);
+  color: var(--lp-gold-light);
+  font-size: 1.5rem;
+  margin-bottom: 15px;
+}
+
+.landing-root .tournament-card p {
+  color: var(--lp-cream);
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.landing-root .tournament-date {
+  font-family: var(--lp-font-display);
+  color: var(--lp-gold-primary);
+  font-weight: bold;
+  font-size: 1.1rem;
+  margin-top: 15px;
+}
+
+.landing-root .shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 30px;
+}
+
+.landing-root .shop-item {
+  background: rgba(44, 24, 16, 0.8);
+  border: 2px solid var(--lp-gold-dark);
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.landing-root .shop-item:hover {
+  border-color: var(--lp-gold-primary);
+  transform: scale(1.02);
+}
+
+.landing-root .shop-item-image {
+  width: 100%;
+  height: 200px;
+  background: linear-gradient(135deg, var(--lp-felt-green), var(--lp-felt-dark));
+  border-radius: 8px;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 4rem;
+}
+
+.landing-root .shop-item h4 {
+  font-family: var(--lp-font-display);
+  color: var(--lp-gold-light);
+  margin-bottom: 10px;
+}
+
+.landing-root .btn-buy {
+  background: var(--lp-gold-dark);
+  color: white;
+  padding: 10px 25px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: var(--lp-font-display);
+  font-weight: bold;
+  transition: all 0.3s ease;
+}
+
+.landing-root .btn-buy:hover:not(:disabled) {
+  background: var(--lp-gold-primary);
+}
+
+.landing-root .btn-buy:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.landing-root .contact-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.landing-root .contact-form {
+  background: rgba(44, 24, 16, 0.8);
+  padding: 40px;
+  border-radius: 10px;
+  border: 2px solid var(--lp-gold-dark);
+  backdrop-filter: blur(10px);
+}
+
+.landing-root .form-group {
+  margin-bottom: 20px;
+}
+
+.landing-root .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-family: var(--lp-font-display);
+  color: var(--lp-gold-light);
+  font-size: 1.1rem;
+}
+
+.landing-root .form-group input,
+.landing-root .form-group textarea {
+  width: 100%;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--lp-gold-dark);
+  border-radius: 5px;
+  color: var(--lp-cream);
+  font-family: var(--lp-font-body);
+  font-size: 1rem;
+}
+
+.landing-root .form-group input:focus,
+.landing-root .form-group textarea:focus {
+  outline: none;
+  border-color: var(--lp-gold-primary);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.landing-root .form-group input:disabled,
+.landing-root .form-group textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.landing-root .form-group textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+
+.landing-root .contact-submit {
+  width: 100%;
+}
+
+.landing-root .contact-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  animation: none;
+}
+
+.landing-root .contact-note {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--lp-cream-dark);
+}
+
+.landing-root .site-footer {
+  text-align: center;
+  padding: 30px 0;
+  border-top: 1px solid rgba(212, 175, 55, 0.3);
+  margin-top: 40px;
+  color: var(--lp-cream-dark);
+  font-size: 0.9rem;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.85);
+}
+
+.landing-root .footer-fine-print {
+  margin-top: 10px;
+  font-size: 0.8rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   ACCESSIBILITÀ E STATI — rifiniture (non alterano l'estetica di base)
+   ───────────────────────────────────────────────────────────────────── */
+
+/* Focus visibile e coerente: anello oro chiaro. L'offset porta l'anello sul
+   fondo scuro della pagina (vale anche per il bottone oro, che ha attorno il
+   fondo scuro), così resta percepibile con separazione adeguata. Sovrascrive
+   il ring globale (var(--focus) ottone) mantenendo l'identità della vetrina. */
+.landing-root .nav-link:focus-visible,
+.landing-root .btn:focus-visible,
+.landing-root .btn-buy:focus-visible {
+  outline: 3px solid var(--lp-gold-light);
+  outline-offset: 3px;
+}
+
+/* I dot dello slider possono cadere su una porzione d'immagine più chiara:
+   aggiungo un alone scuro perché l'anello resti sempre leggibile. */
+.landing-root .hero-dot:focus-visible {
+  outline: 3px solid var(--lp-gold-light);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px rgba(0, 0, 0, 0.6);
+}
+
+/* Alternativa testuale per contenuti resi come immagine (es. pergamena regole)
+   e per heading di sezione altrimenti assenti: fuori schermo ma letta dagli
+   screen reader (niente display:none, che la escluderebbe dall'accessibilità). */
+.landing-root .lp-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Etichetta "in arrivo": comunica che una sezione/funzione non è ancora attiva
+   in modo chiaro e intenzionale (non un bug). In palette, contrasto AA. */
+.landing-root .soon-badge {
+  display: inline-block;
+  margin-left: 12px;
+  padding: 3px 12px;
+  font-family: var(--lp-font-display);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--lp-gold-light);
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--lp-gold-dark);
+  border-radius: 20px;
+  vertical-align: middle;
+  text-shadow: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 768px) {
+  .landing-root .scroll-container {
+    padding: 20px 30px;
+  }
+
+  .landing-root .logo-title {
+    font-size: 2.5rem;
+  }
+
+  .landing-root .logo-card {
+    width: 50px;
+    height: 75px;
+  }
+
+  .landing-root .main-nav {
+    flex-wrap: wrap;
+    gap: 15px;
+  }
+
+  .landing-root .nav-link {
+    font-size: 0.8rem;
+  }
+
+  .landing-root .hero-image {
+    height: 250px;
+  }
+
+  .landing-root .hero-slider {
+    height: 250px;
+  }
+
+  .landing-root .parchment-container {
+    padding: 45px 30px;
+  }
+
+  .landing-root .about-content {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-root .action-buttons {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .landing-root .btn {
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .landing-root .whiskey-glass-left,
+  .landing-root .whiskey-glass-right {
+    display: none;
+  }
+
+  .landing-root .contact-form {
+    padding: 25px;
+  }
+}
+
+@keyframes lp-fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lp-shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+/* ── prefers-reduced-motion: azzera il movimento non essenziale ─────────
+   Scoped alla vetrina (non tocca il design system del gioco). Neutralizza
+   shimmer perpetuo (btn Registrati), fade d'ingresso delle sezioni, crossfade
+   dello slider, sollevamenti all'hover e lo sweep luminoso dei bottoni. Gli
+   stati finali restano quelli "a riposo" (sezioni opache, slide attiva visibile).
+   L'autoplay dello slider è fermato lato JS (Landing.tsx) nello stesso caso. */
+@media (prefers-reduced-motion: reduce) {
+  .landing-root *,
+  .landing-root *::before,
+  .landing-root *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .landing-root .scroll-container {
+    scroll-behavior: auto;
+  }
+}
+
+/* ── Mobile stretto (≤480px): il logo va a capo e si rimpicciolisce ───────
+   A larghezze molto ridotte il titolo grande accanto alle 4 carte eccedeva
+   la riga e, con il container centrato, il logo veniva troncato ai bordi.
+   Qui il logo-container va a capo (titolo sopra, carte sotto) e le misure
+   calano ancora, così "Burraco" resta interamente visibile. */
+@media (max-width: 480px) {
+  .landing-root .logo-container {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .landing-root .logo-title {
+    font-size: 2rem;
+    letter-spacing: 2px;
+  }
+
+  .landing-root .logo-card {
+    width: 42px;
+    height: 62px;
+  }
+}

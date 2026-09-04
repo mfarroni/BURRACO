@@ -59,15 +59,43 @@ const csp = [
   "frame-ancestors 'none'",
 ].join("; ");
 
+/*
+ * SEC-L3 — Permissions-Policy: disattiva le API di dispositivo che l'app non usa
+ * (la vetrina e il tavolo non accedono a camera/microfono/geolocalizzazione ecc.).
+ * Riduce la superficie in caso di contenuto ostile iniettato a valle.
+ *
+ * Strict-Transport-Security: cintura di sicurezza applicativa. In produzione HSTS
+ * è di norma già iniettato dall'edge (es. Vercel); qui è dichiarato SOLO in prod
+ * per non forzare https sui `localhost` di sviluppo.
+ */
+const permissionsPolicy = [
+  "camera=()",
+  "microphone=()",
+  "geolocation=()",
+  "payment=()",
+  "usb=()",
+  "magnetometer=()",
+  "accelerometer=()",
+  "gyroscope=()",
+  "interest-cohort=()",
+].join(", ");
+
 const securityHeaders = [
   { key: "Content-Security-Policy", value: csp },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "no-referrer" },
   { key: "X-Frame-Options", value: "DENY" },
+  { key: "Permissions-Policy", value: permissionsPolicy },
+  // HSTS solo in produzione (non su http://localhost in sviluppo).
+  ...(isDev
+    ? []
+    : [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" }]),
 ];
 
 const nextConfig = {
   reactStrictMode: true,
+  // SEC-L2 — rimuove l'header X-Powered-By: Next.js (evita il fingerprinting dello stack).
+  poweredByHeader: false,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
