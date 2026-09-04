@@ -13,6 +13,20 @@ import type { GameConfig } from "./contract/types.js";
  */
 const isProd = process.env.NODE_ENV === "production";
 
+/**
+ * IGIENE SESSIONI — PERIODO DI GRAZIA per la riconnessione (§6.3): UNICA definizione
+ * documentata della soglia. Alla disconnessione del socket la sessione è marcata
+ * *disconnessa* (non eliminata) e il tavolo resta in piedi per questo intervallo,
+ * così un refresh accidentale (F5) a metà partita non la distrugge. Se lo stesso
+ * utente rientra entro la soglia riprende dal punto in cui era; scaduta, la partita
+ * è marcata 'abandoned', il tavolo è liberato e l'avversario torna in lobby. I
+ * contatori non si toccano. Il ritorno VOLONTARIO alla vetrina è un'uscita esplicita
+ * e NON gode di questa grazia. Override via env `RECONNECT_GRACE_MS` (i test iniettano
+ * finestre brevi/lunghe a runtime, quindi `Room` rilegge l'env a ogni disconnessione
+ * ripiegando su QUESTA costante).
+ */
+export const RECONNECT_GRACE_DEFAULT_MS = 45_000;
+
 export const env = {
   isProd,
   port: Number(process.env.PORT ?? 8080),
@@ -21,7 +35,8 @@ export const env = {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
-  reconnectGraceMs: Number(process.env.RECONNECT_GRACE_MS ?? 180_000),
+  /** Periodo di grazia riconnessione (§6.3). Vedi `RECONNECT_GRACE_DEFAULT_MS`. */
+  reconnectGraceMs: Number(process.env.RECONNECT_GRACE_MS ?? RECONNECT_GRACE_DEFAULT_MS),
   turnTimeoutMs: Number(process.env.TURN_TIMEOUT_MS ?? 90_000),
   /**
    * Macro-ciclo 1 — Auth (SEC-08): quando true, `join_room` richiede un authToken

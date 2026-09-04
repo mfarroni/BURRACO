@@ -125,12 +125,60 @@ export const persistence = {
     );
   },
 
-  async endMatch(matchId: string, winnerSeat: Seat | null): Promise<void> {
-    await safe("endMatch", () =>
+  /**
+   * Fine LEGITTIMA della partita (obiettivo raggiunto): UNICO percorso che marca
+   * `status='completed'` e quindi l'UNICO conteggiato nelle statistiche (§7). È il
+   * punto di scrittura consolidato: prima `endMatch` era chiamato da due punti (fine
+   * normale + forfeit da stallo); entrambi rappresentano una vittoria reale e ora
+   * passano di qui.
+   */
+  async completeMatch(matchId: string, winnerSeat: Seat | null): Promise<void> {
+    await safe("completeMatch", () =>
       db!
         .update(schema.matches)
-        .set({ status: "ended", winnerSeat: winnerSeat ?? null })
+        .set({ status: "completed", winnerSeat: winnerSeat ?? null, endedAt: new Date() })
         .where(eq(schema.matches.id, matchId)),
+    );
+  },
+
+  /**
+   * ANNULLAMENTO unilaterale (§5.3): marca `status='aborted'` con timestamp e
+   * l'identità dell'utente che ha annullato (audit). La riga storica NON viene
+   * cancellata. Non tocca alcun contatore (status ≠ 'completed'). `abortedByUserId`
+   * può essere null (join senza principale risolto: dev/test).
+   */
+  async abortMatch(matchId: string, abortedByUserId: string | null): Promise<void> {
+    await safe("abortMatch", () =>
+      db!
+        .update(schema.matches)
+        .set({ status: "aborted", endedAt: new Date(), abortedBy: abortedByUserId ?? null })
+        .where(eq(schema.matches.id, matchId)),
+    );
+  },
+
+  /**
+   * ABBANDONO (§6.3): l'avversario non è rientrato entro la finestra di grazia.
+   * Marca `status='abandoned'` con timestamp. Nessun vincitore, nessun contatore
+   * toccato (status ≠ 'completed').
+   */
+  async abandonMatch(matchId: string): Promise<void> {
+    await safe("abandonMatch", () =>
+      db!
+        .update(schema.matches)
+        .set({ status: "abandoned", endedAt: new Date() })
+        .where(eq(schema.matches.id, matchId)),
+    );
+  },
+
+  /**
+   * Elimina i CHECKPOINT (stato pieno server-side, mai esposto) di una partita:
+   * dati transitori purgati all'annullamento (§5.3.2), così non resta stato di gioco
+   * nascosto persistito dopo che il tavolo è stato liberato. La riga `matches` e le
+   * partecipazioni `match_players` restano per audit e correttezza statistiche.
+   */
+  async deleteCheckpoints(matchId: string): Promise<void> {
+    await safe("deleteCheckpoints", () =>
+      db!.delete(schema.checkpoints).where(eq(schema.checkpoints.matchId, matchId)),
     );
   },
 };

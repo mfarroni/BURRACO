@@ -25,7 +25,7 @@ export class DrizzleStatsStore implements StatsStore {
       .select({ seat: schema.matchPlayers.seat, winnerSeat: schema.matches.winnerSeat })
       .from(schema.matchPlayers)
       .innerJoin(schema.matches, eq(schema.matches.id, schema.matchPlayers.matchId))
-      .where(and(eq(schema.matchPlayers.userId, userId), eq(schema.matches.status, "ended")));
+      .where(and(eq(schema.matchPlayers.userId, userId), eq(schema.matches.status, "completed")));
 
     const matchesPlayed = rows.length;
     let matchesWon = 0;
@@ -69,7 +69,7 @@ export class DrizzleStatsStore implements StatsStore {
       .from(schema.matchPlayers)
       .innerJoin(schema.matches, eq(schema.matches.id, schema.matchPlayers.matchId))
       .leftJoin(schema.hands, eq(schema.hands.matchId, schema.matches.id))
-      .where(and(eq(schema.matchPlayers.userId, userId), eq(schema.matches.status, "ended")))
+      .where(and(eq(schema.matchPlayers.userId, userId), eq(schema.matches.status, "completed")))
       .groupBy(
         schema.matches.id,
         schema.matches.winnerSeat,

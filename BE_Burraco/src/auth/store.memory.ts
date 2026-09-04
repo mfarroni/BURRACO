@@ -29,6 +29,7 @@ export class MemoryAuthStore implements AuthStore {
       isGuest: input.isGuest,
       createdAt: new Date(),
       lastSeenAt: null,
+      expiredAt: null,
     };
     this.usersById.set(user.id, user);
     if (user.email) this.usersByEmail.set(user.email.toLowerCase(), user);
@@ -110,9 +111,13 @@ export class MemoryAuthStore implements AuthStore {
     let removed = 0;
     for (const u of [...this.usersById.values()]) {
       if (!u.isGuest) continue;
+      // §6.4: eleggibile se SCADUTO (expired_at) oppure inattivo da prima di cutoff.
       const lastActive = (u.lastSeenAt ?? u.createdAt).getTime();
-      if (lastActive >= cutoff.getTime()) continue;
+      const eligible = u.expiredAt !== null || lastActive < cutoff.getTime();
+      if (!eligible) continue;
       // Non eliminare un ospite che ha ancora una sessione (attiva o non ancora potata).
+      // (Lo store in-memory non traccia le partite: la protezione dagli ospiti
+      // referenziati da match è nello store Drizzle, via i vincoli `not exists`.)
       const hasSession = [...this.sessionsByTokenHash.values()].some((s) => s.userId === u.id);
       if (hasSession) continue;
       this.usersById.delete(u.id);
@@ -125,5 +130,11 @@ export class MemoryAuthStore implements AuthStore {
   async touchLastSeen(userId: string): Promise<void> {
     const u = this.usersById.get(userId);
     if (u) u.lastSeenAt = new Date();
+  }
+
+  async markGuestExpired(userId: string, now: Date): Promise<void> {
+    // Idempotente e ristretto agli ospiti non ancora scaduti (mai sui registrati).
+    const u = this.usersById.get(userId);
+    if (u && u.isGuest && u.expiredAt === null) u.expiredAt = now;
   }
 }

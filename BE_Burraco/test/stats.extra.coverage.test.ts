@@ -66,7 +66,7 @@ test("IDOR: ?userId=<altrui> è IGNORATO, tornano i dati del principale del toke
   const alice = await register("idor-alice@example.com");
   const bob = await register("idor-bob@example.com");
   // Partita conclusa: Alice vince (seat0), Bob perde (seat1).
-  stats.putMatch({ id: "IDOR-1", status: "ended", winnerSeat: 0, endedAt: new Date() });
+  stats.putMatch({ id: "IDOR-1", status: "completed", winnerSeat: 0, endedAt: new Date() });
   stats.putPlayer({ matchId: "IDOR-1", seat: 0, displayName: "Alice", userId: alice.id });
   stats.putPlayer({ matchId: "IDOR-1", seat: 1, displayName: "Bob", userId: bob.id });
   stats.putHandScore({ matchId: "IDOR-1", seat: 0, totalDelta: 205 });
@@ -132,7 +132,7 @@ test("AGGREGATI: winRate non intero (1 vinta su 3) via HTTP", async () => {
   // 3 partite concluse: u vince solo la prima.
   for (let i = 0; i < 3; i++) {
     const id = `WR-${i}`;
-    stats.putMatch({ id, status: "ended", winnerSeat: i === 0 ? 0 : 1, endedAt: new Date(2026, 0, i + 1) });
+    stats.putMatch({ id, status: "completed", winnerSeat: i === 0 ? 0 : 1, endedAt: new Date(2026, 0, i + 1) });
     stats.putPlayer({ matchId: id, seat: 0, displayName: "U", userId: u.id });
     stats.putPlayer({ matchId: id, seat: 1, displayName: "Opp", userId: opp.id });
     stats.putHandScore({ matchId: id, seat: 0, totalDelta: 10 });
@@ -150,7 +150,7 @@ test("AGGREGATI: winRate non intero (1 vinta su 3) via HTTP", async () => {
 test("AGGREGATI: winnerSeat null conta come partita persa (played-won)", async () => {
   const u = await register("draw-user@example.com");
   const opp = await register("draw-opp@example.com");
-  stats.putMatch({ id: "DRAW-1", status: "ended", winnerSeat: null, endedAt: new Date() });
+  stats.putMatch({ id: "DRAW-1", status: "completed", winnerSeat: null, endedAt: new Date() });
   stats.putPlayer({ matchId: "DRAW-1", seat: 0, displayName: "U", userId: u.id });
   stats.putPlayer({ matchId: "DRAW-1", seat: 1, displayName: "Opp", userId: opp.id });
   stats.putHandScore({ matchId: "DRAW-1", seat: 0, totalDelta: 7 });

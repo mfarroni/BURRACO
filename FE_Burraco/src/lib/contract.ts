@@ -156,6 +156,9 @@ export type ClientMessage =
   | { type: "undo_last"; clientMoveId?: string }
   // Smontaggio esplicito del tavolo (in attesa o con avversario disconnesso).
   | { type: "reset_room" }
+  // ANNULLAMENTO UNILATERALE della partita in corso (nessun payload; room e seat
+  // dedotti dal socket lato server). Chiude la partita per entrambi, libera il tavolo.
+  | { type: "game_abort" }
   | { type: "heartbeat" };
 
 /** SERVER → CLIENT. */
@@ -174,6 +177,10 @@ export type ServerMessage =
   // Chiusura TERMINALE del tavolo SENZA vincitore, distinta da `game_ended`.
   // "interrupted" = reset esplicito; "abandoned" = avversario non rientrato.
   | { type: "room_closed"; reason: "interrupted" | "abandoned" }
+  // ANNULLAMENTO UNILATERALE della partita (terminale, senza vincitore, distinto da
+  // room_closed). `byName` è chi ha annullato, per l'avviso in chiaro. La partita è
+  // 'aborted' e NON conta nelle statistiche.
+  | { type: "game_aborted"; byName: string }
   | { type: "opponent_disconnected"; seat: Seat }
   | { type: "opponent_reconnected"; seat: Seat }
   // Rifiuto di join_room PRIMA di occupare un posto (SEC-08), distinto da `error`
@@ -238,4 +245,22 @@ export interface MatchesPage {
   items: MatchSummary[];
   limit: number;
   offset: number;
+}
+
+/* ─────────────────────────── ELENCO TAVOLI APERTI (HTTP) ─────────────────────
+ * DTO di GET /rooms/open (endpoint PUBBLICO, read-only). COPIA allineata a mano
+ * dello specchio BE. Espone SOLO il minimo: nessun id utente/email, nessuna
+ * distinzione ospite-vs-registrato — solo il displayName di chi attende. */
+export interface OpenRoomInfo {
+  code: string;
+  hostName: string;
+  seats: number;
+  maxSeats: number;
+  /** ISO8601 di quando il tavolo ha iniziato ad attendere. */
+  waitingSince: string;
+}
+
+/** Risposta di GET /rooms/open. */
+export interface OpenRoomsResponse {
+  rooms: OpenRoomInfo[];
 }

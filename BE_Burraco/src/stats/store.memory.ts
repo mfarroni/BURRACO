@@ -10,14 +10,18 @@ import type { Pagination, StatsStore } from "./types.js";
  * direttamente tramite i metodi di ingest sottostanti.
  *
  * Le aggregazioni riproducono FEDELMENTE la semantica delle query Drizzle:
- *  - partite CONCLUSE (`status='ended'`);
+ *  - partite conteggiate = SOLO quelle COMPLETATE (`status='completed'`); gli stati
+ *    'aborted'/'abandoned' non contano mai (§7);
  *  - vinta = il posto dell'utente == `winnerSeat`;
  *  - totalPoints = somma dei `totalDelta` per il posto dell'utente nelle sue partite.
  */
 
+/** Vocabolario di stato partita allineato allo schema DB (macro-ciclo lobby). */
+type MatchStatus = "playing" | "completed" | "aborted" | "abandoned";
+
 interface MatchRec {
   id: string;
-  status: "playing" | "ended";
+  status: MatchStatus;
   winnerSeat: Seat | null;
   createdAt: Date;
   /** Best-effort: ultima mano conclusa (fine partita). */
@@ -45,7 +49,7 @@ export class MemoryStatsStore implements StatsStore {
   /** Registra/aggiorna una partita. */
   putMatch(rec: {
     id: string;
-    status: "playing" | "ended";
+    status: MatchStatus;
     winnerSeat?: Seat | null;
     createdAt?: Date;
     endedAt?: Date | null;
@@ -76,7 +80,7 @@ export class MemoryStatsStore implements StatsStore {
     const participations = this.players
       .filter((p) => p.userId === userId)
       .map((p) => ({ player: p, match: this.matches.get(p.matchId) }))
-      .filter((x): x is { player: PlayerRec; match: MatchRec } => !!x.match && x.match.status === "ended");
+      .filter((x): x is { player: PlayerRec; match: MatchRec } => !!x.match && x.match.status === "completed");
 
     const matchesPlayed = participations.length;
     let matchesWon = 0;
@@ -105,7 +109,7 @@ export class MemoryStatsStore implements StatsStore {
     const participations = this.players
       .filter((p) => p.userId === userId)
       .map((p) => ({ player: p, match: this.matches.get(p.matchId) }))
-      .filter((x): x is { player: PlayerRec; match: MatchRec } => !!x.match && x.match.status === "ended");
+      .filter((x): x is { player: PlayerRec; match: MatchRec } => !!x.match && x.match.status === "completed");
 
     // Ordina dalla più recente (endedAt, poi createdAt come tie-break).
     participations.sort((a, b) => {

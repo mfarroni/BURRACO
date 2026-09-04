@@ -36,6 +36,15 @@ export const users = pgTable("users", {
   isGuest: boolean("is_guest").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  /**
+   * Igiene sessioni (macro-ciclo lobby): marca temporale di SCADENZA del record
+   * OSPITE all'uscita (chiusura pagina / ritorno alla vetrina). Serve a distinguere
+   * gli ospiti non più attivi senza cancellarli fisicamente subito: la cancellazione
+   * fisica avviene nello sweep SOLO se l'ospite non è più referenziato (§6.4). Il
+   * `display_name` resta leggibile in chiaro (nessuna anonimizzazione). Sempre NULL
+   * per gli account registrati: non vengono mai marcati scaduti né cancellati.
+   */
+  expiredAt: timestamp("expired_at", { withTimezone: true }),
 });
 
 /**
@@ -58,8 +67,19 @@ export const matches = pgTable("matches", {
   id: uuid("id").primaryKey(),
   config: jsonb("config").notNull(),
   targetScore: integer("target_score").notNull(),
-  status: text("status").notNull(), // "playing" | "ended"
+  // Vocabolario di stato (macro-ciclo lobby): "playing" | "completed" | "aborted" |
+  // "abandoned". SOLO "completed" (fine legittima per raggiungimento del punteggio
+  // pieno) aggiorna le statistiche; "aborted" (annullamento) e "abandoned"
+  // (disconnessione oltre la grazia) non toccano mai i contatori.
+  status: text("status").notNull(),
   winnerSeat: integer("winner_seat"),
+  // Fine partita (best-effort): valorizzato alla conclusione/annullamento/abbandono.
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  // Identità dell'utente che ha ANNULLATO la partita (solo per status "aborted"),
+  // per audit/analisi future. Nullable e non-breaking; il record storico della
+  // partita non viene mai cancellato. FK a users con ON DELETE no action (nessun
+  // cascade): un ospite referenziato qui non è cancellabile fisicamente.
+  abortedBy: uuid("aborted_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

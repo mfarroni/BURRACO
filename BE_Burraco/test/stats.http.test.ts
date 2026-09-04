@@ -78,7 +78,7 @@ test("GET /users/me/stats: ritorna SOLO i dati del principale (nessun IDOR)", as
   const bob = await register("bob-stats@example.com");
 
   // Partita conclusa: Alice (seat0) vince contro Bob (seat1).
-  stats.putMatch({ id: "MATCH-1", status: "ended", winnerSeat: 0, endedAt: new Date() });
+  stats.putMatch({ id: "MATCH-1", status: "completed", winnerSeat: 0, endedAt: new Date() });
   stats.putPlayer({ matchId: "MATCH-1", seat: 0, displayName: "Alice", userId: alice.id });
   stats.putPlayer({ matchId: "MATCH-1", seat: 1, displayName: "Bob", userId: bob.id });
   stats.putHandScore({ matchId: "MATCH-1", seat: 0, totalDelta: 150 });
@@ -105,7 +105,7 @@ test("GET /users/me/matches: storico paginato del solo principale", async () => 
   const opp = await register("opp-stats@example.com");
   for (let i = 0; i < 3; i++) {
     const id = `CAROL-${i}`;
-    stats.putMatch({ id, status: "ended", winnerSeat: 0, endedAt: new Date(2026, 7, i + 1) });
+    stats.putMatch({ id, status: "completed", winnerSeat: 0, endedAt: new Date(2026, 7, i + 1) });
     stats.putPlayer({ matchId: id, seat: 0, displayName: "Carol", userId: carol.id });
     stats.putPlayer({ matchId: id, seat: 1, displayName: "Avv", userId: opp.id });
     stats.putHandScore({ matchId: id, seat: 0, totalDelta: 100 + i });

@@ -150,6 +150,26 @@ export interface HandScoreDetail {
   totalDelta: number; // somma dei precedenti
 }
 
+/* ───────────────────────── ELENCO TAVOLI APERTI (HTTP) ──────────────────────
+ * Macro-ciclo lobby. DTO di RISPOSTA di `GET /rooms/open` (endpoint PUBBLICO e
+ * READ-ONLY). Espone SOLO i tavoli in attesa di un secondo giocatore, con il
+ * MINIMO indispensabile: nessun dato personale oltre al `displayName` di chi
+ * attende (mai email, mai id utente, mai indicazione ospite-vs-registrato). Il FE
+ * ne tiene una COPIA allineata a mano (decisione #4/#8).
+ */
+export interface OpenRoomInfo {
+  /** Codice tavolo (normalizzato, uppercase). */
+  code: string;
+  /** displayName autoritativo di chi ha aperto il tavolo ed è in attesa. */
+  hostName: string;
+  /** Posti occupati (1 finché in attesa). */
+  seats: number;
+  /** Posti totali del tavolo (2 in 1v1). */
+  maxSeats: number;
+  /** Momento in cui il tavolo ha iniziato ad attendere, ISO8601. */
+  waitingSince: string;
+}
+
 /* ───────────────────────── STATISTICHE & PROFILO (HTTP) ─────────────────────
  * Macro-ciclo 3. DTO di RISPOSTA degli endpoint REST /users/me/* (sotto Bearer).
  * Sono di proprietà del BACKEND: il FE ne tiene una COPIA allineata a mano
@@ -223,6 +243,15 @@ export type ClientMessage =
   // LIFECYCLE: smontaggio esplicito del tavolo (nessun payload; room dedotta dal
   // socket). Consentito solo in attesa o con avversario disconnesso.
   | { type: "reset_room" }
+  // ANNULLAMENTO UNILATERALE della partita in corso (nessun payload; room e seat
+  // dedotti dal socket). Chi conferma chiude la partita per ENTRAMBI: la partita è
+  // marcata 'aborted' (non conta nelle statistiche), il tavolo è liberato e il
+  // codice torna subito riutilizzabile. Solo un giocatore SEDUTO a quel tavolo può
+  // annullare (autorizzazione verificata lato server dallo slot del socket, mai dal
+  // payload). Idempotente: un secondo abort o un abort su tavolo già chiuso dà
+  // esito neutro. Adatta il nome `game:abort` della scheda alla convenzione
+  // snake_case del contratto esistente.
+  | { type: "game_abort" }
   | { type: "heartbeat" };
 
 /** Codici di rifiuto mossa (stabili, il FE può mapparli a messaggi UX). */
@@ -293,6 +322,15 @@ export type ServerMessage =
    * Alla ricezione il client mostra un esito chiaro e non resta bloccato.
    */
   | { type: "room_closed"; reason: "interrupted" | "abandoned" }
+  /**
+   * ANNULLAMENTO UNILATERALE della partita (esito TERMINALE senza vincitore,
+   * distinto da `game_ended` e da `room_closed`). Inviato a ENTRAMBI i giocatori
+   * quando uno dei due conferma "Annulla partita". `byName` è il displayName di chi
+   * ha annullato, per l'avviso in chiaro. La partita è marcata 'aborted' e NON conta
+   * nelle statistiche; alla ricezione il client torna alla lobby azzerando lo stato
+   * locale del tavolo.
+   */
+  | { type: "game_aborted"; byName: string }
   | { type: "opponent_disconnected"; seat: Seat }
   | { type: "opponent_reconnected"; seat: Seat }
   /**

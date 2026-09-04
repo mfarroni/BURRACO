@@ -7,11 +7,14 @@ import { useAuth } from "@/lib/useAuth";
 import { AuthPanel, type AuthMode } from "@/components/AuthPanel";
 import { Landing } from "@/components/Landing";
 import { ProfilePanel } from "@/components/ProfilePanel";
+import { OpenTablesList } from "@/components/OpenTablesList";
+import { getAuthToken } from "@/lib/auth";
 import { BottomHand } from "@/components/BottomHand";
 import { CardView } from "@/components/CardView";
 import { Melds } from "@/components/Melds";
 import { ActionBar } from "@/components/ActionBar";
 import {
+  ConfirmDialog,
   GameEndedOverlay,
   HandEndedOverlay,
   PendingBadge,
@@ -45,6 +48,10 @@ export default function Page() {
   // Stato di SELEZIONE locale (nessuna regola: solo UI).
   const [selectedCards, setSelectedCards] = useState<string[]>([]);
   const [selectedMeldId, setSelectedMeldId] = useState<string | null>(null);
+  // Conferma modale dell'annullamento partita (§5.1) — stato UI locale.
+  const [confirmingAbort, setConfirmingAbort] = useState(false);
+  // Trigger di reload immediato dell'elenco tavoli (race §4.3: dopo un join fallito).
+  const [openTablesReload, setOpenTablesReload] = useState(0);
 
   // RICONCILIAZIONE della selezione a ogni nuovo stato del server (non azzeramento).
   // Le carte che restano in mano conservano la selezione; quelle uscite
@@ -105,6 +112,73 @@ export default function Page() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  /* ── Igiene sessione: beacon di uscita (§6.2) ─────────────────────────────
+   * Alla chiusura/abbandono della pagina invia il token al beacon `/session/leave`
+   * con `navigator.sendBeacon` (token nel corpo text/plain: nessun header, nessuna
+   * risposta letta). `pagehide` è il segnale principale; `visibilitychange→hidden`
+   * è la rete di sicurezza su iOS Safari (dove `beforeunload` è inaffidabile). MAI
+   * `fetch` in `beforeunload`: verrebbe troncata. Il server tratta la chiusura con
+   * la stessa grazia della riconnessione, quindi un F5 non distrugge la sessione. */
+  useEffect(() => {
+    const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+    const leave = () => {
+      const token = getAuthToken();
+      if (!token) return;
+      try {
+        navigator.sendBeacon(`${API}/session/leave`, token);
+      } catch {
+        /* best-effort: il TTL server-side resta la garanzia */
+      }
+    };
+    // Al ritorno in primo piano: un ping autenticato best-effort a /auth/me. Rivalidare
+    // la sessione ANNULLA lato server una chiusura morbida eventualmente pianificata
+    // quando la scheda era andata in background (§6.3 resume), così un semplice cambio
+    // scheda non provoca un logout indesiderato. La chiusura reale avviene solo se non
+    // si torna entro la grazia.
+    const resume = () => {
+      const token = getAuthToken();
+      if (!token) return;
+      try {
+        void fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+      } catch {
+        /* best-effort */
+      }
+    };
+    const onPageHide = () => leave();
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") leave();
+      else resume();
+    };
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
+
+  /* ── Ritorno alla lobby: azzera lo stato locale del tavolo (§5.4) ──────────
+   * Quando non si è più seduti (annullamento, chiusura, uscita) le selezioni locali
+   * non devono riemergere alla partita successiva. */
+  useEffect(() => {
+    if (!g.joined) {
+      setSelectedCards((prev) => (prev.length === 0 ? prev : []));
+      setSelectedMeldId(null);
+    }
+  }, [g.joined]);
+
+  /* ── Annullamento: il box del codice torna vuoto ──────────────────────────*/
+  useEffect(() => {
+    if (g.abortedNotice) setRoomCode("");
+  }, [g.abortedNotice]);
+
+  /* ── Race sull'elenco (§4.3): un join fallito ricarica subito l'elenco ─────
+   * Se il tavolo si è riempito tra rendering e click, il server rifiuta; qui si
+   * forza un reload immediato così la lista riflette lo stato reale. */
+  useEffect(() => {
+    if (g.errorMessage) setOpenTablesReload((n) => n + 1);
+  }, [g.errorMessage]);
 
   /* ── Ingresso diretto al tavolo (ospite con codice) ─────────────────────
    * Quando AuthPanel deposita un codice tavolo dopo un accesso Ospite riuscito,
@@ -181,6 +255,21 @@ export default function Page() {
           </button>
         </div>
 
+        {/* Avviso NON bloccante di partita annullata (§5.4): tono neutro, scartabile. */}
+        {g.abortedNotice && (
+          <div className="banner" role="status" aria-live="polite">
+            <span className="banner-body">
+              <span className="banner-title">Partita annullata</span>
+              <span className="banner-sub">
+                La partita è stata annullata da <strong>{g.abortedNotice.byName}</strong>.
+              </span>
+            </span>
+            <button type="button" className="btn-ghost" onClick={g.dismissAbortNotice}>
+              Ho capito
+            </button>
+          </div>
+        )}
+
         <label htmlFor="room">Codice tavolo</label>
         <input
           id="room"
@@ -241,6 +330,23 @@ export default function Page() {
             <span>{g.errorMessage}</span>
           </p>
         )}
+
+        {/* Nota di trasparenza (§4.2): il codice tavolo non è più un segreto condiviso. */}
+        <p className="field-hint">
+          Ogni tavolo aperto è visibile a tutti finché non è al completo.
+        </p>
+
+        {/* Elenco tavoli aperti: click su "Siediti" = STESSO percorso del join manuale. */}
+        <OpenTablesList
+          reloadKey={openTablesReload}
+          disabled={connecting}
+          onSit={(code) => {
+            g.dismissJoinRejected();
+            g.dismissAbortNotice();
+            setRoomCode(code);
+            g.join(code, auth.user?.displayName ?? "");
+          }}
+        />
       </div>
     );
   }
@@ -301,6 +407,22 @@ export default function Page() {
       <GameEndedOverlay info={g.gameEnded} players={g.players} yourSeat={g.yourSeat} config={g.config} />
       <RoomClosedOverlay info={g.roomClosed} onLeave={() => window.location.reload()} />
 
+      {/* Conferma modale dell'annullamento (§5.1): riusa il markup delle modali
+          esistenti (focus trap, Esc/sfondo = annulla). Solo la conferma invia game_abort. */}
+      {confirmingAbort && (
+        <ConfirmDialog
+          title="Annullare la partita?"
+          body="La partita verrà chiusa per entrambi i giocatori e non conterà nelle statistiche."
+          confirmLabel="Annulla partita"
+          cancelLabel="Continua a giocare"
+          onConfirm={() => {
+            setConfirmingAbort(false);
+            g.abort();
+          }}
+          onCancel={() => setConfirmingAbort(false)}
+        />
+      )}
+
       {/* Avversario offline: rientro in corso entro la finestra di grazia; nel
           frattempo è possibile terminare il tavolo (annulla la partita). */}
       {!opponentConnected && (
@@ -326,6 +448,18 @@ export default function Page() {
           </span>
           {isMyTurn && turnEndsAt !== null && <Countdown turnEndsAt={turnEndsAt} />}
           <OpponentStatus name={opponentName} handCount={s.opponentHandCount} connected={opponentConnected} />
+          {/* Annulla partita (§5.1): azione discreta nell'area comandi in alto, MAI
+              accanto a presa/scarto (che vivono nella barra in basso). Sempre
+              disponibile durante la partita. Apre una conferma modale. */}
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{ marginLeft: "auto" }}
+            onClick={() => setConfirmingAbort(true)}
+            aria-haspopup="dialog"
+          >
+            Annulla partita
+          </button>
         </div>
         <div className="scoreboard">
           <div className="chip you">

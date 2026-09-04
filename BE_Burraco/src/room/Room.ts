@@ -4,6 +4,7 @@ import type {
   ClientMessage,
   ConnectionStatus,
   GameConfig,
+  OpenRoomInfo,
   PlayerPublic,
   Seat,
   ServerMessage,
@@ -11,6 +12,7 @@ import type {
 import { GameEngine, type GameEffect, type MoveResult } from "../engine/game.js";
 import { redactFor } from "./redact.js";
 import { persistence } from "../db/persistence.js";
+import { RECONNECT_GRACE_DEFAULT_MS } from "../config.js";
 
 /**
  * Una Room è una partita 1v1. Possiede il GameEngine autoritativo (stato in
@@ -70,9 +72,17 @@ export class Room {
   readonly code: string;
   readonly config: GameConfig;
   readonly matchId: string;
+  /** Epoch ms in cui il tavolo è stato aperto: base di `waitingSince` in /rooms/open. */
+  readonly openedAt: number;
 
   private players: PlayerSlot[] = [];
   private engine: GameEngine | null = null;
+  /**
+   * true una volta avviata la partita (createMatch persistito). Distingue i
+   * terminali che vanno scritti su DB (abbandono/annullamento/completamento di una
+   * partita realmente iniziata) dai teardown pre-partita (nessuna riga match).
+   */
+  private matchStarted = false;
   private handId: string | null = null;
   private eventSeq = 0;
   /** Timer di enforcement del timeout turno (SEC-05). Uno per volta. */
@@ -90,6 +100,7 @@ export class Room {
     this.code = code;
     this.config = config;
     this.matchId = randomUUID();
+    this.openedAt = Date.now();
   }
 
   isFull(): boolean {
@@ -98,6 +109,32 @@ export class Room {
 
   hasEngine(): boolean {
     return this.engine !== null;
+  }
+
+  /**
+   * ELENCO TAVOLI APERTI (/rooms/open). Ritorna la sintesi pubblica del tavolo se e
+   * solo se è "aperto": non smaltito, partita NON iniziata (`engine === null`), con
+   * ESATTAMENTE un posto occupato da un giocatore VIVO (posto libero disponibile).
+   * Tavoli con partita in corso, pieni, conclusi, annullati o con l'unico occupante
+   * disconnesso NON compaiono. Espone SOLO il displayName di chi attende (nessun id
+   * utente/email, nessuna distinzione ospite-vs-registrato). Altrimenti `null`.
+   */
+  openInfo(): OpenRoomInfo | null {
+    if (this.disposed) return null;
+    if (this.engine !== null) return null; // partita iniziata
+    // Esattamente UN posto, occupato da un giocatore VIVO: c'è un posto libero e chi
+    // attende è online. Con 0 posti (in via di GC) o 2 (nessun posto libero, es. un
+    // secondo posto disconnesso pre-partita) il tavolo NON è pubblicizzabile.
+    if (this.players.length !== 1) return null;
+    const host = this.players[0]!;
+    if (!this.isSeatLive(host)) return null;
+    return {
+      code: this.code,
+      hostName: host.displayName,
+      seats: 1,
+      maxSeats: 2,
+      waitingSince: new Date(this.openedAt).toISOString(),
+    };
   }
 
   /** Trova lo slot associato a un socket (o undefined). */
@@ -382,6 +419,7 @@ export class Room {
 
     // Persistenza best-effort (checkpoint/audit): match, players, hand 1.
     this.handId = randomUUID();
+    this.matchStarted = true;
     void persistence.createMatch(this.matchId, this.config);
     void persistence.addPlayers(
       this.matchId,
@@ -422,6 +460,14 @@ export class Room {
     // l'avversario connesso e attivo (in quel caso viene rifiutato in modo leggibile).
     if (msg.type === "reset_room") {
       this.handleReset(slot);
+      return;
+    }
+
+    // ANNULLAMENTO unilaterale della partita in corso (§5). Autorizzazione: solo chi
+    // è SEDUTO a questo tavolo (slot risolto dal socket) può annullare — l'identità
+    // NON arriva mai dal payload. Idempotente e senza vincoli di stato del turno.
+    if (msg.type === "game_abort") {
+      this.abortGame(slot);
       return;
     }
 
@@ -504,7 +550,9 @@ export class Room {
           winnerSeat: eff.winnerSeat,
           finalScores: eff.finalScores,
         });
-        void persistence.endMatch(this.matchId, eff.winnerSeat);
+        // §7: fine LEGITTIMA (obiettivo raggiunto) → UNICO percorso 'completed',
+        // l'unico conteggiato nelle statistiche.
+        void persistence.completeMatch(this.matchId, eff.winnerSeat);
         // SEC-05: partita conclusa → GC della room (rimozione dalla mappa RAM).
         this.dispose();
       } else if (eff.kind === "pozzetto_taken") {
@@ -567,8 +615,24 @@ export class Room {
    */
   private closeRoom(reason: "interrupted" | "abandoned"): void {
     if (this.disposed) return;
+    // §6.3: l'ABBANDONO (avversario non rientrato entro la grazia) di una partita
+    // REALMENTE iniziata va marcato 'abandoned' su Neon. Non tocca i contatori
+    // (status ≠ 'completed'). L'"interrupted" (teardown pre-partita / avversario già
+    // offline via reset) resta un teardown senza scrittura di stato terminale.
+    if (reason === "abandoned" && this.matchStarted) {
+      void persistence.abandonMatch(this.matchId);
+    }
+    this.logLifecycle(reason);
     this.broadcast({ type: "room_closed", reason });
     this.dispose();
+  }
+
+  /**
+   * §8: log di ciclo di vita del tavolo con SOLO codice tavolo, esito e timestamp.
+   * Nessun dato personale (mai displayName/token/id).
+   */
+  private logLifecycle(event: "interrupted" | "abandoned" | "aborted"): void {
+    console.log(`[room] ${event} room=${this.code} at=${new Date().toISOString()}`);
   }
 
   /**
@@ -588,12 +652,64 @@ export class Room {
     this.closeRoom("interrupted");
   }
 
+  /**
+   * ANNULLAMENTO UNILATERALE della partita (§5.3). In ordine e in modo idempotente:
+   *  1. marca la partita 'aborted' su Neon con timestamp e l'identità dell'autore
+   *     (la riga storica NON viene cancellata: audit + verifica statistiche);
+   *  2. purga i checkpoint (stato transitorio) e rimuove lo stato dalla RAM liberando
+   *     il codice tavolo (dispose → GC nel RoomManager): il codice torna subito
+   *     riutilizzabile;
+   *  3. NON tocca alcun contatore (status ≠ 'completed');
+   *  4. notifica ENTRAMBI i client con il nome di chi ha annullato.
+   * Doppio abort o abort su tavolo già chiuso → esito neutro (guardia `disposed`),
+   * mai un 500. Senza partita realmente iniziata è un no-op (i teardown pre-partita
+   * passano da `reset_room`).
+   */
+  private abortGame(slot: PlayerSlot): void {
+    if (this.disposed) return;
+    if (!this.engine || !this.matchStarted) return;
+    void persistence.abortMatch(this.matchId, slot.userId);
+    void persistence.deleteCheckpoints(this.matchId);
+    this.logLifecycle("aborted");
+    this.broadcast({ type: "game_aborted", byName: slot.displayName });
+    this.dispose();
+  }
+
   private reconnectGraceMs(): number {
-    return Number(process.env.RECONNECT_GRACE_MS ?? 180_000);
+    // §6.3: soglia unica e documentata in config (`RECONNECT_GRACE_DEFAULT_MS`, 45s).
+    // Rilettura dinamica dell'env così i test possono iniettare finestre brevi/lunghe.
+    return Number(process.env.RECONNECT_GRACE_MS ?? RECONNECT_GRACE_DEFAULT_MS);
   }
 
   isEmpty(): boolean {
     return this.players.every((p) => p.ws === null);
+  }
+
+  /** true se una finestra di grazia è ancora pendente su qualche posto. */
+  private hasPendingGrace(): boolean {
+    return this.players.some((p) => p.graceTimer !== null);
+  }
+
+  /**
+   * SWEEP server-side (§6.2.3) — rete di sicurezza indipendente dai timer di grazia:
+   * smaltisce il tavolo se è rimasto SENZA giocatori vivi e senza alcuna grazia
+   * pendente (nessun rientro atteso). NON tocca tavoli con un disconnesso ancora
+   * entro la grazia (un refresh in corso) né tavoli sani. Ritorna true se smaltito.
+   * È la garanzia che regge crash del browser e sleep del processo: il TTL/lo sweep
+   * ripuliscono anche se nessun beacon arriva mai.
+   */
+  sweepIfAbandoned(): boolean {
+    if (this.disposed) return false;
+    if (this.players.length === 0) {
+      this.dispose();
+      return true;
+    }
+    const anyLive = this.players.some((p) => this.isSeatLive(p));
+    if (!anyLive && !this.hasPendingGrace()) {
+      this.dispose();
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -723,7 +839,9 @@ export class Room {
       e.turnEndsAt = null;
       const finalScores: [number, number] = [e.cumulative[0], e.cumulative[1]];
       this.broadcast({ type: "game_ended", winnerSeat, finalScores, reason: "forfeit" });
-      void persistence.endMatch(this.matchId, winnerSeat);
+      // Decisione Gate 1: il forfeit da stallo dichiara un vincitore reale → conta
+      // come 'completed' (preserva il comportamento pre-esistente).
+      void persistence.completeMatch(this.matchId, winnerSeat);
     }
     this.dispose();
   }
