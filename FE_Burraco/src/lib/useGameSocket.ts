@@ -62,6 +62,15 @@ export interface RoomClosedInfo {
 }
 
 /**
+ * ANNULLAMENTO UNILATERALE della partita: `byName` è chi ha annullato. Alla
+ * ricezione il client torna alla lobby azzerando lo stato locale del tavolo e mostra
+ * un avviso NON bloccante (distinto dagli overlay terminali di `roomClosed`).
+ */
+export interface AbortedInfo {
+  byName: string;
+}
+
+/**
  * Rifiuto di join per motivi di AUTENTICazione (SEC-08): "AUTH_REQUIRED" =
  * manca l'authToken; "AUTH_INVALID" = token scaduto/revocato. Il client interrompe
  * i tentativi di riconnessione e riporta alla schermata d'ingresso/login.
@@ -85,6 +94,8 @@ export interface GameSocketApi {
   gameEnded: GameEndedInfo | null;
   /** tavolo chiuso senza vincitore (reset/abbandono); terminale. */
   roomClosed: RoomClosedInfo | null;
+  /** partita annullata (unilaterale): avviso non bloccante mostrato in lobby. */
+  abortedNotice: AbortedInfo | null;
   /** join rifiutato per autenticazione (SEC-08); riporta alla schermata d'ingresso. */
   joinRejected: JoinRejectedInfo | null;
   /** true tra l'invio di una mossa e la risposta del server (globale). */
@@ -102,6 +113,10 @@ export interface GameSocketApi {
   dismissJoinRejected: () => void;
   /** Smonta il tavolo (invia reset_room): valido in attesa o con avversario offline. */
   resetRoom: () => void;
+  /** Annulla la partita in corso (invia game_abort): il server chiude per entrambi. */
+  abort: () => void;
+  /** Scarta l'avviso di annullamento (dopo il rientro in lobby). */
+  dismissAbortNotice: () => void;
   drawDeck: () => void;
   drawDiscard: () => void;
   meldNew: (cards: string[]) => void;
@@ -149,6 +164,7 @@ export function useGameSocket(): GameSocketApi {
   const [handEnded, setHandEnded] = useState<HandEndedInfo | null>(null);
   const [gameEnded, setGameEnded] = useState<GameEndedInfo | null>(null);
   const [roomClosed, setRoomClosed] = useState<RoomClosedInfo | null>(null);
+  const [abortedNotice, setAbortedNotice] = useState<AbortedInfo | null>(null);
   const [joinRejected, setJoinRejected] = useState<JoinRejectedInfo | null>(null);
   const [pending, setPending] = useState(false);
   const [pendingCardIds, setPendingCardIds] = useState<string[]>([]);
@@ -274,6 +290,27 @@ export function useGameSocket(): GameSocketApi {
           if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
           clearInFlight();
           break;
+        case "game_aborted":
+          // ANNULLAMENTO unilaterale: torna alla lobby AZZERANDO tutto lo stato locale
+          // del tavolo (§5.4), senza tentare riconnessioni. L'avviso non bloccante
+          // resta visibile in lobby finché non viene scartato.
+          setAbortedNotice({ byName: msg.byName });
+          wantConnectedRef.current = false;
+          if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+          wsRef.current?.close();
+          setJoined(false);
+          setResumed(false);
+          setYourSeat(null);
+          yourSeatRef.current = null;
+          setPlayers([]);
+          setConfig(null);
+          setState(null);
+          setHandEnded(null);
+          setGameEnded(null);
+          setRoomClosed(null);
+          setRejection(null);
+          clearInFlight();
+          break;
         case "join_rejected":
           // SEC-08: il server ha negato l'ingresso per autenticazione. Interrompe
           // la riconnessione automatica e segnala all'UI di riportare al login.
@@ -367,6 +404,8 @@ export function useGameSocket(): GameSocketApi {
     (roomCode: string, displayName: string) => {
       const room = roomCode.trim().toUpperCase();
       if (!room) return;
+      // Nuovo ingresso: scarta un eventuale avviso di annullamento precedente.
+      setAbortedNotice(null);
       roomRef.current = room;
       nameRef.current = displayName.trim() || "Giocatore";
       wantConnectedRef.current = true;
@@ -403,6 +442,7 @@ export function useGameSocket(): GameSocketApi {
     handEnded,
     gameEnded,
     roomClosed,
+    abortedNotice,
     joinRejected,
     pending,
     pendingCardIds,
@@ -412,6 +452,9 @@ export function useGameSocket(): GameSocketApi {
     join,
     dismissJoinRejected: () => setJoinRejected(null),
     resetRoom: () => sendRaw({ type: "reset_room" }),
+    // Il server valida che il mittente sia SEDUTO al tavolo e chiude per entrambi.
+    abort: () => sendRaw({ type: "game_abort" }),
+    dismissAbortNotice: () => setAbortedNotice(null),
     drawDeck: () => sendMove({ type: "draw", source: "deck" }),
     drawDiscard: () => sendMove({ type: "draw", source: "discard" }),
     meldNew: (cards) => sendMove({ type: "meld_new", cards }, cards),

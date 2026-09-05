@@ -26,7 +26,7 @@ function seedMatch(
     endedAt?: Date;
   },
 ): void {
-  store.putMatch({ id: opts.id, status: "ended", winnerSeat: opts.winnerSeat, endedAt: opts.endedAt });
+  store.putMatch({ id: opts.id, status: "completed", winnerSeat: opts.winnerSeat, endedAt: opts.endedAt });
   store.putPlayer({ matchId: opts.id, seat: 0, displayName: opts.seat0.name, userId: opts.seat0.userId });
   store.putPlayer({ matchId: opts.id, seat: 1, displayName: opts.seat1.name, userId: opts.seat1.userId });
   for (const [d0, d1] of opts.scores) {

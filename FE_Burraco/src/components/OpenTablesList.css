@@ -1,0 +1,129 @@
+/*
+ * Elenco tavoli aperti — CSS SCOPATO sotto `.open-tables`. Usa ESCLUSIVAMENTE i
+ * token del design system esistente (spaziature, superfici, bordi, ottone, focus):
+ * nessun colore, font o spaziatura estranei. Nessuna deriva stilistica.
+ */
+
+.open-tables {
+  margin-top: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.open-tables-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-strong);
+}
+
+.open-tables-msg {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+
+.open-tables-retry {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--brass-400);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.open-tables-retry:hover {
+  color: var(--brass-300);
+}
+.open-tables-retry:focus-visible {
+  outline: var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.open-tables-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.open-tables-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-card);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.open-tables-row:hover:not(:disabled) {
+  border-color: var(--brass-500);
+}
+.open-tables-row:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.open-tables-row:focus-visible {
+  outline: var(--focus);
+  outline-offset: 2px;
+}
+.open-tables-row:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ot-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ot-code {
+  font-family: var(--font-serif);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-strong);
+}
+.ot-host {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ot-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-shrink: 0;
+}
+.ot-wait {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+.ot-sit {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--brass-400);
+  border: 1px solid var(--brass-500);
+  border-radius: var(--r-pill);
+  padding: 2px var(--sp-3);
+}
+.open-tables-row:hover:not(:disabled) .ot-sit {
+  color: var(--brass-300);
+}

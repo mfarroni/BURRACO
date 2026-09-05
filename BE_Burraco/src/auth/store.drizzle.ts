@@ -19,6 +19,7 @@ function toUser(row: typeof schema.users.$inferSelect): StoredUser {
     isGuest: row.isGuest,
     createdAt: row.createdAt,
     lastSeenAt: row.lastSeenAt,
+    expiredAt: row.expiredAt,
   };
 }
 
@@ -150,16 +151,22 @@ export class DrizzleAuthStore implements AuthStore {
   }
 
   async pruneInactiveGuests(cutoff: Date): Promise<number> {
-    // Elimina gli OSPITI inattivi (last_seen_at o, se null, created_at < cutoff) che
-    // NON hanno più sessioni e NON sono referenziati da match_players (vincolo FK).
+    // Elimina gli OSPITI SCADUTI (expired_at valorizzato) o inattivi (last_seen_at o,
+    // se null, created_at < cutoff) che NON hanno più sessioni e NON sono referenziati
+    // da alcuna partita — né come partecipante (match_players) né come autore di un
+    // annullamento (matches.aborted_by) — così nessun vincolo FK può rompersi (§6.4).
     const rows = await this.db
       .delete(schema.users)
       .where(
         and(
           eq(schema.users.isGuest, true),
-          lte(sql`coalesce(${schema.users.lastSeenAt}, ${schema.users.createdAt})`, cutoff),
+          or(
+            isNotNull(schema.users.expiredAt),
+            lte(sql`coalesce(${schema.users.lastSeenAt}, ${schema.users.createdAt})`, cutoff),
+          ),
           sql`not exists (select 1 from ${schema.sessions} s where s.user_id = ${schema.users.id})`,
           sql`not exists (select 1 from ${schema.matchPlayers} mp where mp.user_id = ${schema.users.id})`,
+          sql`not exists (select 1 from ${schema.matches} m where m.aborted_by = ${schema.users.id})`,
         ),
       )
       .returning({ id: schema.users.id });
@@ -171,5 +178,20 @@ export class DrizzleAuthStore implements AuthStore {
       .update(schema.users)
       .set({ lastSeenAt: new Date() })
       .where(eq(schema.users.id, userId));
+  }
+
+  async markGuestExpired(userId: string, now: Date): Promise<void> {
+    // Idempotente e ristretto agli OSPITI non ancora scaduti: sui registrati e sugli
+    // ospiti già marcati non modifica nulla (il WHERE non seleziona la riga).
+    await this.db
+      .update(schema.users)
+      .set({ expiredAt: now })
+      .where(
+        and(
+          eq(schema.users.id, userId),
+          eq(schema.users.isGuest, true),
+          isNull(schema.users.expiredAt),
+        ),
+      );
   }
 }

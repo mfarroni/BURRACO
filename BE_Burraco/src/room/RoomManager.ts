@@ -1,5 +1,5 @@
 import type { WebSocket } from "ws";
-import type { ClientMessage, GameConfig } from "../contract/types.js";
+import type { ClientMessage, GameConfig, OpenRoomInfo } from "../contract/types.js";
 import { defaultGameConfig } from "../config.js";
 import { Room } from "./Room.js";
 import type { AuthService } from "../auth/service.js";
@@ -49,6 +49,36 @@ export class RoomManager {
   /** Numero di room attive in memoria (per test/diagnostica GC). */
   activeRoomCount(): number {
     return this.rooms.size;
+  }
+
+  /**
+   * ELENCO TAVOLI APERTI (§4.1) per `GET /rooms/open`. Ritorna SOLO i tavoli in
+   * attesa di un secondo giocatore (un posto libero, partita non iniziata), con
+   * l'attesa più lunga in cima (waitingSince ISO ascendente = ordinamento
+   * lessicografico) e un tetto massimo di elementi. Read-only: nessuna mutazione.
+   */
+  listOpenRooms(limit = 50): OpenRoomInfo[] {
+    const open: OpenRoomInfo[] = [];
+    for (const room of this.rooms.values()) {
+      const info = room.openInfo();
+      if (info) open.push(info);
+    }
+    open.sort((a, b) => a.waitingSince.localeCompare(b.waitingSince));
+    return open.slice(0, Math.max(0, limit));
+  }
+
+  /**
+   * SWEEP periodico (§6.2.3): smaltisce i tavoli rimasti senza giocatori vivi e
+   * senza grazia pendente. Delega a `Room.sweepIfAbandoned` (che non tocca i refresh
+   * in corso). Itera su uno snapshot perché `dispose` rimuove dalla mappa via hook.
+   * Ritorna il numero di tavoli smaltiti.
+   */
+  sweepEmptyRooms(): number {
+    let swept = 0;
+    for (const room of [...this.rooms.values()]) {
+      if (room.sweepIfAbandoned()) swept += 1;
+    }
+    return swept;
   }
 
   /**

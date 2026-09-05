@@ -26,6 +26,13 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
  */
 const AUTH_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
+/**
+ * §6.2.3: intervallo dello sweep dei tavoli rimasti senza giocatori. Rete di
+ * sicurezza indipendente dai timer di grazia per-room (che restano il percorso
+ * principale): 60s è pronto senza costo apprezzabile su una mappa in-RAM piccola.
+ */
+const ROOM_SWEEP_INTERVAL_MS = 60 * 1000;
+
 /** SEC-02: tetto massimo di un singolo frame WS (payload oversize → 1009). */
 const MAX_PAYLOAD_BYTES = 16 * 1024;
 
@@ -94,9 +101,12 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
   // StatsStore: Drizzle/Neon con DATABASE_URL, altrimenti in-memory (macro-ciclo 3).
   const statsStore = opts.statsStore ?? createStatsStore();
 
-  // App Express: /health + /auth/* + /users/me/* (stats/storico) con CORS
-  // allowlist, rate-limit e validazione zod. Vive sullo STESSO http.Server del WS.
-  const app = createHttpApp(authService, statsStore);
+  // App Express: /health + /rooms/open + /session/leave + /auth/* + /users/me/*
+  // con CORS allowlist, rate-limit e validazione zod. Vive sullo STESSO http.Server
+  // del WS. Il provider dei tavoli aperti è il RoomManager (read-only).
+  const app = createHttpApp(authService, statsStore, {
+    openRooms: () => manager.listOpenRooms(),
+  });
   const httpServer = http.createServer(app);
 
   // SEC-02: `maxPayload` fa sì che `ws` rifiuti (1009) e non bufferizzi né
@@ -183,11 +193,19 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
   }, AUTH_SWEEP_INTERVAL_MS);
   authSweep.unref?.();
 
+  // §6.2.3: sweep periodico dei tavoli senza giocatori (rete di sicurezza).
+  const roomSweep = setInterval(() => {
+    const swept = manager.sweepEmptyRooms();
+    if (swept > 0) console.log(`[room] sweep: ${swept} tavolo/i rimossi`);
+  }, ROOM_SWEEP_INTERVAL_MS);
+  roomSweep.unref?.();
+
   // A4: ferma gli intervalli sia alla chiusura del WSS sia dell'http server, così
   // lo shutdown termina pulito senza handle attivi che impediscano l'uscita.
   const stopTimers = () => {
     clearInterval(heartbeat);
     clearInterval(authSweep);
+    clearInterval(roomSweep);
   };
   wss.on("close", stopTimers);
   httpServer.on("close", stopTimers);

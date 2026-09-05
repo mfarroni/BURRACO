@@ -47,6 +47,10 @@ const joinRoom = z.object({
 // LIFECYCLE: smontaggio esplicito del tavolo. Nessun payload oltre al tipo.
 const resetRoom = z.object({ type: z.literal("reset_room") });
 
+// ANNULLAMENTO UNILATERALE della partita in corso. Nessun payload: room e seat
+// sono dedotti dal socket lato server (mai dal client → nessuno spoof).
+const gameAbort = z.object({ type: z.literal("game_abort") });
+
 const draw = z.object({
   type: z.literal("draw"),
   source: z.enum(["deck", "discard"]),
@@ -96,6 +100,7 @@ const clientMessageSchema = z.discriminatedUnion("type", [
   discard,
   undoLast,
   resetRoom,
+  gameAbort,
   heartbeat,
 ]);
 

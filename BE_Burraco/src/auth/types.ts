@@ -20,6 +20,12 @@ export interface StoredUser {
   isGuest: boolean;
   createdAt: Date;
   lastSeenAt: Date | null;
+  /**
+   * Igiene sessioni (§6.4): marca temporale di SCADENZA del record OSPITE all'uscita.
+   * `null` finché l'ospite è attivo e SEMPRE per gli account registrati. Non implica
+   * cancellazione: quella avviene nello sweep solo se l'ospite non è più referenziato.
+   */
+  expiredAt: Date | null;
 }
 
 /** Record di sessione come vive nello store (contiene SOLO l'hash del token). */
@@ -106,13 +112,24 @@ export interface AuthStore {
   pruneSessions(now: Date, revokedGraceMs: number): Promise<number>;
 
   /**
-   * SEC-A3b (pruning): elimina gli utenti OSPITI inattivi da prima di `cutoff`
-   * (per `last_seen_at`, o `created_at` se mai visti) che NON hanno più sessioni
-   * attive e non sono referenziati da partite. Ritorna il numero di righe
-   * eliminate. Gli account registrati non vengono mai eliminati.
+   * SEC-A3b + §6.4 (pruning): elimina fisicamente gli utenti OSPITI che sono
+   * SCADUTI (`expired_at` valorizzato dall'uscita) OPPURE inattivi da prima di
+   * `cutoff` (per `last_seen_at`, o `created_at` se mai visti), a condizione che NON
+   * abbiano più sessioni e NON siano referenziati da alcuna partita (né come
+   * partecipante né come autore di un annullamento). Gli ospiti ancora referenziati
+   * restano, marcati come scaduti. Gli account registrati non vengono mai eliminati.
+   * Ritorna il numero di righe eliminate.
    */
   pruneInactiveGuests(cutoff: Date): Promise<number>;
 
   /** Best-effort: aggiorna `last_seen_at`. Un fallimento non è mai fatale. */
   touchLastSeen(userId: string): Promise<void>;
+
+  /**
+   * §6.4: marca un OSPITE come scaduto (`expired_at = now`) all'uscita. Idempotente
+   * (non sovrascrive una scadenza già impostata) e ristretto agli ospiti: sui
+   * registrati è un no-op (l'account non viene mai toccato). NON cancella nulla: la
+   * cancellazione fisica è demandata allo sweep, e solo se non più referenziato.
+   */
+  markGuestExpired(userId: string, now: Date): Promise<void>;
 }

@@ -6,6 +6,19 @@ import { isOriginAllowed } from "../net/originPolicy.js";
 import { rateLimit } from "./rateLimit.js";
 import { env } from "../config.js";
 import type { StatsStore } from "../stats/types.js";
+import type { OpenRoomInfo } from "../contract/types.js";
+
+/**
+ * Dipendenze opzionali iniettate nell'app HTTP oltre ad auth/stats.
+ */
+export interface HttpAppDeps {
+  /**
+   * Provider READ-ONLY dei tavoli aperti per `GET /rooms/open` (§4.1). Iniettato da
+   * `ws/server.ts` come `RoomManager.listOpenRooms`. Se assente (test solo-auth),
+   * la rotta risponde con elenco vuoto.
+   */
+  openRooms?: () => OpenRoomInfo[];
+}
 
 /**
  * APP HTTP del backend auth (Express) montata sullo STESSO http.Server del WS
@@ -90,7 +103,7 @@ function handler(fn: (req: Request, res: Response) => Promise<void>) {
 
 /* ─────────────────────────────── app ─────────────────────────────────────── */
 
-export function createHttpApp(auth: AuthService, stats?: StatsStore): Express {
+export function createHttpApp(auth: AuthService, stats?: StatsStore, deps?: HttpAppDeps): Express {
   const app = express();
 
   // Dietro il proxy di Render: fidati del primo hop per un req.ip coerente
@@ -148,6 +161,55 @@ export function createHttpApp(auth: AuthService, stats?: StatsStore): Express {
   const registerLimiter = rateLimit({ name: "register", windowMs: 15 * 60 * 1000, max: 50 });
   const guestLimiter = rateLimit({ name: "guest", windowMs: 15 * 60 * 1000, max: 50 });
   const loginLimiter = rateLimit({ name: "login", windowMs: 15 * 60 * 1000, max: 20 });
+  // Elenco tavoli: stesso meccanismo/finestra dei limiter auth, dimensionato per un
+  // polling ogni 5s per client (900s/5s = 180 richieste/finestra) con margine per
+  // re-poll da refocus/seconda scheda → max 300 (≈1 poll/3s sostenuto).
+  const roomsLimiter = rateLimit({ name: "rooms", windowMs: 15 * 60 * 1000, max: 300 });
+  // Beacon di uscita: budget ampio (una chiamata per chiusura pagina, al più due
+  // — pagehide + visibilitychange). È idempotente e innocuo; il TTL resta la garanzia.
+  const leaveLimiter = rateLimit({ name: "leave", windowMs: 15 * 60 * 1000, max: 600 });
+
+  /* ─────────────────────────── ELENCO TAVOLI APERTI (§4) ───────────────────────
+   * GET /rooms/open — PUBBLICO e READ-ONLY: elenca i tavoli in attesa di un secondo
+   * giocatore. Non crea, non modifica, non prenota nulla. Espone SOLO i campi del
+   * §4.1 (code, hostName, seats, maxSeats, waitingSince): nessuna email, nessun id
+   * utente, nessuna distinzione ospite-vs-registrato. Rate-limited per il polling.
+   */
+  app.get("/rooms/open", roomsLimiter, (_req: Request, res: Response) => {
+    const rooms = deps?.openRooms ? deps.openRooms() : [];
+    res.json({ rooms });
+  });
+
+  /* ─────────────────────────── BEACON DI USCITA (§6.2) ─────────────────────────
+   * POST /session/leave — chiusura sessione su chiusura/abbandono pagina via
+   * navigator.sendBeacon. sendBeacon NON può porre header personalizzati né leggere
+   * la risposta: il token viaggia nel CORPO come text/plain (nessun Authorization).
+   * La rotta:
+   *  - autentica col SOLO token del corpo (mai un id nel payload) → chiude
+   *    ESCLUSIVAMENTE la sessione di quel token: impossibile espellere un altro utente;
+   *  - è idempotente (può arrivare due volte o in ritardo su sessione già chiusa):
+   *    esito neutro, sempre 204 a corpo vuoto, anche in caso di errore interno;
+   *  - sui REGISTRATI rimuove solo la sessione; sugli OSPITI marca `expired_at` (§6.4).
+   * `express.text` cattura QUALSIASI content-type come stringa (il beacon può usare
+   * text/plain); il body-parser JSON globale non interferisce (salta i non-JSON).
+   */
+  app.post(
+    "/session/leave",
+    leaveLimiter,
+    express.text({ type: () => true, limit: "2kb" }),
+    async (req: Request, res: Response) => {
+      const token = typeof req.body === "string" ? req.body.trim() : "";
+      try {
+        const closed = await auth.leaveSession(token || undefined);
+        // §8: log della pulizia sessione, SENZA dati personali (né token né IP).
+        if (closed) console.log(`[session] leave at=${new Date().toISOString()}`);
+      } catch (err) {
+        // Mai un 500 verso il beacon: esito neutro. Nessun segreto nel log.
+        console.error("[session] leave fallito:", (err as Error).message);
+      }
+      res.status(204).end();
+    },
+  );
 
   app.post(
     "/auth/register",
