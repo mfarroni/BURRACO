@@ -148,6 +148,17 @@ export interface HandScoreDetail {
   ptsPenaltyHand: number; // carte rimaste in mano (negativo)
   ptsPozzetto: number; // -100 se pozzetto non preso, altrimenti 0
   totalDelta: number; // somma dei precedenti
+  /**
+   * Fatti di STILE per l'analisi di gioco (macro-ciclo storico). Additivi:
+   *  - `burrachiPuliti`/`burrachiSporchi`: conteggio dei burrachi PROPRI, separati
+   *    per `clean` (non ricavabili da `ptsBonus`, che li fonde col bonus chiusura);
+   *  - `pozzettoInDiretta`: true SOLO se il pozzetto è stato preso "in diretta"
+   *    (svuotando la mano PRIMA dello scarto). false se non preso o preso in differita.
+   * Il client si allinea a questi campi a mano (nessun package condiviso).
+   */
+  burrachiPuliti: number;
+  burrachiSporchi: number;
+  pozzettoInDiretta: boolean;
 }
 
 /* ───────────────────────── ELENCO TAVOLI APERTI (HTTP) ──────────────────────
@@ -179,26 +190,139 @@ export interface OpenRoomInfo {
  * client): nessun IDOR possibile.
  */
 
-/** Statistiche aggregate CORE di un utente (decisione C). */
+/** Periodo temporale su cui aggregare le statistiche (filtro su matches.ended_at). */
+export type StatsPeriod = "all" | "30d" | "season";
+
+/**
+ * Metrica del BLOCCO ANALISI ("come giochi"). Il valore è `null` quando il
+ * campione è sotto soglia (dati insufficienti): il BE non restituisce mai uno
+ * zero fuorviante. `sampleSize` è il denominatore effettivo, `threshold` la
+ * soglia minima. La UI mostra "dati insufficienti (sampleSize/threshold)".
+ */
+export interface StatMetric {
+  value: number | null;
+  sampleSize: number;
+  threshold: number;
+}
+
+/** Serie d'andamento (sparkline): punti medi per partita, cronologici. */
+export interface StatTrend {
+  /** Media dei `total_delta` per smazzata, una voce per partita, in ordine cronologico. */
+  points: number[];
+  sampleSize: number;
+  threshold: number;
+}
+
+/**
+ * Blocco analisi di STILE (macro-ciclo storico). Tutto derivato da hand_scores
+ * arricchito (+ hands) per il solo posto dell'utente, sulle partite completed
+ * nel periodo scelto. Le metriche sotto soglia hanno `value: null`.
+ */
+export interface StyleAnalysis {
+  /** Numero di smazzate giocate: base statistica dell'intero blocco. */
+  dealsPlayed: number;
+  /** Burrachi puliti medi per smazzata. */
+  burrachiPulitiPerDeal: StatMetric;
+  /** Burrachi sporchi medi per smazzata. */
+  burrachiSporchiPerDeal: StatMetric;
+  /** Rapporto puliti/sporchi (alto = gioco "pulito"; basso = chiude sporco in fretta). */
+  cleanDirtyRatio: StatMetric;
+  /** Quota di smazzate in cui ha preso il pozzetto. */
+  pozzettoRate: StatMetric;
+  /** Fra i pozzetti presi, quota di quelli "in diretta". */
+  pozzettoInDirettaShare: StatMetric;
+  /** Quota di smazzate chiuse dall'utente. */
+  closureRate: StatMetric;
+  /** Punti medi persi per carte rimaste in mano (numero ≤ 0). */
+  avgHandPenalty: StatMetric;
+  /** Punti medi per smazzata. */
+  avgPointsPerDeal: StatMetric;
+  /** Quante volte ha subito il malus del pozzetto (-100). Conteggio, nessuna soglia. */
+  malusPozzettoCount: number;
+  /** Andamento punti (ultime 20 partite). */
+  trend: StatTrend;
+}
+
+/** Statistiche aggregate di un utente (contatori base + blocco analisi). */
 export interface UserStats {
   matchesPlayed: number;
   matchesWon: number;
   matchesLost: number;
+  /** Partite abbandonate (status 'abandoned'): NON pesano su vinte/perse. */
+  matchesAbandoned: number;
   /** won/played in [0,1]; 0 quando played = 0. */
   winRate: number;
   /** Somma dei delta di punteggio delle mani per il posto dell'utente. */
   totalPoints: number;
+  /** Punteggio finale medio con cui chiude le partite; null se played = 0. */
+  avgFinalScore: number | null;
+  /** Blocco analisi di stile ("come giochi"). */
+  analysis: StyleAnalysis;
+  /** Eco del periodo su cui sono calcolate (per l'UI). */
+  periodo: StatsPeriod;
 }
 
 /** Sintesi di una partita conclusa per lo storico paginato (decisione E). */
 export interface MatchSummary {
   matchId: string;
-  /** Epoch millis di fine partita (best-effort: ultima mano conclusa). Può essere null. */
+  /** Epoch millis di fine partita (matches.ended_at). Può essere null. */
   endedAt: number | null;
   result: "won" | "lost";
   opponentName: string;
+  /** true se l'avversario era un ospite (per il suffisso "(ospite)" nella UI). */
+  opponentIsGuest: boolean;
   yourScore: number;
   opponentScore: number;
+  /** Numero di smazzate giocate nella partita. */
+  dealsCount: number;
+}
+
+/** Stato di una partita nello storico (vocabolario DB). */
+export type MatchStatus = "playing" | "completed" | "aborted" | "abandoned";
+
+/** Lato (utente/avversario) di una smazzata nel dettaglio partita. */
+export interface MatchDealSide {
+  /** Punti della smazzata (total_delta). */
+  puntiSmazzata: number;
+  /** Punti persi per carte rimaste in mano (pts_penalty_hand, ≤ 0). */
+  puntiCarteInMano: number;
+  burrachiPuliti: number;
+  burrachiSporchi: number;
+  /** true se ha preso il pozzetto (pts_pozzetto = 0). */
+  pozzettoPreso: boolean;
+  /** true se il pozzetto è stato preso in diretta. */
+  pozzettoInDiretta: boolean;
+  /** true se è stato lui a chiudere la smazzata. */
+  haChiuso: boolean;
+  /** true se ha subito il malus del pozzetto (pts_pozzetto = -100). */
+  malusPozzetto: boolean;
+}
+
+/** Una smazzata nel dettaglio partita, con i due lati. */
+export interface MatchDeal {
+  numeroSmazzata: number;
+  dealerSeat: Seat;
+  closerSeat: Seat | null;
+  you: MatchDealSide;
+  opponent: MatchDealSide;
+}
+
+/**
+ * Dettaglio di una partita, smazzata-per-smazzata. Restituito da
+ * `GET /users/me/matches/:id` SOLO a chi vi ha PARTECIPATO (altrimenti 404).
+ * Nessun campo interno (id utente altrui, token, checkpoint) è mai esposto.
+ */
+export interface MatchDetail {
+  matchId: string;
+  endedAt: number | null;
+  status: MatchStatus;
+  /** won | lost per le partite completed; null per aborted/abandoned/playing. */
+  result: "won" | "lost" | null;
+  opponent: { name: string; isGuest: boolean };
+  targetScore: number;
+  yourSeat: Seat;
+  finalScore: { you: number; opponent: number };
+  deals: MatchDeal[];
 }
 
 /* ─────────────────────────── EVENTI WEBSOCKET ─────────────────────────── */

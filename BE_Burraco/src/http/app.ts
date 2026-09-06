@@ -66,6 +66,16 @@ const matchesQuery = z.object({
   offset: z.coerce.number().int().min(0).max(100_000).default(0),
 });
 
+// Statistiche: periodo temporale su enum CHIUSO (nessun valore libero → nessun
+// errore SQL possibile). Assente/default → "all".
+const statsQuery = z.object({
+  periodo: z.enum(["all", "30d", "season"]).default("all"),
+});
+
+// Dettaglio partita: l'id di rotta deve essere un uuid ben formato (altrimenti 400,
+// prima di qualsiasi query). Impedisce input malformati verso il DB.
+const matchIdSchema = z.string().uuid();
+
 /* ─────────────────────────────── helper ──────────────────────────────────── */
 
 /** Mappa i codici d'errore stabili del servizio agli status HTTP. */
@@ -325,7 +335,13 @@ export function createHttpApp(auth: AuthService, stats?: StatsStore, deps?: Http
       handler(async (req, res) => {
         const principal = await requireRegistered(req, res);
         if (!principal) return;
-        const result = await stats.getStats(principal.userId);
+        const parsed = statsQuery.safeParse(req.query);
+        if (!parsed.success) {
+          // `periodo` fuori dall'enum chiuso → 400 (nessun errore SQL, nessun default silenzioso).
+          res.status(400).json({ error: "INVALID_QUERY", message: "Parametro periodo non valido." });
+          return;
+        }
+        const result = await stats.getStats(principal.userId, parsed.data.periodo);
         res.json(result);
       }),
     );
@@ -342,6 +358,33 @@ export function createHttpApp(auth: AuthService, stats?: StatsStore, deps?: Http
         }
         const items = await stats.getRecentMatches(principal.userId, parsed.data);
         res.json({ items, limit: parsed.data.limit, offset: parsed.data.offset });
+      }),
+    );
+
+    /* GET /users/me/matches/:id — dettaglio smazzata-per-smazzata.
+     *  - gate solo-registrati (ospite → 403), come le altre rotte /users/me/*;
+     *  - utente derivato SOLO dal token (nessun IDOR);
+     *  - `:id` deve essere un uuid ben formato → altrimenti 400 (prima di ogni query);
+     *  - autorizzazione per PARTECIPAZIONE: se l'utente non ha una riga match_players
+     *    in quella partita (o la partita non esiste) → 404, MAI 403. Un 403
+     *    confermerebbe l'esistenza di una partita altrui: l'esistenza non è
+     *    osservabile. Stesso 404 per uuid ben formato ma inesistente. */
+    app.get(
+      "/users/me/matches/:id",
+      handler(async (req, res) => {
+        const principal = await requireRegistered(req, res);
+        if (!principal) return;
+        const idParsed = matchIdSchema.safeParse(req.params.id);
+        if (!idParsed.success) {
+          res.status(400).json({ error: "INVALID_ID", message: "Identificativo partita non valido." });
+          return;
+        }
+        const detail = await stats.getMatchDetail(principal.userId, idParsed.data);
+        if (!detail) {
+          res.status(404).json({ error: "NOT_FOUND", message: "Partita non trovata." });
+          return;
+        }
+        res.json(detail);
       }),
     );
   }

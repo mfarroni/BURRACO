@@ -1,6 +1,6 @@
 "use client";
 
-import type { UserStats, MatchesPage } from "./contract";
+import type { UserStats, MatchesPage, MatchDetail, StatsPeriod } from "./contract";
 import { AuthClientError } from "./auth";
 import { getAuthToken } from "./sessionIdentity";
 
@@ -54,13 +54,27 @@ async function authedGet<T>(path: string): Promise<T> {
   return body as unknown as T;
 }
 
-/** Statistiche aggregate del principale (solo utenti registrati; ospite → 403). */
-export async function fetchStats(): Promise<UserStats> {
-  return authedGet<UserStats>("/users/me/stats");
+/**
+ * Statistiche aggregate del principale (solo utenti registrati; ospite → 403).
+ * `periodo` filtra temporalmente lato server (enum chiuso: all|30d|season).
+ */
+export async function fetchStats(periodo: StatsPeriod = "all"): Promise<UserStats> {
+  const qs = new URLSearchParams({ periodo });
+  return authedGet<UserStats>(`/users/me/stats?${qs.toString()}`);
 }
 
 /** Storico partite paginato del principale. */
 export async function fetchMatches(limit = 10, offset = 0): Promise<MatchesPage> {
   const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   return authedGet<MatchesPage>(`/users/me/matches?${qs.toString()}`);
+}
+
+/**
+ * Dettaglio smazzata-per-smazzata di una partita del principale. Il server
+ * autorizza per PARTECIPAZIONE: una partita non propria/inesistente → 404
+ * (AuthClientError con status 404). L'id è passato così com'è: nessun altro
+ * parametro identifica l'utente (derivato dal token lato server).
+ */
+export async function fetchMatchDetail(matchId: string): Promise<MatchDetail> {
+  return authedGet<MatchDetail>(`/users/me/matches/${encodeURIComponent(matchId)}`);
 }

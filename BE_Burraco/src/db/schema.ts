@@ -1,10 +1,12 @@
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -63,60 +65,98 @@ export const sessions = pgTable("sessions", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const matches = pgTable("matches", {
-  id: uuid("id").primaryKey(),
-  config: jsonb("config").notNull(),
-  targetScore: integer("target_score").notNull(),
-  // Vocabolario di stato (macro-ciclo lobby): "playing" | "completed" | "aborted" |
-  // "abandoned". SOLO "completed" (fine legittima per raggiungimento del punteggio
-  // pieno) aggiorna le statistiche; "aborted" (annullamento) e "abandoned"
-  // (disconnessione oltre la grazia) non toccano mai i contatori.
-  status: text("status").notNull(),
-  winnerSeat: integer("winner_seat"),
-  // Fine partita (best-effort): valorizzato alla conclusione/annullamento/abbandono.
-  endedAt: timestamp("ended_at", { withTimezone: true }),
-  // Identità dell'utente che ha ANNULLATO la partita (solo per status "aborted"),
-  // per audit/analisi future. Nullable e non-breaking; il record storico della
-  // partita non viene mai cancellato. FK a users con ON DELETE no action (nessun
-  // cascade): un ospite referenziato qui non è cancellabile fisicamente.
-  abortedBy: uuid("aborted_by").references(() => users.id),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const matches = pgTable(
+  "matches",
+  {
+    id: uuid("id").primaryKey(),
+    config: jsonb("config").notNull(),
+    targetScore: integer("target_score").notNull(),
+    // Vocabolario di stato (macro-ciclo lobby): "playing" | "completed" | "aborted" |
+    // "abandoned". SOLO "completed" (fine legittima per raggiungimento del punteggio
+    // pieno) aggiorna le statistiche; "aborted" (annullamento) e "abandoned"
+    // (disconnessione oltre la grazia) non toccano mai i contatori.
+    status: text("status").notNull(),
+    winnerSeat: integer("winner_seat"),
+    // Fine partita (best-effort): valorizzato alla conclusione/annullamento/abbandono.
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    // Identità dell'utente che ha ANNULLATO la partita (solo per status "aborted"),
+    // per audit/analisi future. Nullable e non-breaking; il record storico della
+    // partita non viene mai cancellato. FK a users con ON DELETE no action (nessun
+    // cascade): un ospite referenziato qui non è cancellabile fisicamente.
+    abortedBy: uuid("aborted_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    // Ordinamento dello storico per fine partita (rende l'indice efficace e
+    // semplifica getRecentMatches, che ordina per matches.ended_at).
+    endedAtIdx: index("matches_ended_at_idx").on(t.endedAt.desc()),
+  }),
+);
 
-export const matchPlayers = pgTable("match_players", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  matchId: uuid("match_id").notNull().references(() => matches.id),
-  seat: integer("seat").notNull(), // 0 | 1
-  displayName: text("display_name").notNull(),
-  playerTokenHash: text("player_token_hash").notNull(),
-  connectionStatus: text("connection_status").notNull().default("connected"),
-  // Macro-ciclo 1: traccia CHI (account/ospite) ha occupato il posto. Nullable e
-  // non-breaking: le partite pre-auth (o senza DB) restano valide. Il posto in
-  // partita resta governato da playerToken/clientId (SEC-04/10/11) INVARIATI.
-  userId: uuid("user_id").references(() => users.id),
-});
+export const matchPlayers = pgTable(
+  "match_players",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    matchId: uuid("match_id").notNull().references(() => matches.id),
+    seat: integer("seat").notNull(), // 0 | 1
+    displayName: text("display_name").notNull(),
+    playerTokenHash: text("player_token_hash").notNull(),
+    connectionStatus: text("connection_status").notNull().default("connected"),
+    // Macro-ciclo 1: traccia CHI (account/ospite) ha occupato il posto. Nullable e
+    // non-breaking: le partite pre-auth (o senza DB) restano valide. Il posto in
+    // partita resta governato da playerToken/clientId (SEC-04/10/11) INVARIATI.
+    userId: uuid("user_id").references(() => users.id),
+  },
+  (t) => ({
+    // Ogni query statistica parte da "le partecipazioni di questo utente": senza
+    // indice sarebbe un seq-scan dell'intera tabella. Le FK non sono auto-indicizzate.
+    userMatchIdx: index("match_players_user_match_idx").on(t.userId, t.matchId),
+  }),
+);
 
-export const hands = pgTable("hands", {
-  id: uuid("id").primaryKey(),
-  matchId: uuid("match_id").notNull().references(() => matches.id),
-  handNumber: integer("hand_number").notNull(),
-  dealerSeat: integer("dealer_seat").notNull(),
-  closerSeat: integer("closer_seat"),
-  status: text("status").notNull(), // "playing" | "ended"
-  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
-  endedAt: timestamp("ended_at", { withTimezone: true }),
-});
+export const hands = pgTable(
+  "hands",
+  {
+    id: uuid("id").primaryKey(),
+    matchId: uuid("match_id").notNull().references(() => matches.id),
+    handNumber: integer("hand_number").notNull(),
+    dealerSeat: integer("dealer_seat").notNull(),
+    closerSeat: integer("closer_seat"),
+    status: text("status").notNull(), // "playing" | "ended"
+    startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+  },
+  (t) => ({
+    // Join hands→match (somma punteggi, dettaglio): non indicizzato di default.
+    matchIdx: index("hands_match_idx").on(t.matchId),
+  }),
+);
 
-export const handScores = pgTable("hand_scores", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  handId: uuid("hand_id").notNull().references(() => hands.id),
-  seat: integer("seat").notNull(),
-  ptsMelds: integer("pts_melds").notNull(),
-  ptsBonus: integer("pts_bonus").notNull(),
-  ptsPenaltyHand: integer("pts_penalty_hand").notNull(),
-  ptsPozzetto: integer("pts_pozzetto").notNull(),
-  totalDelta: integer("total_delta").notNull(),
-});
+export const handScores = pgTable(
+  "hand_scores",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    handId: uuid("hand_id").notNull().references(() => hands.id),
+    seat: integer("seat").notNull(),
+    ptsMelds: integer("pts_melds").notNull(),
+    ptsBonus: integer("pts_bonus").notNull(),
+    ptsPenaltyHand: integer("pts_penalty_hand").notNull(),
+    ptsPozzetto: integer("pts_pozzetto").notNull(),
+    totalDelta: integer("total_delta").notNull(),
+    // Fatti di STILE (migrazione 0002). Additivi con default retro-compatibili: le
+    // smazzate storiche restano valide (0 burrachi, pozzetto non in diretta).
+    burrachiPuliti: integer("burrachi_puliti").notNull().default(0),
+    burrachiSporchi: integer("burrachi_sporchi").notNull().default(0),
+    pozzettoInDiretta: boolean("pozzetto_in_diretta").notNull().default(false),
+  },
+  (t) => ({
+    // Chiave d'idempotenza: una sola riga punteggio per (smazzata, seat). Blocca il
+    // doppio conteggio da un eventuale secondo endHand sullo stesso hand_id.
+    handSeatUq: uniqueIndex("hand_scores_hand_seat_uq").on(t.handId, t.seat),
+    // Join hand_scores→hands: è il più caldo (ogni SUM(total_delta) e il dettaglio).
+    handIdx: index("hand_scores_hand_idx").on(t.handId),
+  }),
+);
 
 export const gameEvents = pgTable("game_events", {
   id: uuid("id").primaryKey().defaultRandom(),

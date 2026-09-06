@@ -1,4 +1,4 @@
-import type { MatchSummary, UserStats } from "../contract/types.js";
+import type { MatchDetail, MatchSummary, StatsPeriod, UserStats } from "../contract/types.js";
 
 /**
  * CONTRATTO INTERNO del layer STATISTICHE (BE-only, macro-ciclo 3).
@@ -22,15 +22,24 @@ export interface Pagination {
 
 export interface StatsStore {
   /**
-   * Statistiche aggregate del solo utente indicato. L'`userId` proviene SEMPRE
-   * dal principale risolto dal token (mai dal client): il chiamante HTTP non deve
-   * mai passare un id arbitrario → nessun IDOR.
+   * Statistiche aggregate del solo utente indicato, sul `periodo` scelto (default
+   * "all"). L'`userId` proviene SEMPRE dal principale risolto dal token (mai dal
+   * client): il chiamante HTTP non deve mai passare un id arbitrario → nessun IDOR.
    */
-  getStats(userId: string): Promise<UserStats>;
+  getStats(userId: string, periodo?: StatsPeriod): Promise<UserStats>;
 
   /**
-   * Storico paginato delle partite CONCLUSE dell'utente, dalla più recente.
-   * `limit`/`offset` sono già validati (cap ragionevole) dal layer HTTP.
+   * Storico paginato delle partite CONCLUSE dell'utente, dalla più recente
+   * (ordinato per matches.ended_at). `limit`/`offset` sono già validati (cap
+   * ragionevole) dal layer HTTP.
    */
   getRecentMatches(userId: string, page: Pagination): Promise<MatchSummary[]>;
+
+  /**
+   * Dettaglio smazzata-per-smazzata di UNA partita. Autorizzazione per
+   * PARTECIPAZIONE: ritorna `null` se l'utente non ha una riga match_players in
+   * quella partita (o la partita non esiste) → l'HTTP mappa a 404, così
+   * l'esistenza di partite altrui non è mai osservabile.
+   */
+  getMatchDetail(userId: string, matchId: string): Promise<MatchDetail | null>;
 }

@@ -65,15 +65,25 @@ test("getStats: aggrega played/won/lost/winRate/points per il posto dell'utente"
 });
 
 test("getStats: utente senza partite → tutti zeri, winRate 0 (nessuna divisione per 0)", async () => {
+  // La forma di UserStats è CRESCIUTA (macro-ciclo storico): oltre ai contatori base
+  // include matchesAbandoned, avgFinalScore, il periodo e il blocco analisi. Con zero
+  // partite: contatori a 0, avgFinalScore null, ogni metrica d'analisi con value null.
   const store = new MemoryStatsStore();
   const s = await store.getStats("nessuno");
-  assert.deepEqual(s, {
-    matchesPlayed: 0,
-    matchesWon: 0,
-    matchesLost: 0,
-    winRate: 0,
-    totalPoints: 0,
-  });
+  assert.equal(s.matchesPlayed, 0);
+  assert.equal(s.matchesWon, 0);
+  assert.equal(s.matchesLost, 0);
+  assert.equal(s.matchesAbandoned, 0);
+  assert.equal(s.winRate, 0);
+  assert.equal(s.totalPoints, 0);
+  assert.equal(s.avgFinalScore, null);
+  assert.equal(s.periodo, "all");
+  assert.equal(s.analysis.dealsPlayed, 0);
+  assert.equal(s.analysis.malusPozzettoCount, 0);
+  assert.equal(s.analysis.burrachiPulitiPerDeal.value, null);
+  assert.equal(s.analysis.pozzettoInDirettaShare.value, null);
+  assert.equal(s.analysis.closureRate.value, null);
+  assert.deepEqual(s.analysis.trend.points, []);
 });
 
 test("getStats: le partite non concluse (playing) sono ignorate", async () => {

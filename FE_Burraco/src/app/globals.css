@@ -2287,3 +2287,262 @@ button:disabled {
     animation: none;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   STORICO & STATISTICHE — DELTA macro-ciclo storico.
+   Struttura di base (develop): la rifinitura visiva è di agente_ui_ux.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Selettore periodo (chip) ────────────────────────────────────────── */
+.period-filter {
+  display: flex;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+  flex-wrap: wrap;
+}
+.period-chip {
+  padding: var(--sp-1) var(--sp-3);
+  min-height: 36px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.period-chip[data-active="true"] {
+  background: var(--surface-raised);
+  border-color: var(--brass-500);
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.period-chip:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ── Blocco "Come giochi" (analisi di stile) ─────────────────────────── */
+.style-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+.style-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.style-stat-label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.style-stat-value {
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.style-stat[data-insufficient="true"] .style-stat-value {
+  font-family: var(--font-sans, inherit);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--text-faint);
+}
+.style-stat-nodata {
+  font-style: italic;
+}
+.style-stat-sample {
+  white-space: nowrap;
+}
+.style-stat-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  line-height: var(--lh-body);
+}
+@media (max-width: 520px) {
+  .style-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Sparkline andamento (SVG inline) ────────────────────────────────── */
+.sparkline {
+  margin: 0 0 var(--sp-5);
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--brass-300); /* currentColor della polyline: oro chiaro, buon contrasto */
+}
+.sparkline-svg {
+  display: block;
+}
+.sparkline-empty {
+  margin: 0 0 var(--sp-5);
+  padding: var(--sp-3);
+  background: var(--surface-sunken);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+}
+
+/* ── Righe storico cliccabili (button che riempie la riga) ───────────── */
+.match-row {
+  padding: 0; /* il padding passa al button interno per un target pieno */
+}
+.match-open {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-3);
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.match-open:hover {
+  background: var(--surface-raised);
+}
+.match-open:focus-visible {
+  outline: 2px solid var(--brass-400);
+  outline-offset: -2px;
+}
+.match-chevron {
+  color: var(--text-faint);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+/* ── Vista Dettaglio ─────────────────────────────────────────────────── */
+.detail-back {
+  align-self: flex-start;
+  margin-bottom: var(--sp-3);
+}
+.detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.detail-opponent {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.detail-score {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h2);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums lining-nums;
+  margin-left: auto;
+}
+.detail-score .ms-you {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.detail-score .ms-sep {
+  color: var(--text-faint);
+  margin: 0 var(--sp-1);
+}
+.detail-date {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  width: 100%;
+}
+
+/* ── Tabella smazzate → schede a ≤375px ──────────────────────────────── */
+.deals-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: var(--sp-4);
+  font-size: var(--fs-sm);
+}
+.deals-table caption {
+  text-align: left;
+}
+.deals-table th,
+.deals-table td {
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.deals-table thead th {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.deals-table td.num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.deals-table .burr-clean {
+  color: var(--text-strong);
+}
+.deals-table .burr-dirty {
+  color: var(--text-muted);
+}
+
+/* A ≤375px la tabella larga non ci sta: diventa schede (una card per smazzata).
+   L'intestazione si nasconde; ogni cella mostra la propria etichetta (data-label).
+   Più accessibile dello scroll orizzontale, che nasconderebbe colonne. */
+@media (max-width: 375px) {
+  .deals-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .deals-table,
+  .deals-table tbody,
+  .deals-table tr,
+  .deals-table td {
+    display: block;
+    width: 100%;
+  }
+  .deals-table tr {
+    margin-bottom: var(--sp-3);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: var(--sp-2) var(--sp-3);
+  }
+  .deals-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    border-bottom: 1px solid var(--border);
+    padding: var(--sp-2) 0;
+  }
+  .deals-table td:last-child {
+    border-bottom: 0;
+  }
+  .deals-table td::before {
+    content: attr(data-label);
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+    font-weight: 600;
+  }
+}

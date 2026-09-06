@@ -56,6 +56,13 @@ export type MoveResult = OkResult | RejectResult;
 interface SeatState {
   hand: Card[];
   pozzettoTaken: boolean;
+  /**
+   * true se questo seat ha preso il pozzetto "in diretta" (svuotando la mano PRIMA
+   * dello scarto, in `afterMeldMutation`). Resta false se il pozzetto è preso in
+   * differita (ramo di `discardCard`) o non è preso. Azzerato a inizio smazzata.
+   * Confluisce in `HandScoreDetail.pozzettoInDiretta` (analisi di stile).
+   */
+  pozzettoInDiretta: boolean;
 }
 
 /**
@@ -74,6 +81,7 @@ interface SeatState {
 interface TurnUndoSnapshot {
   hand: Card[];
   pozzettoTaken: boolean;
+  pozzettoInDiretta: boolean;
   melds: Meld[];
   pozzetti: Card[][];
   phase: Phase;
@@ -96,8 +104,8 @@ export class GameEngine {
   pozzetti: Card[][] = [];
   melds: Meld[] = [];
   seats: [SeatState, SeatState] = [
-    { hand: [], pozzettoTaken: false },
-    { hand: [], pozzettoTaken: false },
+    { hand: [], pozzettoTaken: false, pozzettoInDiretta: false },
+    { hand: [], pozzettoTaken: false, pozzettoInDiretta: false },
   ];
 
   dealerSeat: Seat = 0;
@@ -137,8 +145,8 @@ export class GameEngine {
     const deck = shuffle(createDeck());
     const take = (n: number): Card[] => deck.splice(0, n);
 
-    this.seats[0] = { hand: take(11), pozzettoTaken: false }; // A1: 11 carte
-    this.seats[1] = { hand: take(11), pozzettoTaken: false };
+    this.seats[0] = { hand: take(11), pozzettoTaken: false, pozzettoInDiretta: false }; // A1: 11 carte
+    this.seats[1] = { hand: take(11), pozzettoTaken: false, pozzettoInDiretta: false };
     this.pozzetti = [take(11), take(11)]; // A2: due pozzetti da 11
     this.drawPile = deck; // 64 carte residue
     this.discard = []; // A3-ter: monte scarti vuoto all'inizio
@@ -379,7 +387,11 @@ export class GameEngine {
 
     // Ripristino: assegna NUOVI riferimenti (le Card sono valori immutabili).
     // Solo il seat attivo è toccato dalle azioni annullabili; l'avversario no.
-    this.seats[seat] = { hand: snap.hand.slice(), pozzettoTaken: snap.pozzettoTaken };
+    this.seats[seat] = {
+      hand: snap.hand.slice(),
+      pozzettoTaken: snap.pozzettoTaken,
+      pozzettoInDiretta: snap.pozzettoInDiretta,
+    };
     this.melds = snap.melds.slice();
     this.pozzetti = snap.pozzetti.map((p) => p.slice());
     this.phase = snap.phase;
@@ -398,6 +410,7 @@ export class GameEngine {
     this.undoStack.push({
       hand: this.seats[seat].hand.slice(),
       pozzettoTaken: this.seats[seat].pozzettoTaken,
+      pozzettoInDiretta: this.seats[seat].pozzettoInDiretta,
       melds: this.melds.slice(),
       pozzetti: this.pozzetti.map((p) => p.slice()),
       phase: this.phase,
@@ -451,6 +464,8 @@ export class GameEngine {
     if (handAfter === 0 && !this.seats[seat].pozzettoTaken && this.pozzetti.length > 0) {
       // Pozzetto IN DIRETTA: prende subito il pozzetto e continua lo stesso turno.
       this.takePozzetto(seat);
+      // Marca la MODALITÀ di presa (in diretta): svuotata la mano PRIMA dello scarto.
+      this.seats[seat].pozzettoInDiretta = true;
       // CONFINE COL POZZETTO: l'undo NON attraversa la presa. La calata che ha
       // preso il pozzetto e tutte le calate precedenti del turno diventano NON
       // annullabili; le mosse successive ricostruiscono un nuovo giornale dallo
@@ -495,6 +510,7 @@ export class GameEngine {
       seat: i as Seat,
       hand: s.hand,
       pozzettoTaken: s.pozzettoTaken,
+      pozzettoInDiretta: s.pozzettoInDiretta,
     }));
     const scores = scoreHand(seatStates, this.melds, closerSeat);
     this.lastHandScores = scores;
