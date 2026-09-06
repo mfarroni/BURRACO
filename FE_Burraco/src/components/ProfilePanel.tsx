@@ -241,13 +241,22 @@ export function ProfilePanel({ user, onBack }: Props) {
                 <StatCard label="Giocate" value={nfInt.format(stats.matchesPlayed)} />
                 <StatCard label="Vinte" value={nfInt.format(stats.matchesWon)} />
                 <StatCard label="Perse" value={nfInt.format(stats.matchesLost)} />
-                <StatCard label="Abbandonate" value={nfInt.format(stats.matchesAbandoned)} />
+                <StatCard
+                  label="Abbandonate"
+                  value={stats.matchesAbandoned == null ? "—" : nfInt.format(stats.matchesAbandoned)}
+                />
                 <StatCard
                   label="Punteggio medio"
-                  value={stats.avgFinalScore === null ? "—" : nfInt.format(Math.round(stats.avgFinalScore))}
+                  value={stats.avgFinalScore == null ? "—" : nfInt.format(Math.round(stats.avgFinalScore))}
                 />
               </div>
 
+              {/* Blocco analisi + andamento: presenti SOLO se il backend è aggiornato
+                  (campo `analysis`). Con un backend non ancora aggiornato la risposta
+                  non li contiene: si nasconde la sezione invece di dereferenziare
+                  `undefined` (che manderebbe in crash l'intera app). */}
+              {stats.analysis && (
+                <>
               {/* ── Blocco "Come giochi" (analisi di stile) ─────────────────── */}
               <h2 className="profile-section-title">Come giochi</h2>
               <div className="style-grid" aria-label="Analisi del tuo stile di gioco">
@@ -310,6 +319,8 @@ export function ProfilePanel({ user, onBack }: Props) {
               {/* ── Andamento (sparkline) ───────────────────────────────────── */}
               <h2 className="profile-section-title">Andamento</h2>
               <Sparkline trend={stats.analysis.trend} />
+                </>
+              )}
 
               {/* ── Storico partite ─────────────────────────────────────────── */}
               <h2 className="profile-section-title">Partite recenti</h2>
@@ -332,7 +343,7 @@ export function ProfilePanel({ user, onBack }: Props) {
                             type="button"
                             className="match-open"
                             onClick={() => void openDetail(m)}
-                            aria-label={`Apri il dettaglio: ${won ? "vittoria" : "sconfitta"} contro ${opponentLabel(m.opponentName, m.opponentIsGuest)}, ${m.dealsCount} smazzate`}
+                            aria-label={`Apri il dettaglio: ${won ? "vittoria" : "sconfitta"} contro ${opponentLabel(m.opponentName, m.opponentIsGuest ?? false)}${m.dealsCount != null ? `, ${m.dealsCount} smazzate` : ""}`}
                           >
                             <span className="match-result" data-result={m.result}>
                               <span className="match-result-icon" aria-hidden="true">{won ? "▲" : "▼"}</span>
@@ -341,11 +352,17 @@ export function ProfilePanel({ user, onBack }: Props) {
                             <span className="match-meta">
                               <span className="match-opponent">
                                 <span className="match-vs" aria-hidden="true">vs</span>{" "}
-                                {opponentLabel(m.opponentName, m.opponentIsGuest)}
+                                {opponentLabel(m.opponentName, m.opponentIsGuest ?? false)}
                               </span>
                               <span className="match-date">
-                                {formatDate(m.endedAt)} · {nfInt.format(m.dealsCount)}{" "}
-                                {m.dealsCount === 1 ? "smazzata" : "smazzate"}
+                                {formatDate(m.endedAt)}
+                                {m.dealsCount != null && (
+                                  <>
+                                    {" · "}
+                                    {nfInt.format(m.dealsCount)}{" "}
+                                    {m.dealsCount === 1 ? "smazzata" : "smazzate"}
+                                  </>
+                                )}
                               </span>
                             </span>
                             <span className="match-score">
@@ -416,7 +433,7 @@ function MatchDetailView({
   const oppName = detail
     ? opponentLabel(detail.opponent.name, detail.opponent.isGuest)
     : summary
-      ? opponentLabel(summary.opponentName, summary.opponentIsGuest)
+      ? opponentLabel(summary.opponentName, summary.opponentIsGuest ?? false)
       : "Avversario";
   const result = detail ? detail.result : summary ? summary.result : null;
   const yourSeat = detail?.yourSeat ?? 0;

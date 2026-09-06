@@ -262,20 +262,29 @@ export interface StyleAnalysis {
   trend: StatTrend;
 }
 
-/** Statistiche aggregate di un utente (base + analisi). Specchio di UserStats (BE). */
+/**
+ * Statistiche aggregate di un utente (base + analisi). Specchio di UserStats (BE).
+ *
+ * ROBUSTEZZA (contratto tollerante): i campi introdotti da questa feature sono
+ * OPZIONALI perché il FE può parlare con un backend non ancora aggiornato (es.
+ * preview Vercel del branch verso il Render di produzione ancora vecchio). In quel
+ * caso la risposta contiene solo i campi base: la UI deve degradare (nascondere il
+ * blocco analisi), MAI andare in crash dereferenziando `analysis` inesistente.
+ */
 export interface UserStats {
   matchesPlayed: number;
   matchesWon: number;
   matchesLost: number;
-  /** Partite abbandonate: non pesano su vinte/perse. */
-  matchesAbandoned: number;
   /** won/played in [0,1]; 0 quando played = 0. */
   winRate: number;
   totalPoints: number;
-  /** Punteggio finale medio; null se played = 0. */
-  avgFinalScore: number | null;
-  analysis: StyleAnalysis;
-  periodo: StatsPeriod;
+  /** Partite abbandonate: non pesano su vinte/perse. Assente su backend non aggiornato. */
+  matchesAbandoned?: number;
+  /** Punteggio finale medio; null se played = 0. Assente su backend non aggiornato. */
+  avgFinalScore?: number | null;
+  /** Blocco analisi di stile. Assente su backend non aggiornato → sezione nascosta. */
+  analysis?: StyleAnalysis;
+  periodo?: StatsPeriod;
 }
 
 /** Sintesi di una partita conclusa nello storico. Specchio di MatchSummary (BE). */
@@ -285,12 +294,12 @@ export interface MatchSummary {
   endedAt: number | null;
   result: "won" | "lost";
   opponentName: string;
-  /** true se l'avversario era un ospite (suffisso "(ospite)" nella UI). */
-  opponentIsGuest: boolean;
+  /** true se l'avversario era un ospite (suffisso "(ospite)" nella UI). Assente su backend non aggiornato. */
+  opponentIsGuest?: boolean;
   yourScore: number;
   opponentScore: number;
-  /** Numero di smazzate giocate nella partita. */
-  dealsCount: number;
+  /** Numero di smazzate giocate nella partita. Assente su backend non aggiornato. */
+  dealsCount?: number;
 }
 
 /** Risposta paginata di GET /users/me/matches. */
