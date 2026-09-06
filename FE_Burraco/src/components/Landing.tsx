@@ -328,13 +328,13 @@ export function Landing({ onOpenAuth }: Props) {
             </div>
           </section>
 
-          {/* REGOLE — pergamena in CSS con testo reale: selezionabile,
-              traducibile, leggibile a zoom 200%. Nessuna immagine di testo. */}
+          {/* REGOLE — il rotolo è un'IMMAGINE DECORATIVA a 9 slice
+              (border-image, vedi Landing.css): i due rulli restano intatti e
+              si stira solo la texture centrale, così il rotolo si adatta a
+              qualsiasi altezza del testo. Il testo è REALE: selezionabile,
+              traducibile, leggibile a zoom 200%. */}
           <section className="section rules-section" id="regole">
             <div className="parchment">
-              <div className="parchment-rod" aria-hidden="true" />
-              <div className="parchment-fold" aria-hidden="true" />
-
               <div className="parchment-sheet">
                 <header className="parchment-head">
                   <p className="parchment-eyebrow">Circolo Nettuno</p>
@@ -372,9 +372,6 @@ export function Landing({ onOpenAuth }: Props) {
                   </p>
                 </footer>
               </div>
-
-              <div className="parchment-fold bottom" aria-hidden="true" />
-              <div className="parchment-rod bottom" aria-hidden="true" />
             </div>
           </section>
 

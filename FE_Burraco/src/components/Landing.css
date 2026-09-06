@@ -615,10 +615,25 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────
-   REGOLE — pergamena in CSS, TESTO REALE
-   Nessuna immagine di testo: selezionabile, traducibile, zoomabile.
-   La carta è un gradiente multi-tappa + una macchia radiale; le aste
-   sopra/sotto sono due barre di legno, la piega è un'ombra.
+   REGOLE — rotolo di pergamena come IMMAGINE + TESTO REALE
+
+   Il problema: il testo ha altezza variabile, il rotolo ha proporzioni
+   fisse. Un'unica immagine stirata deformerebbe i due rulli.
+   Soluzione: tre ritagli sovrapposti come layer di background —
+   rullo alto ancorato in cima, rullo basso in fondo, banda centrale
+   ripetuta in verticale a coprire tutto il resto.
+
+   Due accorgimenti sui file (già applicati agli asset):
+   · la banda centrale è SPECCHIATA (la seconda metà è il riflesso della
+     prima), così prima e ultima riga coincidono e la ripetizione non
+     lascia cuciture;
+   · i due rulli sfumano sul lato che confina con la banda, così il
+     ritaglio si fonde con la texture sottostante.
+
+   Il padding è in PERCENTUALE: le percentuali si risolvono sulla
+   larghezza, esattamente come `background-size: 100% auto`, quindi il
+   testo resta dentro il foglio a qualsiasi larghezza — nessuna media
+   query da tenere allineata.
    ───────────────────────────────────────────────────────────────────── */
 
 .landing-root .rules-section {
@@ -630,55 +645,17 @@
 .landing-root .parchment {
   max-width: 900px;
   margin: 0 auto;
-  padding: 34px 0 40px;
-}
-
-.landing-root .parchment-rod {
-  height: 26px;
-  margin: 0 -14px;
-  border-radius: 13px;
-  background: linear-gradient(180deg, #7a5a2e 0%, #4a3116 42%, #2b1c0c 100%);
-  box-shadow:
-    0 6px 16px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(244, 208, 63, 0.35);
-}
-
-.landing-root .parchment-rod.bottom {
-  box-shadow:
-    0 8px 20px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(244, 208, 63, 0.35);
-}
-
-.landing-root .parchment-fold {
-  height: 14px;
-  margin: 0 4px;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0));
-  border-left: 1px solid rgba(92, 59, 30, 0.3);
-  border-right: 1px solid rgba(92, 59, 30, 0.3);
-}
-
-.landing-root .parchment-fold.bottom {
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0));
+  padding: 20px 0;
 }
 
 .landing-root .parchment-sheet {
-  padding: 30px clamp(24px, 5vw, 64px) 26px;
   background:
-    linear-gradient(
-      180deg,
-      var(--lp-parch-1) 0%,
-      #e8d6b0 18%,
-      #f0e2c4 46%,
-      var(--lp-parch-2) 78%,
-      #dcc79c 100%
-    ),
-    radial-gradient(60% 40% at 18% 12%, rgba(160, 120, 60, 0.16), transparent 70%);
-  border-left: 1px solid rgba(120, 88, 48, 0.35);
-  border-right: 1px solid rgba(120, 88, 48, 0.35);
-  box-shadow:
-    inset 0 14px 22px -12px rgba(80, 52, 20, 0.55),
-    inset 0 -14px 22px -12px rgba(80, 52, 20, 0.55),
-    0 18px 44px rgba(0, 0, 0, 0.55);
+    url("/images/landing/rotolo-alto.png") top center / 100% auto no-repeat,
+    url("/images/landing/rotolo-basso.png") bottom center / 100% auto no-repeat,
+    url("/images/landing/rotolo-centro.png") top center / 100% auto repeat-y;
+  /* Il rullo alto occupa il 19,3% della larghezza: il testo parte sotto. */
+  padding: 16.5% 9.5% 16%;
+  filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.5));
 }
 
 .landing-root .parchment-head {
@@ -1121,10 +1098,6 @@
 
   .landing-root .btn {
     width: 100%;
-  }
-
-  .landing-root .parchment-sheet {
-    padding: 26px 22px 22px;
   }
 
   .landing-root .parchment-seal {
