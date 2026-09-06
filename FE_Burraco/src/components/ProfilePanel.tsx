@@ -546,21 +546,45 @@ function DealsTable({ deals, yourSeat, oppName }: { deals: MatchDeal[]; yourSeat
         </tr>
       </thead>
       <tbody>
-        {deals.map((d) => (
-          <tr key={d.numeroSmazzata}>
-            <td data-label="Smazzata">{d.numeroSmazzata}</td>
-            <td data-label="Chi ha chiuso">{closerLabel(d)}</td>
-            <td data-label="Punti" className="num">{d.you.puntiSmazzata}</td>
-            <td data-label="Burrachi">
-              <span className="burr-clean">{d.you.burrachiPuliti} puliti</span>
-              {" · "}
-              <span className="burr-dirty">{d.you.burrachiSporchi} sporchi</span>
-            </td>
-            <td data-label="Pozzetto">{pozzettoLabel(d)}</td>
-            <td data-label="In mano" className="num">{d.you.puntiCarteInMano}</td>
-            <td data-label="Malus">{d.you.malusPozzetto ? "−100" : "—"}</td>
-          </tr>
-        ))}
+        {deals.map((d) => {
+          const closedByYou = d.closerSeat === yourSeat;
+          const gotPozzetto = d.you.pozzettoPreso;
+          return (
+            <tr key={d.numeroSmazzata}>
+              <td data-label="Smazzata">{d.numeroSmazzata}</td>
+              <td data-label="Chi ha chiuso">
+                {d.closerSeat === null ? (
+                  <span className="deal-none">—</span>
+                ) : closedByYou ? (
+                  <span className="deal-closer-you">Tu</span>
+                ) : (
+                  closerLabel(d)
+                )}
+              </td>
+              <td data-label="Punti" className="num">{d.you.puntiSmazzata}</td>
+              <td data-label="Burrachi">
+                <span className="burr-clean">
+                  {d.you.burrachiPuliti} {d.you.burrachiPuliti === 1 ? "pulito" : "puliti"}
+                </span>
+                {" · "}
+                <span className="burr-dirty">
+                  {d.you.burrachiSporchi} {d.you.burrachiSporchi === 1 ? "sporco" : "sporchi"}
+                </span>
+              </td>
+              <td data-label="Pozzetto">
+                {gotPozzetto ? pozzettoLabel(d) : <span className="deal-none">No</span>}
+              </td>
+              <td data-label="In mano" className="num">{d.you.puntiCarteInMano}</td>
+              <td data-label="Malus">
+                {d.you.malusPozzetto ? (
+                  <span className="deal-malus">−100</span>
+                ) : (
+                  <span className="deal-none">—</span>
+                )}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
@@ -647,10 +671,19 @@ function Sparkline({ trend }: { trend: StatTrend }) {
     return { x, y, v };
   });
   const polyPoints = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+  // Poligono di riempimento sotto la linea (profondità discreta, on-brand):
+  // dal basso-sinistra, su lungo la linea, giù a basso-destra.
+  const first = coords[0];
+  const last = coords[coords.length - 1];
+  const areaPoints = `${first.x.toFixed(1)},${H} ${polyPoints} ${last.x.toFixed(1)},${H}`;
   const label = `Andamento dei punti medi per partita, ultime ${pts.length} partite: ${pts.join(", ")}.`;
 
   return (
     <figure className="sparkline">
+      <div className="sparkline-head" aria-hidden="true">
+        <span className="sparkline-title">Punti medi per partita</span>
+        <span className="sparkline-count">ultime {pts.length}</span>
+      </div>
       <svg
         className="sparkline-svg"
         viewBox={`0 0 ${W} ${H}`}
@@ -660,18 +693,28 @@ function Sparkline({ trend }: { trend: StatTrend }) {
         aria-label={label}
         preserveAspectRatio="none"
       >
+        {/* Area di riempimento: distorsione invisibile, dà corpo alla curva. */}
+        <polygon className="sparkline-area" points={areaPoints} />
         <polyline
+          className="sparkline-line"
           points={polyPoints}
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
           strokeLinejoin="round"
           strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
         />
-        {coords.map((c, i) => (
-          <circle key={i} cx={c.x} cy={c.y} r="2.5" fill="currentColor" />
+        {/* Punti intermedi discreti; l'ultimo (più recente) è enfatizzato. */}
+        {coords.slice(0, -1).map((c, i) => (
+          <circle key={i} cx={c.x} cy={c.y} r="1.8" fill="currentColor" opacity="0.7" />
         ))}
+        <circle className="sparkline-dot-last" cx={last.x} cy={last.y} r="3.2" fill="currentColor" />
       </svg>
+      <div className="sparkline-axis" aria-hidden="true">
+        <span>Meno recenti</span>
+        <span>Più recenti</span>
+      </div>
       {/* Alternativa testuale/tabellare per screen reader e no-SVG. */}
       <figcaption className="sr-only">{label}</figcaption>
     </figure>

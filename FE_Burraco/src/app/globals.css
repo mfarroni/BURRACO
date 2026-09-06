@@ -2032,6 +2032,13 @@ button:disabled {
 .stat-card[data-highlight="true"] .stat-label {
   color: var(--text-muted);
 }
+/* I due contatori "di contesto" (Abbandonate, Punteggio medio) occupano
+   mezza riga ciascuno: chiudono la griglia senza lasciare una riga monca e
+   dànno respiro alle etichette più lunghe. Esclusi gli skeleton, che sono in
+   numero diverso e restano a 3-per-riga. */
+.stats-grid .stat-card:not([data-highlight="true"]):not(.skeleton-card):nth-last-child(-n + 2) {
+  grid-column: span 3;
+}
 
 /* Mobile: la griglia collassa a 2 colonne; le chiave restano a piena
    larghezza in alto per mantenere la gerarchia. */
@@ -2044,6 +2051,9 @@ button:disabled {
   }
   .stat-card[data-highlight="true"] {
     grid-column: span 2;
+  }
+  .stats-grid .stat-card:not([data-highlight="true"]):not(.skeleton-card):nth-last-child(-n + 2) {
+    grid-column: span 1;
   }
 }
 
@@ -2301,7 +2311,7 @@ button:disabled {
   flex-wrap: wrap;
 }
 .period-chip {
-  padding: var(--sp-1) var(--sp-3);
+  padding: var(--sp-1) var(--sp-4);
   min-height: 36px;
   border-radius: var(--r-pill);
   border: 1px solid var(--border);
@@ -2309,12 +2319,24 @@ button:disabled {
   color: var(--text-muted);
   font-size: var(--fs-sm);
   cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
+/* Hover solo sui chip inattivi: invita senza competere con lo stato attivo. */
+.period-chip:not([data-active="true"]):not(:disabled):hover {
+  border-color: var(--brass-600);
+  color: var(--text-strong);
+}
+/* Attivo: filo d'ottone + testo forte + peso — riconoscibile anche senza
+   colore (bordo + grassetto), coerente con aria-pressed. */
 .period-chip[data-active="true"] {
   background: var(--surface-raised);
   border-color: var(--brass-500);
   color: var(--text-strong);
   font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--brass-600);
 }
 .period-chip:disabled {
   opacity: 0.6;
@@ -2332,7 +2354,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
-  padding: var(--sp-3);
+  padding: var(--sp-4) var(--sp-3);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
@@ -2344,23 +2366,37 @@ button:disabled {
   color: var(--text-faint);
 }
 .style-stat-value {
+  display: flex;
+  align-items: baseline;
+  min-height: 1.7rem; /* ritmo verticale stabile fra card con/senza dato */
   font-family: var(--font-serif);
   font-size: 1.3rem;
   font-weight: 600;
   color: var(--text-strong);
   font-variant-numeric: tabular-nums lining-nums;
 }
+/* Sotto soglia: tono NEUTRO (non errore). Fondo incassato + bordo tratteggiato
+   comunicano "in raccolta dati", non "problema". Il testo informativo sale a
+   --text-muted (≥7:1): l'etichetta secondaria del campione resta --text-faint. */
+.style-stat[data-insufficient="true"] {
+  background: var(--surface-sunken);
+  border-style: dashed;
+}
 .style-stat[data-insufficient="true"] .style-stat-value {
   font-family: var(--font-sans, inherit);
   font-size: var(--fs-sm);
   font-weight: 400;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 .style-stat-nodata {
   font-style: italic;
+  color: var(--text-muted);
 }
 .style-stat-sample {
   white-space: nowrap;
+  color: var(--text-faint);
+  font-style: normal;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 .style-stat-hint {
   font-size: var(--fs-xs);
@@ -2375,23 +2411,64 @@ button:disabled {
 
 /* ── Sparkline andamento (SVG inline) ────────────────────────────────── */
 .sparkline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
   margin: 0 0 var(--sp-5);
-  padding: var(--sp-3);
+  padding: var(--sp-4);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  color: var(--brass-300); /* currentColor della polyline: oro chiaro, buon contrasto */
+  color: var(--brass-300); /* currentColor di linea/area/punti: oro chiaro, ~8:1 */
+}
+.sparkline-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.sparkline-title {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.sparkline-count {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums lining-nums;
 }
 .sparkline-svg {
   display: block;
+  width: 100%;
+  height: 5.5rem; /* più respiro del 64px nativo: la curva si legge meglio */
+}
+.sparkline-area {
+  fill: currentColor;
+  fill-opacity: 0.14; /* velo d'oro sotto la curva: dà corpo, non urla */
+  stroke: none;
+}
+.sparkline-line {
+  color: var(--brass-300);
+}
+.sparkline-dot-last {
+  color: var(--text-strong); /* punto "più recente": più chiaro, spicca sulla curva */
+}
+.sparkline-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
 }
 .sparkline-empty {
   margin: 0 0 var(--sp-5);
-  padding: var(--sp-3);
+  padding: var(--sp-4);
   background: var(--surface-sunken);
   border: 1px dashed var(--border);
   border-radius: var(--r-md);
   font-size: var(--fs-sm);
+  color: var(--text-muted); /* messaggio informativo: neutro, ≥7:1 */
+  line-height: var(--lh-body);
 }
 
 /* ── Righe storico cliccabili (button che riempie la riga) ───────────── */
@@ -2412,18 +2489,33 @@ button:disabled {
   cursor: pointer;
   color: inherit;
   font: inherit;
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
 .match-open:hover {
   background: var(--surface-raised);
 }
+/* Pressione: fondo incassato → conferma tattile immediata (l'apertura del
+   dettaglio ha una latenza di rete, quindi il feedback locale è importante). */
+.match-open:active {
+  background: var(--surface-sunken);
+}
 .match-open:focus-visible {
-  outline: 2px solid var(--brass-400);
-  outline-offset: -2px;
+  outline: 3px solid var(--brass-300);
+  outline-offset: -3px;
 }
 .match-chevron {
   color: var(--text-faint);
   font-size: 1.4rem;
   line-height: 1;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+/* Il chevron si accende e avanza all'hover/focus: "questa riga si apre". */
+.match-open:hover .match-chevron,
+.match-open:focus-visible .match-chevron {
+  color: var(--brass-300);
+  transform: translateX(3px);
 }
 
 /* ── Vista Dettaglio ─────────────────────────────────────────────────── */
@@ -2488,8 +2580,9 @@ button:disabled {
   font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-faint);
+  color: var(--text-muted); /* intestazione informativa: ≥7:1, non "faint" */
   font-weight: 600;
+  border-bottom: 2px solid var(--brass-600); /* filo d'ottone: ancora lo sguardo */
 }
 .deals-table td.num {
   font-variant-numeric: tabular-nums lining-nums;
@@ -2500,11 +2593,28 @@ button:disabled {
 .deals-table .burr-dirty {
   color: var(--text-muted);
 }
+/* Semantica di colore (mai l'unico canale: sono affiancati a testo esplicito). */
+.deals-table .deal-closer-you {
+  color: var(--brass-300);
+  font-weight: 600;
+}
+.deals-table .deal-malus {
+  color: var(--danger-300); /* il −100 è una penalità: peso semantico misurato */
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.deals-table .deal-none {
+  /* "—" / "No": stato assente. De-enfatizzato ma pur sempre informativo →
+     --text-muted (≥7:1), non --text-faint, per restare conforme AA. */
+  color: var(--text-muted);
+}
 
-/* A ≤375px la tabella larga non ci sta: diventa schede (una card per smazzata).
-   L'intestazione si nasconde; ogni cella mostra la propria etichetta (data-label).
-   Più accessibile dello scroll orizzontale, che nasconderebbe colonne. */
-@media (max-width: 375px) {
+/* Sotto la larghezza a cui una tabella a 7 colonne resta leggibile, diventa
+   SCHEDE (una card per smazzata): più accessibile dello scroll orizzontale, che
+   nasconderebbe colonne e penalizzerebbe tastiera/screen reader. La tabella vera
+   riappare solo da 561px, dove il pannello ha una larghezza interna stabile
+   (~512px) sufficiente a tutte e 7 le colonne: niente scroll orizzontale su
+   nessun telefono (garanzia più forte del vincolo "nessuno scroll a 375px"). */
+@media (max-width: 560px) {
   .deals-table thead {
     position: absolute;
     width: 1px;
@@ -2525,24 +2635,64 @@ button:disabled {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--r-md);
-    padding: var(--sp-2) var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    box-shadow: var(--sh-card);
   }
   .deals-table td {
     display: flex;
+    align-items: baseline;
     justify-content: space-between;
     gap: var(--sp-3);
     border-bottom: 1px solid var(--border);
     padding: var(--sp-2) 0;
+    color: var(--text-strong); /* valore leggibile; l'etichetta ::before è faint */
   }
   .deals-table td:last-child {
     border-bottom: 0;
+    padding-bottom: 0;
   }
   .deals-table td::before {
     content: attr(data-label);
+    flex: none;
     font-size: var(--fs-xs);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-faint);
     font-weight: 600;
+  }
+  /* Prima cella = intestazione della scheda: numero smazzata in evidenza,
+     separato dal resto da un filo. "Smazzata 1" tutto a sinistra. */
+  .deals-table td:first-child {
+    justify-content: flex-start;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-2);
+    padding-bottom: var(--sp-3);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-serif);
+    font-size: var(--fs-h2);
+    font-weight: 600;
+    color: var(--brass-300);
+  }
+  .deals-table td:first-child::before {
+    align-self: baseline;
+    font-family: var(--font-sans);
+    color: var(--text-faint);
+  }
+}
+
+/* Riduzione del movimento (storico): il feedback resta ma DIVENTA STATICO.
+   I cambi di colore (hover/focus/attivo) NON sono "movimento" e restano; si
+   annullano solo gli spostamenti (nudge del chevron, press). Coerente con la
+   direzione visiva: informare sì, animare no. */
+@media (prefers-reduced-motion: reduce) {
+  .match-open,
+  .match-chevron,
+  .period-chip {
+    transition: none;
+  }
+  .match-open:hover .match-chevron,
+  .match-open:focus-visible .match-chevron {
+    transform: none;
   }
 }
