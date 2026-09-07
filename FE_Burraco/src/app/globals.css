@@ -1113,10 +1113,19 @@ button:disabled {
   border-left: 4px solid var(--brass-500);
   margin: var(--sp-3) 0;
   z-index: var(--z-banner);
+  animation: banner-in var(--dur-base) var(--ease-out);
 }
 .banner .banner-icon {
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.5em;
+  color: var(--brass-400);
+}
+.banner .banner-icon svg {
+  display: block;
 }
 .banner .banner-body {
   display: flex;
@@ -1149,6 +1158,20 @@ button:disabled {
   border-left-color: var(--success-500);
 }
 .banner[data-tone="success"] .banner-title {
+  color: var(--success-300);
+}
+/* Icona tinta per tono: lo STATO è codificato da forma (glifo/SVG) + colore +
+   testo del titolo, mai dal solo colore. */
+.banner[data-tone="warn"] .banner-icon {
+  color: var(--warn-300);
+}
+.banner[data-tone="danger"] .banner-icon {
+  color: var(--danger-300);
+}
+.banner[data-tone="info"] .banner-icon {
+  color: var(--info-300);
+}
+.banner[data-tone="success"] .banner-icon {
   color: var(--success-300);
 }
 .banner .spinner {
@@ -1431,6 +1454,17 @@ button:disabled {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+/* Ingresso banner: comparsa morbida dall'alto (informa senza strattonare). */
+@keyframes banner-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+/* Ingresso riga tavolo: usata per le NUOVE righe (React monta solo i codici
+   nuovi; le righe esistenti persistono e non rianimano). */
+@keyframes row-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
 @keyframes celebrate-pop {
   0% { transform: scale(0.85); opacity: 0; }
   15% { transform: scale(1.04); opacity: 1; }
@@ -1466,6 +1500,18 @@ button:disabled {
   /* Il pending resta comunicato dallo spinner statico + testo. */
   .countdown[data-level="urgent"] {
     box-shadow: 0 0 0 2px var(--warn-500);
+  }
+  /* Comparse ed entrate: nessun ritardo/scorrimento (l'animation-delay con fill
+     "both" lascerebbe l'elemento invisibile durante il delay). Tutto istantaneo. */
+  .table-row,
+  .banner,
+  .lobby-connecting,
+  .table-empty {
+    animation: none !important;
+  }
+  .table-wait .wait-dot,
+  .waiting-dots span {
+    animation: none !important;
   }
 }
 
@@ -2285,5 +2331,711 @@ button:disabled {
   }
   .spinner-inline {
     animation: none;
+  }
+}
+
+/* =====================================================================
+ * MACRO-CICLO LOBBY — LISTA TAVOLI, AZIONI, MODALE APERTURA, ATTESA
+ * Riusa il design system "Circolo Notturno": feltro sollevato + filo d'oro,
+ * azione primaria in oro, testo AA su feltro. Nessuna informazione affidata al
+ * solo colore (stato sempre anche testo/icona). Responsive fino a 375px.
+ * ===================================================================== */
+
+/* La lobby con lista è più larga della schermata d'ingresso a un solo campo. */
+.lobby-wide {
+  max-width: 560px;
+}
+.lobby-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+/* Contatore giocatori realmente in lobby (§6.2): badge icona + testo. Presenta
+   gli ALTRI (lead #1); a zero diventa un invito, non un "sei solo". */
+.lobby-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  align-self: flex-start;
+  max-width: 100%;
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-tight);
+}
+.lobby-counter-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(62, 164, 107, 0.16);
+  color: var(--success-300);
+  border: 1px solid rgba(127, 214, 164, 0.35);
+}
+/* Stato "sei il primo": badge neutro (niente verde "presenza") e forma a pillola
+   più morbida per accogliere la frase più lunga. */
+.lobby-counter[data-empty="true"] {
+  border-radius: var(--r-md);
+}
+.lobby-counter[data-empty="true"] .lobby-counter-badge {
+  background: var(--surface);
+  color: var(--text-faint);
+  border-color: var(--border);
+}
+.lobby-counter-text .num {
+  color: var(--brass-300);
+  font-weight: 700;
+}
+.lobby-counter-text strong {
+  color: var(--text-strong);
+}
+
+/* Riga di contorno quando la lista NON è vuota. */
+.lobby-lead {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/* Le due azioni principali: elemento più evidente della schermata (§6.3).
+   Gerarchia: "Gioca subito" primaria (oro, più peso), "Apri un tavolo"
+   secondaria (feltro). Ogni azione porta icona + titolo + micro-sottotitolo che
+   chiarisce la differenza (utile ai neofiti). */
+.lobby-actions {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: stretch;
+}
+.lobby-action {
+  flex: 1 1 0;
+  min-height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  text-align: left;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+}
+/* Dentro la lobby, .cta è larga 100% con margine alto: neutralizzalo nella riga
+   azioni mantenendo l'oro del primario. */
+.lobby-actions .cta {
+  margin-top: 0;
+  width: auto;
+}
+/* Primario: più peso visivo (cresce di più) + ombra d'ottone TENUE (non pulsa). */
+.lobby-action-primary {
+  flex-grow: 1.35;
+  box-shadow: 0 4px 16px rgba(201, 162, 74, 0.22);
+}
+/* "Apri un tavolo": azione SECONDARIA (feltro), non compete con l'oro del primario. */
+.lobby-action-open {
+  background: linear-gradient(180deg, var(--felt-700), var(--felt-800));
+  color: var(--text-strong);
+  border-color: var(--border);
+}
+.lobby-action-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.lobby-action-primary .lobby-action-icon {
+  color: var(--ink-900);
+}
+.lobby-action-open .lobby-action-icon {
+  color: var(--brass-300);
+}
+.lobby-action-text {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.lobby-action-title {
+  font-size: var(--fs-body);
+  font-weight: 700;
+  line-height: 1.1;
+}
+.lobby-action-sub {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 1.2;
+}
+/* Sotto-testo su ORO: ink pieno (≥5.7:1 anche sul fondo più scuro del gradiente);
+   differenziato dal titolo solo per dimensione/peso, così il contrasto resta AA. */
+.lobby-action-primary .lobby-action-title,
+.lobby-action-primary .lobby-action-sub {
+  color: var(--ink-900);
+}
+.lobby-action-open .lobby-action-sub {
+  color: var(--text-muted);
+}
+@media (max-width: 480px) {
+  .lobby-actions {
+    flex-direction: column;
+  }
+  .lobby-action {
+    min-height: 60px;
+  }
+  .lobby-action-primary {
+    flex-grow: 1;
+  }
+}
+
+/* Stato "connessione in corso" (cold-start Render ~30s) con annulla: banner info
+   sotto le azioni. Feedback esplicito, mai interfaccia congelata. */
+.lobby-connecting {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--info-500);
+  font-size: var(--fs-sm);
+  color: var(--text);
+  animation: banner-in var(--dur-base) var(--ease-out);
+}
+.lobby-connecting .spinner-inline {
+  margin-top: 2px;
+}
+.lobby-connecting-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lobby-connecting-title {
+  font-weight: 600;
+  color: var(--info-300);
+}
+.lobby-connecting-sub {
+  color: var(--text-muted);
+}
+.lobby-connecting .btn-ghost {
+  margin-left: auto;
+  align-self: center;
+  flex: none;
+}
+
+/* Sezione lista. */
+.table-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.table-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* Skeleton della lista al PRIMO caricamento: dà forma all'attesa (non un vuoto
+   ambiguo). Riusa i token .skeleton (shimmer disattivato in reduced-motion). */
+.table-skeletons {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.table-skel {
+  display: grid;
+  grid-template-columns: 40px 1fr 88px;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.table-skel .sk-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+.table-skel .sk-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.table-skel .sk-line-1 {
+  height: 0.9rem;
+  width: 55%;
+}
+.table-skel .sk-line-2 {
+  height: 0.7rem;
+  width: 80%;
+}
+.table-skel .sk-btn {
+  height: 40px;
+  border-radius: var(--r-sm);
+}
+
+/* Stato vuoto (§6.3): testo riprodotto alla lettera, con motivo decorativo che
+   lo rende intenzionale e spinge l'occhio verso "Apri tu un tavolo". */
+.table-empty {
+  padding: var(--sp-5) var(--sp-4);
+  background: var(--surface-sunken);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  animation: fade-in var(--dur-base) var(--ease-out);
+}
+.table-empty-mark {
+  display: block;
+  margin: 0 auto var(--sp-3);
+  color: var(--brass-500);
+  opacity: 0.85;
+}
+.table-empty-title {
+  margin: 0 0 var(--sp-2);
+  font-weight: 700;
+  color: var(--text-strong);
+  text-align: center;
+}
+.table-empty-text {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  line-height: var(--lh-body);
+}
+.table-empty-text:last-child {
+  margin-bottom: 0;
+}
+.table-empty-text strong {
+  color: var(--brass-300);
+}
+
+/* Lista dei tavoli pubblici in attesa. Gerarchia della riga: chi attende (nome +
+   avatar) è l'eroe, "Siediti" (oro) è l'azione; tempo/posti/codice sono meta di
+   supporto. Il codice resta visibile ma DEMOTATO (utile per condividere/verificare,
+   mai in competizione col nome). */
+.table-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.table-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brass-600);
+  border-radius: var(--r-md);
+  animation: row-in var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(min(var(--row-index, 0), 6) * 45ms);
+  transition: border-color var(--dur-base) var(--ease-out);
+}
+.table-row:hover {
+  border-color: var(--border-strong);
+}
+/* Avatar dall'iniziale: "una persona reale ti aspetta", aiuta la scansione.
+   Trattamento SOBRIO (feltro incassato + iniziale ottone): l'oro pieno resta
+   all'azione primaria "Siediti", non si moltiplica su ogni riga. */
+.table-avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--brass-300);
+  background: var(--surface-sunken);
+  border: 1px solid var(--brass-600);
+}
+.table-row-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.table-creator {
+  font-weight: 700;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.table-row-meta {
+  display: flex;
+  gap: var(--sp-2) var(--sp-3);
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.table-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.table-wait .num {
+  color: var(--text);
+}
+.table-wait .wait-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success-300);
+  flex: none;
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+.table-seats {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+.seat-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.seat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--brass-500);
+  background: transparent;
+}
+.seat-dot[data-filled="true"] {
+  background: var(--brass-400);
+}
+.table-code-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-faint);
+}
+.table-code-inline code {
+  font-family: var(--font-serif);
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 0 6px;
+}
+.table-sit {
+  align-self: center;
+  min-height: 44px;
+  padding-inline: var(--sp-5);
+}
+
+/* Ingresso con codice (door c): utility distinta dalla lista, separata da un filo. */
+.join-by-code {
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+.join-by-code label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.join-by-code-row {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: stretch;
+}
+.join-by-code-row input {
+  flex: 1;
+  min-width: 0;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.join-by-code-row .lobby-action {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding-inline: var(--sp-5);
+}
+
+/* ── Modale "Apri un tavolo" ─────────────────────────────────────────── */
+.overlay-card.open-table {
+  max-width: 460px;
+  text-align: left;
+}
+/* Titolo da form: allineato a sinistra e più contenuto del display. */
+.overlay-card.open-table h2 {
+  text-align: left;
+  font-size: var(--fs-h1);
+}
+.open-table-desc {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--fs-sm);
+}
+.open-table-error {
+  margin-top: var(--sp-3);
+}
+/* Etichetta del campo codice (con spinner "genero un codice…" durante il fetch). */
+.open-code-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.open-code-generating {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+/* Input codice: grande, centrato, spaziato → leggibile e dettabile a voce.
+   La modale NON è dentro .lobby, quindi lo stile base è esplicitato qui. */
+.open-table .code-input {
+  width: 100%;
+  padding: var(--sp-3);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+  text-align: center;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.open-table .code-input::placeholder {
+  color: var(--text-faint);
+  letter-spacing: 0.08em;
+}
+/* CODE_IN_USE: NOTA (ambra), non un errore — "scegline un altro", nessuna colpa. */
+.open-table-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  background: rgba(224, 169, 58, 0.12);
+  border: 1px solid var(--warn-500);
+  color: var(--warn-300);
+}
+.open-table-notice .notice-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--warn-500);
+  color: var(--ink-900);
+  font-weight: 800;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+/* Conferma con icona: allineamento icona + testo. */
+.open-table-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Casella "Tavolo privato": target ampio, checkbox visibile, testo su due righe.
+   Specificità .overlay-card .checkbox-field (0,2,0) per battere .lobby label. */
+.overlay-card .checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0 0;
+  padding: var(--sp-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  color: var(--text);
+}
+.checkbox-field input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  margin-top: 2px;
+  accent-color: var(--brass-500);
+  cursor: pointer;
+}
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.checkbox-label svg {
+  flex: none;
+  color: var(--brass-400);
+}
+.checkbox-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  line-height: var(--lh-body);
+}
+
+/* ── Schermata tavolo in ATTESA ──────────────────────────────────────── */
+.waiting-room {
+  text-align: center;
+}
+.waiting-code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-5) 0;
+  padding: var(--sp-4);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--brass-500);
+  border-radius: var(--r-md);
+}
+.waiting-code-label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+.waiting-code-value {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+/* Il codice come TESSERE avorio (come carte sul tavolo): massima leggibilità e
+   dettabilità a voce. Contrasto ink su avorio ~15:1. */
+.waiting-code-text {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--sp-2);
+  max-width: 100%;
+  color: var(--brass-300);
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 700;
+}
+.code-char {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(36px, 12vw, 52px);
+  height: clamp(48px, 16vw, 68px);
+  font-family: var(--font-serif);
+  font-size: clamp(1.5rem, 6vw, 2.2rem);
+  font-weight: 700;
+  color: var(--ink-900);
+  background: linear-gradient(180deg, var(--ivory-50), var(--ivory-100));
+  border: 1px solid var(--brass-500);
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-card);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.waiting-copy {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.waiting-copy svg {
+  flex: none;
+}
+.waiting-copy-error {
+  font-size: var(--fs-sm);
+  color: var(--warn-300);
+  max-width: 32ch;
+}
+/* Puntini "in attesa" animati (calmi, non lampeggianti). */
+.waiting-dots {
+  display: inline-flex;
+  margin-left: 2px;
+}
+.waiting-dots span {
+  animation: waiting-dot 1.4s ease-in-out infinite;
+}
+.waiting-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.waiting-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes waiting-dot {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+/* Promemoria (tavolo pubblico): già in lista + condivisibile col codice. */
+.waiting-hint {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  line-height: var(--lh-body);
+}
+.waiting-elapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  color: var(--text-muted);
+  margin: 0;
+}
+.waiting-elapsed .num {
+  color: var(--text-strong);
+}
+.waiting-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--sp-5);
+}
+
+/* Pulsante di chiusura di un banner (riusa l'aspetto del toast-close, ma nel
+   contesto .banner: spinto a destra, trasparente). */
+.banner .toast-close {
+  margin-left: auto;
+  align-self: flex-start;
+  flex: none;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0 var(--sp-1);
+}
+.banner .toast-close:hover {
+  background: transparent;
+  color: var(--text-strong);
+  border: none;
+}
+
+/* Codice d'attesa su schermi molto stretti: tessere più fitte per non traboccare
+   (la dimensione è già gestita da clamp; qui si stringe solo il gap). */
+@media (max-width: 380px) {
+  .waiting-code-text {
+    gap: var(--sp-1);
   }
 }

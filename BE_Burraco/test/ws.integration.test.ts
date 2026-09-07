@@ -187,12 +187,16 @@ test("azione prima del join -> errore 'nessuna room'", async () => {
   c.close();
 });
 
-test("terzo giocatore nella room piena -> error 'room al completo'", async () => {
+test("terzo giocatore nella room piena (2 posti vivi) -> join_rejected{ROOM_JUST_TAKEN}", async () => {
+  // LOBBY (§5.4-C): con due posti VIVI (tavolo genuinamente pieno) il terzo riceve
+  // l'esito tipizzato ROOM_JUST_TAKEN (il FE mostra "qualcuno si è appena seduto"
+  // e fa un refresh della lista), non l'errore generico. Nessun accesso/leak.
   const { a, b } = await joinPair("ROOMG");
   const c = new Client(url); await c.open();
   c.send({ type: "join_room", roomCode: "ROOMG", displayName: "Intruso" });
-  const err = (await c.waitFor((m) => m.type === "error")) as Extract<ServerMessage, { type: "error" }>;
-  assert.match(err.message, /completo/i);
+  const rej = (await c.waitFor((m) => m.type === "join_rejected")) as Extract<ServerMessage, { type: "join_rejected" }>;
+  assert.equal(rej.code, "ROOM_JUST_TAKEN");
+  assert.ok(!c.has("room_joined") && !c.has("state"), "nessun accesso/leak al terzo");
   a.close(); b.close(); c.close();
 });
 

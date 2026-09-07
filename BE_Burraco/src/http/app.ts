@@ -6,6 +6,8 @@ import { isOriginAllowed } from "../net/originPolicy.js";
 import { rateLimit } from "./rateLimit.js";
 import { env } from "../config.js";
 import type { StatsStore } from "../stats/types.js";
+import type { RoomManager } from "../room/RoomManager.js";
+import type { TablesResponse, NewCodeResponse } from "../contract/types.js";
 
 /**
  * APP HTTP del backend auth (Express) montata sullo STESSO http.Server del WS
@@ -90,7 +92,7 @@ function handler(fn: (req: Request, res: Response) => Promise<void>) {
 
 /* ─────────────────────────────── app ─────────────────────────────────────── */
 
-export function createHttpApp(auth: AuthService, stats?: StatsStore): Express {
+export function createHttpApp(auth: AuthService, stats?: StatsStore, manager?: RoomManager): Express {
   const app = express();
 
   // Dietro il proxy di Render: fidati del primo hop per un req.ip coerente
@@ -280,6 +282,80 @@ export function createHttpApp(auth: AuthService, stats?: StatsStore): Express {
         }
         const items = await stats.getRecentMatches(principal.userId, parsed.data);
         res.json({ items, limit: parsed.data.limit, offset: parsed.data.offset });
+      }),
+    );
+  }
+
+  /* ───────────────────────── LOBBY / LISTA TAVOLI (macro-ciclo lobby) ─────────
+   * GET  /tables            (Bearer) → { tables: WaitingTableView[], lobbyPlayers }
+   * GET  /tables/new-code   (Bearer) → { code }
+   * POST /session/leave     (Bearer o { token } nel body per il beacon) → 204
+   *
+   * Sicurezza:
+   *  - identità SEMPRE dal token (getPrincipalByToken), MAI da un id nel client:
+   *    nessun IDOR (una sessione può lasciare/toccare solo il PROPRIO stato).
+   *  - la lista NON espone tavoli privati né campi interni (whitelist Room.waitingView):
+   *    niente userId/email/token/origin/clientId/visibility.
+   *  - l'avvio partita passa dal WebSocket: questa lista è solo informativa.
+   *  - rate-limit dedicati per rotta (namespacing indipendente).
+   * Montate solo quando un RoomManager è iniettato (in test-solo-auth possono mancare).
+   */
+  if (manager) {
+    const tablesLimiter = rateLimit({ name: "tables", windowMs: 60_000, max: 40 });
+    const newCodeLimiter = rateLimit({ name: "newcode", windowMs: 60_000, max: 30 });
+    const leaveLimiter = rateLimit({ name: "leave", windowMs: 60_000, max: 60 });
+
+    // Corpo opzionale di /session/leave: consente al beacon (navigator.sendBeacon,
+    // che NON può impostare l'header Authorization) di veicolare il PROPRIO token.
+    const leaveBody = z.object({ token: z.string().max(512).optional() });
+
+    app.get(
+      "/tables",
+      tablesLimiter,
+      handler(async (req, res) => {
+        const principal = await auth.getPrincipalByToken(bearer(req));
+        if (!principal) {
+          res.status(401).json({ error: "UNAUTHORIZED", message: "Sessione non valida." });
+          return;
+        }
+        // Heartbeat di presenza lobby (§6.2): registra che questa sessione sfoglia.
+        manager.touchLobby(principal.userId);
+        const body: TablesResponse = {
+          tables: manager.listPublicWaitingTables(),
+          lobbyPlayers: manager.lobbyPlayerCount(),
+        };
+        res.json(body);
+      }),
+    );
+
+    app.get(
+      "/tables/new-code",
+      newCodeLimiter,
+      handler(async (req, res) => {
+        const principal = await auth.getPrincipalByToken(bearer(req));
+        if (!principal) {
+          res.status(401).json({ error: "UNAUTHORIZED", message: "Sessione non valida." });
+          return;
+        }
+        const body: NewCodeResponse = { code: manager.generateFreeCode() };
+        res.json(body);
+      }),
+    );
+
+    app.post(
+      "/session/leave",
+      leaveLimiter,
+      handler(async (req, res) => {
+        // Token dal Bearer (fetch) o dal corpo (beacon su pagehide).
+        const parsed = leaveBody.safeParse(req.body ?? {});
+        const bodyToken = parsed.success ? parsed.data.token : undefined;
+        const principal = await auth.getPrincipalByToken(bearer(req) ?? bodyToken);
+        if (!principal) {
+          res.status(401).json({ error: "UNAUTHORIZED", message: "Sessione non valida." });
+          return;
+        }
+        manager.leaveWaiting(principal.userId);
+        res.status(204).end();
       }),
     );
   }

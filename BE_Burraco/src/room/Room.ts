@@ -11,6 +11,18 @@ import type {
 import { GameEngine, type GameEffect, type MoveResult } from "../engine/game.js";
 import { redactFor } from "./redact.js";
 import { persistence } from "../db/persistence.js";
+import type { WaitingTableView } from "../contract/types.js";
+
+/** LOBBY: visibilità di un tavolo in attesa (i privati non compaiono in lista). */
+export type RoomVisibility = "pubblico" | "privato";
+/** LOBBY: origine del tavolo. Solo `quick_match` è candidabile alla fusione. */
+export type RoomOrigin = "quick_match" | "apertura_manuale";
+
+/** LOBBY: opzioni di creazione di una Room (default = tavolo privato manuale). */
+export interface RoomOptions {
+  visibility?: RoomVisibility;
+  origin?: RoomOrigin;
+}
 
 /**
  * Una Room è una partita 1v1. Possiede il GameEngine autoritativo (stato in
@@ -71,6 +83,20 @@ export class Room {
   readonly config: GameConfig;
   readonly matchId: string;
 
+  /**
+   * LOBBY: attributi del tavolo in attesa. `visibility` decide se compare nella
+   * lista pubblica; `origin` decide la candidabilità alla FUSIONE (§5.4-A: solo
+   * `pubblico` + `quick_match`); `openedAt` alimenta "attende da MM:SS". Sono
+   * INTERNI: non vengono mai serializzati ai client (solo `waitingView()` espone
+   * una whitelist). Default = tavolo privato di apertura manuale (semantica
+   * legacy di join_room: reperibile solo col codice, mai in lista, mai fuso).
+   */
+  readonly visibility: RoomVisibility;
+  readonly origin: RoomOrigin;
+  readonly openedAt: number;
+  /** clientId del creatore (seat0), per diagnosi/estensioni. Interno, mai esposto. */
+  private creatorClientId: string | undefined;
+
   private players: PlayerSlot[] = [];
   private engine: GameEngine | null = null;
   private handId: string | null = null;
@@ -86,10 +112,13 @@ export class Room {
    */
   onDispose: (() => void) | null = null;
 
-  constructor(code: string, config: GameConfig) {
+  constructor(code: string, config: GameConfig, opts?: RoomOptions) {
     this.code = code;
     this.config = config;
     this.matchId = randomUUID();
+    this.visibility = opts?.visibility ?? "privato";
+    this.origin = opts?.origin ?? "apertura_manuale";
+    this.openedAt = Date.now();
   }
 
   isFull(): boolean {
@@ -98,6 +127,77 @@ export class Room {
 
   hasEngine(): boolean {
     return this.engine !== null;
+  }
+
+  /* ─────────────────────────── LOBBY: getter per la lista ─────────────────── */
+
+  /** Un tavolo è "in attesa" se la partita non è iniziata e non è smaltito. */
+  isWaiting(): boolean {
+    return !this.engine && !this.disposed;
+  }
+
+  /** Numero di posti occupati da un socket VIVO (in attesa: 0 o 1). */
+  seatsTakenLive(): number {
+    return this.players.reduce((n, p) => n + (this.isSeatLive(p) ? 1 : 0), 0);
+  }
+
+  /** Posti totali del tavolo (predisposizione 4 posti: oggi sempre 2). */
+  seatsTotal(): number {
+    return this.config.numeroGiocatori;
+  }
+
+  /** Nome AUTORITATIVO del creatore (seat0), o stringa vuota se non ancora seduto. */
+  creatorName(): string {
+    const first = this.players.find((p) => p.seat === 0) ?? this.players[0];
+    return first?.displayName ?? "";
+  }
+
+  /** clientId del creatore (interno; per la rilevazione self-play a monte). */
+  getCreatorClientId(): string | undefined {
+    return this.creatorClientId;
+  }
+
+  /**
+   * LOBBY (§5.4-A/B): candidabile alla fusione quick_match SE è un tavolo pubblico
+   * quick_match, ancora in attesa, con ESATTAMENTE un posto vivo.
+   */
+  isMergeableQuickMatch(): boolean {
+    return (
+      this.isWaiting() &&
+      this.visibility === "pubblico" &&
+      this.origin === "quick_match" &&
+      this.seatsTakenLive() === 1
+    );
+  }
+
+  /**
+   * Vista WHITELIST per la lista pubblica, o `null` se il tavolo non va listato
+   * (privato, non in attesa, oppure senza alcun posto vivo → niente fantasmi
+   * §5.4-B). NON espone MAI campi interni (userId/token/origin/clientId/visibility).
+   */
+  waitingView(): WaitingTableView | null {
+    if (this.visibility !== "pubblico") return null;
+    if (!this.isWaiting()) return null;
+    const taken = this.seatsTakenLive();
+    if (taken < 1) return null; // solo con ≥1 socket vivo (anti-fantasma)
+    return {
+      code: this.code,
+      creatorName: this.creatorName(),
+      openedAt: this.openedAt,
+      seatsTotal: this.seatsTotal(),
+      seatsTaken: taken,
+    };
+  }
+
+  /**
+   * LOBBY (§5.4-A): identità del solo posto VIVO di un tavolo in attesa, usata
+   * dalla FUSIONE per spostarlo in un altro tavolo. Ritorna il socket e i dati di
+   * identità (nome autoritativo, clientId, userId); `null` se non c'è un posto vivo.
+   */
+  liveSeatIdentity(): { ws: WebSocket; name: string; clientId?: string; userId: string | null } | null {
+    const live = this.players.find((p) => this.isSeatLive(p));
+    if (!live || !live.ws) return null;
+    return { ws: live.ws, name: live.displayName, clientId: live.clientId, userId: live.userId };
   }
 
   /** Trova lo slot associato a un socket (o undefined). */
@@ -241,8 +341,26 @@ export class Room {
       }
     }
 
-    // (5) Room al completo (due posti vivi) o partita in corso senza reclaim valido.
+    // (5) Room al completo o partita in corso senza reclaim valido.
+    //  - Se i posti sono ENTRAMBI VIVI (tavolo genuinamente pieno: qualcuno si è
+    //    appena seduto) → esito TIPIZZATO join_rejected{ROOM_JUST_TAKEN} (§5.4-C),
+    //    così il FE mostra "Qualcuno si è appena seduto a quel tavolo" e fa un
+    //    refresh della lista. Copre la corsa alla stessa sedia (F12) e il terzo
+    //    che arriva su una partita già in corso.
+    //  - Se il tavolo è pieno SOLO per un posto DISCONNESSO non reclamabile
+    //    (tentativo di subentro mid-game, SEC-11) → resta l'errore generico "al
+    //    completo": non si tratta di una sedia appena presa e non va incoraggiato
+    //    un refresh/nuovo tentativo sullo stesso codice.
     this.logJoin("full", clientId);
+    const anyDisconnected = this.players.some((p) => !this.isSeatLive(p));
+    if (!anyDisconnected) {
+      send(ws, {
+        type: "join_rejected",
+        code: "ROOM_JUST_TAKEN",
+        reason: "Qualcuno si è appena seduto a quel tavolo.",
+      });
+      return;
+    }
     send(ws, { type: "error", message: "La room è al completo." });
   }
 
@@ -288,11 +406,14 @@ export class Room {
       graceTimer: null,
     };
     this.players.push(slot);
+    // LOBBY: il primo posto è il creatore → ne memorizziamo il clientId.
+    if (seat === 0 && clientId) this.creatorClientId = clientId;
 
     send(ws, {
       type: "room_joined",
       yourSeat: seat,
       yourToken: newToken,
+      code: this.code,
       players: this.publicPlayers(),
       config: this.config,
       resumed: false, // primo ingresso
@@ -344,6 +465,7 @@ export class Room {
       type: "room_joined",
       yourSeat: slot.seat,
       yourToken: rotated,
+      code: this.code,
       players: this.publicPlayers(),
       config: this.config,
       resumed: true, // riconnessione/reclaim di una sessione esistente
@@ -368,6 +490,7 @@ export class Room {
         type: "room_joined",
         yourSeat: p.seat,
         yourToken: p.token, // token corrente (invariato): non è una riconnessione
+        code: this.code,
         players: this.publicPlayers(),
         config: this.config,
         resumed: false,
@@ -376,9 +499,30 @@ export class Room {
     this.startMatch();
   }
 
+  /**
+   * LOBBY (§5.4-D): i due posti condividono l'identità per-browser (clientId) o
+   * lo stesso utente (userId). Deve avere ESATTAMENTE 2 posti per essere valutato.
+   */
+  private isSelfPlay(): boolean {
+    if (this.players.length !== 2) return false;
+    const [a, b] = this.players;
+    if (!a || !b) return false;
+    if (a.clientId !== undefined && a.clientId === b.clientId) return true;
+    if (a.userId !== null && a.userId === b.userId) return true;
+    return false;
+  }
+
   private startMatch(): void {
     const firstDealer: Seat = Math.random() < 0.5 ? 0 : 1; // A6: mazziere a caso
     this.engine = new GameEngine(this.config, firstDealer);
+
+    // LOBBY (§5.4-D) — SELF-PLAY: i due posti sono lo stesso browser (clientId
+    // condiviso) o lo stesso utente (userId condiviso). Avviso NON bloccante ai
+    // due socket e ESCLUSIONE dalle statistiche persistendo con userId=null per
+    // ENTRAMBI i posti: un match non attribuito non comparirà nelle stats di
+    // nessuno, senza toccare il layer stats/query (decisione lead #3).
+    const selfPlay = this.isSelfPlay();
+    if (selfPlay) this.broadcast({ type: "self_play_notice" });
 
     // Persistenza best-effort (checkpoint/audit): match, players, hand 1.
     this.handId = randomUUID();
@@ -389,7 +533,7 @@ export class Room {
         seat: p.seat,
         displayName: p.displayName,
         tokenHash: p.tokenHash,
-        userId: p.userId,
+        userId: selfPlay ? null : p.userId,
       })),
     );
     void persistence.startHand(this.matchId, this.handId, this.engine.handNumber, this.engine.dealerSeat);
@@ -556,7 +700,7 @@ export class Room {
       }
       // Avversario ancora presente → partita ANNULLATA per abbandono (no winner).
       this.closeRoom("abandoned");
-    }, this.reconnectGraceMs());
+    }, this.graceMs());
     slot.graceTimer.unref?.();
   }
 
@@ -588,8 +732,26 @@ export class Room {
     this.closeRoom("interrupted");
   }
 
-  private reconnectGraceMs(): number {
+  /**
+   * LOBBY (§5.4-B): grazia CONDIZIONATA allo stato. In ATTESA (`engine === null`)
+   * si usa la finestra breve WAITING_GRACE_MS (default 60s): non c'è partita da
+   * salvare, ma non si punisce un cambio rete. In PARTITA resta RECONNECT_GRACE_MS
+   * (default 180s), invariato. Letto dall'env a ogni disconnessione così i test
+   * possono iniettare valori deterministici.
+   */
+  private graceMs(): number {
+    if (!this.engine) return Number(process.env.WAITING_GRACE_MS ?? 60_000);
     return Number(process.env.RECONNECT_GRACE_MS ?? 180_000);
+  }
+
+  /**
+   * LOBBY (§5.4-B): chiusura PULITA di un tavolo in ATTESA (beacon /session/leave
+   * o annullamento immediato). Dispose solo se la partita non è iniziata: in
+   * partita lo smontaggio passa dai canali esistenti (reset_room/abbandono).
+   */
+  leaveWaiting(): void {
+    if (this.engine) return;
+    this.dispose();
   }
 
   isEmpty(): boolean {

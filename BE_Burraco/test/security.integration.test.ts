@@ -183,8 +183,11 @@ test("SEC-10: dopo la riconnessione il token è RUOTATO; CONFERMATO il nuovo tok
   // stato. Il vettore di replay del vecchio token resta chiuso.
   const intruder = new Client(url); await intruder.open();
   intruder.send({ type: "join_room", roomCode: room, playerToken: oldToken, displayName: "Mallory" });
-  const err = (await intruder.waitFor((m) => m.type === "error")) as Extract<ServerMessage, { type: "error" }>;
-  assert.match(err.message, /completo/i, "vecchio token committato: nessuna riconnessione");
+  // Con i due posti VIVI (A2 riconnesso + B) il tavolo è genuinamente pieno: l'esito
+  // è join_rejected{ROOM_JUST_TAKEN} (§5.4-C). L'invariante di sicurezza è
+  // invariata: nessuna riconnessione col vecchio token, nessun room_joined/state.
+  const rej = (await intruder.waitFor((m) => m.type === "join_rejected")) as Extract<ServerMessage, { type: "join_rejected" }>;
+  assert.equal(rej.code, "ROOM_JUST_TAKEN", "vecchio token committato: nessuna riconnessione");
   assert.ok(!intruder.has("room_joined"), "vecchio token committato: nessun room_joined");
   assert.ok(!intruder.has("state"), "vecchio token committato: nessuno stato");
 

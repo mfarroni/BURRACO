@@ -94,9 +94,11 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
   // StatsStore: Drizzle/Neon con DATABASE_URL, altrimenti in-memory (macro-ciclo 3).
   const statsStore = opts.statsStore ?? createStatsStore();
 
-  // App Express: /health + /auth/* + /users/me/* (stats/storico) con CORS
-  // allowlist, rate-limit e validazione zod. Vive sullo STESSO http.Server del WS.
-  const app = createHttpApp(authService, statsStore);
+  // App Express: /health + /auth/* + /users/me/* (stats/storico) + /tables* e
+  // /session/leave (lobby) con CORS allowlist, rate-limit e validazione zod. Vive
+  // sullo STESSO http.Server del WS. Il RoomManager è wire-ato così le rotte lobby
+  // leggono lo stato in RAM (la lista è solo informativa: l'avvio partita è via WS).
+  const app = createHttpApp(authService, statsStore, manager);
   const httpServer = http.createServer(app);
 
   // SEC-02: `maxPayload` fa sì che `ws` rifiuti (1009) e non bufferizzi né

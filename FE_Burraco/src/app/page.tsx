@@ -4,8 +4,12 @@ import { useEffect, useState } from "react";
 import type { Card } from "@/lib/contract";
 import { useGameSocket } from "@/lib/useGameSocket";
 import { useAuth } from "@/lib/useAuth";
+import { useLobbyList, useLeaveOnPageHide } from "@/lib/lobby";
 import { AuthPanel, type AuthMode } from "@/components/AuthPanel";
 import { Landing } from "@/components/Landing";
+import { Lobby } from "@/components/Lobby";
+import { OpenTableModal } from "@/components/OpenTableModal";
+import { WaitingRoom } from "@/components/WaitingRoom";
 import { ProfilePanel } from "@/components/ProfilePanel";
 import { BottomHand } from "@/components/BottomHand";
 import { CardView } from "@/components/CardView";
@@ -31,13 +35,22 @@ export default function Page() {
   const g = useGameSocket();
   const auth = useAuth();
 
-  // Form della lobby.
-  const [roomCode, setRoomCode] = useState("");
+  // LOBBY: la lista dei tavoli pubblici + contatore viene dal polling HTTP,
+  // attivo SOLO quando l'utente è autenticato e non ancora seduto a un tavolo.
+  // Il polling funge anche da heartbeat di presenza in lobby (§6.2).
+  const inLobby = auth.status === "authenticated" && !g.joined;
+  const lobby = useLobbyList(inLobby);
+  // Beacon di chiusura pulita del tavolo in ATTESA su pagehide (§5.4-B): attivo
+  // solo quando si ha un tavolo in attesa (joined ma partita non ancora iniziata).
+  useLeaveOnPageHide(g.joined && !g.state);
+
   // Ramo anonimo: la vetrina è la prima vista; `showAuth` apre l'AuthPanel sul
   // percorso scelto (login/register/guest) senza cambiare route (SPA).
   const [showAuth, setShowAuth] = useState<AuthMode | null>(null);
   // Vista Profilo (sola lettura) sovrapposta alla lobby autenticata.
   const [showProfile, setShowProfile] = useState(false);
+  // Modale "Apri un tavolo" (door a). Aperta dalla lobby; chiusa a join riuscito.
+  const [showOpenModal, setShowOpenModal] = useState(false);
   // Ingresso diretto al tavolo per l'ospite con codice: la vetrina/AuthPanel
   // deposita qui il codice; l'effetto sotto lo consuma appena l'auth è pronta.
   const [pendingRoom, setPendingRoom] = useState<string | null>(null);
@@ -115,11 +128,22 @@ export default function Page() {
   useEffect(() => {
     if (pendingRoom === null) return;
     if (auth.status !== "authenticated" || g.joined) return;
-    setRoomCode(pendingRoom);
     g.join(pendingRoom, auth.user?.displayName ?? "");
     setPendingRoom(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingRoom, auth.status, g.joined]);
+
+  // LOBBY (§5.4-C): un tentativo di seduta fallito (ROOM_JUST_TAKEN) deve
+  // rinfrescare subito la lista, così la sedia scomparsa sparisce dalla vista.
+  useEffect(() => {
+    if (g.sitRejected) lobby.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [g.sitRejected]);
+
+  // A join riuscito la modale d'apertura non serve più (la schermata cambia).
+  useEffect(() => {
+    if (g.joined) setShowOpenModal(false);
+  }, [g.joined]);
 
   /* ── Ripristino sessione in corso ──────────────────────────────────── */
   if (auth.status === "initializing") {
@@ -156,11 +180,12 @@ export default function Page() {
     return <ProfilePanel user={auth.user} onBack={() => setShowProfile(false)} />;
   }
 
-  /* ── Autenticato ma non ancora al tavolo → codice tavolo + Entra ────── */
+  /* ── Autenticato ma non ancora al tavolo → LOBBY (lista + azioni) ────── */
   if (!g.joined) {
     const connecting = g.connPhase === "connecting" || g.connPhase === "reconnecting";
+    const name = auth.user?.displayName ?? "";
     return (
-      <div className="lobby">
+      <div className="lobby lobby-wide">
         <div className="brand">
           <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
           <h1>Burraco</h1>
@@ -181,35 +206,33 @@ export default function Page() {
           </button>
         </div>
 
-        <label htmlFor="room">Codice tavolo</label>
-        <input
-          id="room"
-          value={roomCode}
-          onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-          placeholder="es. TAVOLO1"
-          maxLength={12}
-          autoComplete="off"
-          aria-describedby="room-hint"
-        />
-        <p id="room-hint" className="field-hint">
-          Chi apre il tavolo sceglie un codice; l&apos;avversario digita lo stesso per sedersi.
-        </p>
-        <button
-          type="button"
-          className="cta btn-primary"
-          disabled={!roomCode.trim() || connecting}
-          onClick={() => {
+        <Lobby
+          tables={lobby.tables}
+          lobbyPlayers={lobby.lobbyPlayers}
+          status={lobby.status}
+          connecting={connecting}
+          sitRejected={g.sitRejected}
+          onDismissSitRejected={g.dismissSitRejected}
+          onQuickMatch={() => {
             g.dismissJoinRejected();
-            g.join(roomCode, auth.user?.displayName ?? "");
+            g.quickMatch(name);
           }}
-        >
-          {connecting ? "Connessione…" : "Entra"}
-        </button>
-        {connecting && (
-          <p className="muted" role="status" style={{ marginTop: "var(--sp-3)" }}>
-            Apertura del tavolo in corso…
-          </p>
-        )}
+          onOpenTable={() => {
+            g.dismissJoinRejected();
+            g.dismissOpenRejected();
+            setShowOpenModal(true);
+          }}
+          onSit={(code) => {
+            g.dismissJoinRejected();
+            g.sit(code, name);
+          }}
+          onJoinByCode={(code) => {
+            g.dismissJoinRejected();
+            g.join(code, name);
+          }}
+          onAbort={g.abortConnection}
+        />
+
         {/* SEC-08: ingresso negato per autenticazione (token mancante/scaduto).
             Tono AMBRA (non rosso): non è una colpa dell'utente. Per la sessione
             scaduta offriamo l'azione diretta riusando il logout già cablato. */}
@@ -235,11 +258,26 @@ export default function Page() {
             </p>
           )
         )}
-        {g.errorMessage && (
+        {/* Errore di connessione/config (SEC-09) mostrato solo fuori dalla modale
+            (dentro la modale ha il suo slot inline). */}
+        {g.errorMessage && !showOpenModal && (
           <p role="alert" className="auth-error">
             <span className="auth-error-icon" aria-hidden="true">!</span>
             <span>{g.errorMessage}</span>
           </p>
+        )}
+
+        {showOpenModal && (
+          <OpenTableModal
+            openRejected={g.openRejected}
+            errorMessage={g.errorMessage}
+            onDismissRejected={g.dismissOpenRejected}
+            onConfirm={(code, isPrivate) => g.openTable(code, isPrivate, name)}
+            onCancel={() => {
+              setShowOpenModal(false);
+              g.abortConnection();
+            }}
+          />
         )}
       </div>
     );
@@ -257,23 +295,14 @@ export default function Page() {
   /* ── In attesa dell'avversario (nessuno stato di gioco ancora) ─────── */
   if (!g.state) {
     return (
-      <div className="lobby">
-        <div className="brand">
-          <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
-          <h1>In attesa dell&apos;avversario</h1>
-          <p className="tagline">
-            Codice tavolo: <strong>{roomCode.toUpperCase() || "—"}</strong>
-          </p>
-        </div>
-        <p className="muted" style={{ textAlign: "center" }}>
-          Condividi il codice con l&apos;altro giocatore: la partita inizia appena si siede al tavolo.
-        </p>
-        <ConnectionBanner connPhase={g.connPhase} resumed={g.resumed} />
-        {/* Reset consentito in attesa: nessun avversario da penalizzare. */}
-        <div style={{ display: "flex", justifyContent: "center", marginTop: "var(--sp-4)" }}>
-          <ResetTableButton onReset={g.resetRoom} context="waiting" />
-        </div>
-      </div>
+      <WaitingRoom
+        code={g.roomCode ?? ""}
+        isPrivate={g.waitingIsPrivate}
+        connPhase={g.connPhase}
+        resumed={g.resumed}
+        merged={g.merged}
+        onCancel={g.leaveToLobby}
+      />
     );
   }
 
@@ -300,6 +329,21 @@ export default function Page() {
       <HandEndedOverlay info={g.handEnded} players={g.players} yourSeat={g.yourSeat} />
       <GameEndedOverlay info={g.gameEnded} players={g.players} yourSeat={g.yourSeat} config={g.config} />
       <RoomClosedOverlay info={g.roomClosed} onLeave={() => window.location.reload()} />
+
+      {/* Self-play (§5.4-D): avviso NON bloccante, i due posti sono lo stesso
+          browser/utente. La partita è esclusa dalle statistiche (lato server). */}
+      {g.selfPlay && (
+        <div className="banner" data-tone="info" role="status" aria-live="polite">
+          <span className="banner-icon" aria-hidden="true">⚑</span>
+          <span className="banner-body">
+            <span className="banner-title">Stai giocando contro te stesso</span>
+            <span className="banner-sub">Questa partita non conterà nelle statistiche.</span>
+          </span>
+          <button type="button" className="toast-close" onClick={g.dismissSelfPlay} aria-label="Chiudi avviso">
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Avversario offline: rientro in corso entro la finestra di grazia; nel
           frattempo è possibile terminare il tavolo (annulla la partita). */}
@@ -429,7 +473,7 @@ export default function Page() {
 
       {/* ── La tua mano (ancorata in basso, a ventaglio, riordinabile) ──── */}
       <BottomHand
-        room={roomCode.toUpperCase() || null}
+        room={g.roomCode}
         hand={s.yourHand}
         selectedCards={selectedCards}
         isMyTurn={isMyTurn}
