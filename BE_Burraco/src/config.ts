@@ -37,6 +37,28 @@ export const env = {
     .filter(Boolean),
   /** Periodo di grazia riconnessione (§6.3). Vedi `RECONNECT_GRACE_DEFAULT_MS`. */
   reconnectGraceMs: Number(process.env.RECONNECT_GRACE_MS ?? RECONNECT_GRACE_DEFAULT_MS),
+  /**
+   * LOBBY (§5.4-B) — grazia alla disconnessione per un tavolo in ATTESA
+   * (`engine === null`): più breve dei 180s in partita perché non c'è una partita
+   * da salvare, ma sufficiente a non punire un cambio di rete mobile. Default 60s.
+   * La finestra "in partita" resta governata da `RECONNECT_GRACE_MS`/180s (grazia
+   * CONDIZIONATA di `Room.graceMs()`).
+   */
+  waitingGraceMs: Number(process.env.WAITING_GRACE_MS ?? 60_000),
+  /**
+   * LOBBY (§6.2) — finestra TTL entro cui una sessione che ha fatto un poll
+   * `GET /tables` è considerata "in lobby". ≈ 2,4× l'intervallo di polling (5s)
+   * per tollerare un poll perso. Default 12s.
+   */
+  lobbyPresenceTtlMs: Number(process.env.LOBBY_PRESENCE_TTL_MS ?? 12_000),
+  /**
+   * LOBBY (remediation SEC-LOBBY-03, R2a) — tetto GLOBALE al numero di room attive
+   * in RAM sul nodo singolo. Oltre questa soglia la CREAZIONE di un nuovo tavolo
+   * (open_table / quick_match / join_room con codice sconosciuto) è rifiutata con un
+   * errore leggibile, invece di far crescere la mappa senza limiti. Non tocca la
+   * seduta/riconnessione a una room ESISTENTE. Default 500.
+   */
+  maxRooms: Number(process.env.MAX_ROOMS ?? 500),
   turnTimeoutMs: Number(process.env.TURN_TIMEOUT_MS ?? 90_000),
   /**
    * Macro-ciclo 1 — Auth (SEC-08): quando true, `join_room` richiede un authToken

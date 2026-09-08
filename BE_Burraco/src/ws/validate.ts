@@ -51,6 +51,28 @@ const resetRoom = z.object({ type: z.literal("reset_room") });
 // sono dedotti dal socket lato server (mai dal client → nessuno spoof).
 const gameAbort = z.object({ type: z.literal("game_abort") });
 
+// LOBBY (door a) — "Apri un tavolo". `code` è normalizzato/troncato a valle dal
+// RoomManager; qui solo cap difensivo. I campi di identità hanno la stessa forma
+// di join_room (la validità reale del token la decide l'AuthService, non qui).
+const openTable = z.object({
+  type: z.literal("open_table"),
+  code: z.string().max(MAX_ROOM),
+  private: z.boolean(),
+  displayName: z.string().max(MAX_NAME),
+  clientId: z.string().max(MAX_ID).optional(),
+  authToken: z.string().max(MAX_AUTH_TOKEN).optional(),
+  playerToken: z.string().max(MAX_ID).optional(),
+});
+
+// LOBBY (door b) — "Gioca subito". Nessun payload di gioco: solo identità.
+const quickMatch = z.object({
+  type: z.literal("quick_match"),
+  displayName: z.string().max(MAX_NAME),
+  clientId: z.string().max(MAX_ID).optional(),
+  authToken: z.string().max(MAX_AUTH_TOKEN).optional(),
+  playerToken: z.string().max(MAX_ID).optional(),
+});
+
 const draw = z.object({
   type: z.literal("draw"),
   source: z.enum(["deck", "discard"]),
@@ -101,6 +123,8 @@ const clientMessageSchema = z.discriminatedUnion("type", [
   undoLast,
   resetRoom,
   gameAbort,
+  openTable,
+  quickMatch,
   heartbeat,
 ]);
 
