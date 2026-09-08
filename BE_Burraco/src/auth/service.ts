@@ -1,7 +1,6 @@
 import type { AuthPrincipal, AuthStore, AuthUser, StoredUser } from "./types.js";
 import { hashPassword, verifyPassword, verifyDummy } from "./password.js";
 import { generateSessionToken, hashToken } from "./tokens.js";
-import { RECONNECT_GRACE_DEFAULT_MS } from "../config.js";
 
 /**
  * SERVIZIO AUTH: orchestrazione di hashing, token e store (server autoritativo).
@@ -66,40 +65,11 @@ export class AuthService {
   /** TTL di sessione: 7 giorni. Oltre, il token non è più risolvibile. */
   private readonly sessionTtlMs: number;
 
-  /**
-   * §6.2/§6.3 — chiusure sessione "morbide" in corso, per hash del token. Il beacon
-   * `/session/leave` NON revoca subito: pianifica la chiusura dopo il PERIODO DI
-   * GRAZIA (stesso valore della riconnessione, 45s), così un `F5`/ritorno rapido non
-   * distrugge la sessione. Qualsiasi ATTIVITÀ autenticata con quel token entro la
-   * grazia (risoluzione del principale in /auth/me o al rejoin WS) ANNULLA la chiusura
-   * (resume). In-RAM, coerente con l'architettura single-instance: un riavvio del
-   * processo perde i timer, ma il TTL resta la garanzia (§6.2.3).
-   */
-  private readonly pendingLeaves = new Map<string, ReturnType<typeof setTimeout>>();
-
   constructor(
     private readonly store: AuthStore,
     opts?: { sessionTtlMs?: number },
   ) {
     this.sessionTtlMs = opts?.sessionTtlMs ?? 7 * 24 * 60 * 60 * 1000;
-  }
-
-  /**
-   * Periodo di grazia della chiusura sessione via beacon: lo stesso della
-   * riconnessione (§6.3). Rilettura dinamica dell'env così i test iniettano finestre
-   * brevi; default documentato in `RECONNECT_GRACE_DEFAULT_MS` (45s).
-   */
-  private leaveGraceMs(): number {
-    return Number(process.env.RECONNECT_GRACE_MS ?? RECONNECT_GRACE_DEFAULT_MS);
-  }
-
-  /** Annulla un'eventuale chiusura sessione pendente per quel token (resume). */
-  private cancelPendingLeave(tokenHash: string): void {
-    const timer = this.pendingLeaves.get(tokenHash);
-    if (timer) {
-      clearTimeout(timer);
-      this.pendingLeaves.delete(tokenHash);
-    }
   }
 
   /** Emette un token opaco, ne persiste SOLO l'hash e lo restituisce in chiaro. */
@@ -202,54 +172,9 @@ export class AuthService {
   /**
    * LOGOUT ESPLICITO (uscita pulita, §6.2 livello 1): revoca IMMEDIATA della sessione
    * + scadenza immediata se ospite (§6.4). Nessuna grazia: è un'uscita volontaria.
-   * Annulla anche un'eventuale chiusura morbida pendente per lo stesso token.
    */
   async logout(token: string): Promise<void> {
-    this.cancelPendingLeave(hashToken(token));
     await this.endSessionByToken(token);
-  }
-
-  /**
-   * §6.2/§6.3: endpoint del beacon `POST /session/leave`. Chiusura MORBIDA: pianifica
-   * la revoca della sessione dopo il periodo di grazia, invece di revocarla subito,
-   * così un `F5`/ritorno rapido (che riemette attività autenticata) la ANNULLA e la
-   * partita riprende (§6.3). Alla scadenza della grazia, se non c'è stato resume:
-   * revoca la sessione e, se il titolare è un OSPITE, lo marca scaduto (§6.4).
-   * Proprietà:
-   *  - IDEMPOTENTE: una seconda chiamata sullo stesso token (pagehide +
-   *    visibilitychange, o ritardo) non pianifica una seconda chiusura;
-   *  - BLINDATO: agisce ESCLUSIVAMENTE sulla sessione il cui token è presentato
-   *    (risoluzione per hash del token, mai un id nel payload) → impossibile espellere
-   *    un altro utente;
-   *  - NEUTRO: token assente/ignoto/già chiuso → nessun effetto, nessuna eccezione.
-   * Ritorna true se una chiusura morbida è stata pianificata.
-   */
-  async leaveSession(token: string | undefined | null): Promise<boolean> {
-    if (!token) return false;
-    const tokenHash = hashToken(token);
-    // Idempotenza: già pianificata → non ripianificare (né annullare).
-    if (this.pendingLeaves.has(tokenHash)) return true;
-    // Risoluzione a basso livello (NON getPrincipalByToken, che annullerebbe la
-    // chiusura trattando la chiamata come "attività"): serve solo a sapere se la
-    // sessione è viva e se il titolare è un ospite.
-    const session = await this.store.getSessionByTokenHash(tokenHash);
-    if (!session || session.revokedAt !== null || session.expiresAt.getTime() <= Date.now()) {
-      return false; // niente da chiudere: neutro
-    }
-    const user = await this.store.getUserById(session.userId);
-    const isGuest = user?.isGuest ?? false;
-    const userId = session.userId;
-    const timer = setTimeout(() => {
-      this.pendingLeaves.delete(tokenHash);
-      void (async () => {
-        // Scaduta la grazia senza resume: chiusura effettiva.
-        if (isGuest) await this.store.markGuestExpired(userId, new Date());
-        await this.store.revokeSessionByTokenHash(tokenHash);
-      })().catch((err) => console.error("[session] chiusura differita fallita:", (err as Error).message));
-    }, this.leaveGraceMs());
-    timer.unref?.();
-    this.pendingLeaves.set(tokenHash, timer);
-    return true;
   }
 
   /**
@@ -290,10 +215,6 @@ export class AuthService {
     if (session.expiresAt.getTime() <= Date.now()) return null;
     const user = await this.store.getUserById(session.userId);
     if (!user) return null;
-    // §6.3 RESUME: qualsiasi attività autenticata con questo token (es. /auth/me al
-    // reload dopo un F5, o il rejoin WS) ANNULLA una chiusura sessione pendente:
-    // l'utente è tornato entro la grazia, la sessione resta viva.
-    this.cancelPendingLeave(tokenHash);
     return { userId: user.id, displayName: user.displayName, isGuest: user.isGuest };
   }
 
