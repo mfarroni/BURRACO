@@ -1,40 +1,36 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import http from "node:http";
-import type { AddressInfo } from "node:net";
-import { createHttpApp } from "../src/http/app.js";
 import { AuthService } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/store.memory.js";
 import { hashToken } from "../src/auth/tokens.js";
 
 /**
- * IGIENE SESSIONI (§6): beacon POST /session/leave (chiusura MORBIDA con grazia) +
+ * IGIENE SESSIONI (§6): chiusura MORBIDA con grazia (AuthService.leaveSession) +
  * logout esplicito (immediato) + scadenza ospite + sweep. AuthService + store
- * in-memory, http reale + fetch. Grazia breve iniettata via env per determinismo.
+ * in-memory. Grazia breve iniettata via env per determinismo.
+ *
+ * NOTA lobby canonica: la rotta HTTP `POST /session/leave` è ora del layer LOBBY
+ * (RoomManager.leaveWaiting: pulizia del tavolo in attesa, NON revoca della
+ * sessione auth) — vedi lobby.http.test.ts. I meccanismi di igiene sessione qui
+ * sotto (leaveSession/logout/sweep) restano nell'AuthService e si verificano
+ * chiamandoli DIRETTAMENTE, non più via beacon HTTP.
  */
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const GRACE = 40; // ms
 
-let server: http.Server;
-let base: string;
 let store: MemoryAuthStore;
 let auth: AuthService;
 const ORIG_GRACE = process.env.RECONNECT_GRACE_MS;
 
-before(async () => {
+before(() => {
   process.env.RECONNECT_GRACE_MS = String(GRACE);
   store = new MemoryAuthStore();
   auth = new AuthService(store);
-  const app = createHttpApp(auth, undefined);
-  server = http.createServer(app);
-  await new Promise<void>((resolve) => server.listen(0, resolve));
-  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
-after(async () => {
+after(() => {
   if (ORIG_GRACE === undefined) delete process.env.RECONNECT_GRACE_MS;
   else process.env.RECONNECT_GRACE_MS = ORIG_GRACE;
-  await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
 async function guest(name: string): Promise<{ token: string; id: string }> {
@@ -50,28 +46,23 @@ const revoked = async (token: string): Promise<boolean> => {
   return !s || s.revokedAt !== null;
 };
 
-/* ─────────────────────── endpoint HTTP /session/leave ─────────────────────── */
+/* ─────────────────── chiusura morbida con grazia (§6.3) ────────────────────── */
 
-test("beacon: risponde 204; ripetuto è neutro; token ignoto è neutro", async () => {
-  const g = await guest("Marco");
-  const post = (body: string) => fetch(base + "/session/leave", { method: "POST", body });
-  assert.equal((await post(g.token)).status, 204);
-  assert.equal((await post(g.token)).status, 204, "ripetizione idempotente");
-  assert.equal((await post("token-ignoto")).status, 204, "token ignoto: neutro");
-});
-
-test("beacon blindato: chiudere col proprio token non tocca la sessione di un altro", async () => {
+test("leaveSession blindato: chiudere la PROPRIA sessione non tocca quella di un altro", async () => {
   const a = await guest("Anna");
   const b = await guest("Bruno");
-  await fetch(base + "/session/leave", { method: "POST", body: a.token });
+  await auth.leaveSession(a.token);
   await delay(GRACE * 3);
   assert.ok(await revoked(a.token), "sessione di Anna chiusa dopo la grazia");
   assert.ok(!(await revoked(b.token)), "sessione di Bruno INTATTA (non espellibile)");
 });
 
-/* ─────────────────── chiusura morbida con grazia (§6.3) ────────────────────── */
+test("leaveSession neutro: token ignoto/assente non lancia e non chiude nulla", async () => {
+  assert.equal(await auth.leaveSession("token-ignoto"), false, "token ignoto: neutro");
+  assert.equal(await auth.leaveSession(undefined), false, "token assente: neutro");
+});
 
-test("beacon ospite: senza resume, oltre la grazia → sessione chiusa e ospite scaduto (displayName intatto)", async () => {
+test("leaveSession ospite: senza resume, oltre la grazia → sessione chiusa e ospite scaduto (displayName intatto)", async () => {
   const g = await guest("Ospite Pippo");
   await auth.leaveSession(g.token);
   assert.ok(!(await revoked(g.token)), "entro la grazia la sessione è ancora viva");
