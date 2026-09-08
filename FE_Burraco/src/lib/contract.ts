@@ -166,11 +166,32 @@ export type ClientMessage =
   // ANNULLAMENTO UNILATERALE della partita in corso (nessun payload; room e seat
   // dedotti dal socket lato server). Chiude la partita per entrambi, libera il tavolo.
   | { type: "game_abort" }
+  // LOBBY (door a) — "Apri un tavolo". `private:true` → non compare in lista.
+  // I campi identità hanno la stessa semantica di join_room (nome autoritativo dal token).
+  | {
+      type: "open_table";
+      code: string;
+      private: boolean;
+      displayName: string;
+      clientId?: string;
+      authToken?: string;
+      playerToken?: string;
+    }
+  // LOBBY (door b) — "Gioca subito". Decisione tutta server-side.
+  | {
+      type: "quick_match";
+      displayName: string;
+      clientId?: string;
+      authToken?: string;
+      playerToken?: string;
+    }
   | { type: "heartbeat" };
 
 /** SERVER → CLIENT. */
 export type ServerMessage =
-  | { type: "room_joined"; yourSeat: Seat; yourToken: string; players: PlayerPublic[]; config: GameConfig; resumed: boolean }
+  // `code`: codice normalizzato del tavolo (necessario per quick_match, dove il
+  // codice è generato dal server e appreso dal client solo qui).
+  | { type: "room_joined"; yourSeat: Seat; yourToken: string; code: string; players: PlayerPublic[]; config: GameConfig; resumed: boolean }
   | { type: "state"; state: GameStatePublic }
   | { type: "move_applied"; clientMoveId: string }
   | { type: "move_rejected"; code: RejectCode; reason: string; clientMoveId?: string }
@@ -190,11 +211,43 @@ export type ServerMessage =
   | { type: "game_aborted"; byName: string }
   | { type: "opponent_disconnected"; seat: Seat }
   | { type: "opponent_reconnected"; seat: Seat }
-  // Rifiuto di join_room PRIMA di occupare un posto (SEC-08), distinto da `error`
-  // e da `move_rejected`. "AUTH_REQUIRED" = manca l'authToken; "AUTH_INVALID" =
-  // token scaduto/revocato/sconosciuto. Il client riporta alla schermata d'ingresso.
-  | { type: "join_rejected"; code: "AUTH_REQUIRED" | "AUTH_INVALID"; reason: string }
+  // Rifiuto di join_room PRIMA di occupare un posto. "AUTH_REQUIRED" = manca
+  // l'authToken; "AUTH_INVALID" = token scaduto/revocato; "ROOM_JUST_TAKEN"
+  // (LOBBY §5.4-C) = ci si è seduti a un tavolo appena riempito → messaggio + refresh lista.
+  | { type: "join_rejected"; code: "AUTH_REQUIRED" | "AUTH_INVALID" | "ROOM_JUST_TAKEN"; reason: string }
+  // LOBBY (§5.4-A) — FUSIONE: spostato in un tavolo pubblico quick_match già in
+  // attesa; `newCode` è il codice di destinazione. Seguono room_joined/state.
+  | { type: "room_merged"; newCode: string }
+  // LOBBY (door a) — open_table su codice già in uso: la modale resta aperta.
+  | { type: "open_rejected"; code: "CODE_IN_USE" }
+  // LOBBY (§5.4-D) — self-play: avviso NON bloccante "giochi contro te stesso".
+  | { type: "self_play_notice" }
   | { type: "error"; message: string };
+
+/* ─────────────────────────── LOBBY / LISTA TAVOLI (HTTP) ─────────────────────
+ * DTO di RISPOSTA delle rotte REST della lobby. COPIA allineata a mano (nessun
+ * package condiviso): specchio di BE contract/types.ts. La lista è una whitelist
+ * anti-leak (mai tavoli privati né campi interni). L'avvio partita è via WebSocket. */
+
+/** Riga della lista tavoli pubblici in attesa. Specchio di WaitingTableView (BE). */
+export interface WaitingTableView {
+  code: string;
+  creatorName: string;
+  openedAt: number;
+  seatsTotal: number;
+  seatsTaken: number;
+}
+
+/** Risposta di GET /tables. Specchio di TablesResponse (BE). */
+export interface TablesResponse {
+  tables: WaitingTableView[];
+  lobbyPlayers: number;
+}
+
+/** Risposta di GET /tables/new-code. Specchio di NewCodeResponse (BE). */
+export interface NewCodeResponse {
+  code: string;
+}
 
 /* ───────────────────────────── CONTRATTO AUTH (HTTP) ─────────────────────────
  * DTO degli endpoint REST /auth/* del backend. COPIA allineata a mano (nessun
@@ -345,22 +398,4 @@ export interface MatchDetail {
   yourSeat: Seat;
   finalScore: { you: number; opponent: number };
   deals: MatchDeal[];
-}
-
-/* ─────────────────────────── ELENCO TAVOLI APERTI (HTTP) ─────────────────────
- * DTO di GET /rooms/open (endpoint PUBBLICO, read-only). COPIA allineata a mano
- * dello specchio BE. Espone SOLO il minimo: nessun id utente/email, nessuna
- * distinzione ospite-vs-registrato — solo il displayName di chi attende. */
-export interface OpenRoomInfo {
-  code: string;
-  hostName: string;
-  seats: number;
-  maxSeats: number;
-  /** ISO8601 di quando il tavolo ha iniziato ad attendere. */
-  waitingSince: string;
-}
-
-/** Risposta di GET /rooms/open. */
-export interface OpenRoomsResponse {
-  rooms: OpenRoomInfo[];
 }
