@@ -106,6 +106,13 @@ export interface HandScoreDetail {
   ptsPenaltyHand: number;
   ptsPozzetto: number;
   totalDelta: number;
+  /**
+   * Fatti di STILE (macro-ciclo storico). Additivi: conteggio dei burrachi propri
+   * separati per pulito/sporco e modalità di presa del pozzetto (true = "in diretta").
+   */
+  burrachiPuliti: number;
+  burrachiSporchi: number;
+  pozzettoInDiretta: boolean;
 }
 
 export type RejectCode =
@@ -219,7 +226,51 @@ export interface AuthErrorBody {
  * allineata a mano (decisione #4/#8): specchio di BE contract/types.ts. L'utente
  * è SEMPRE derivato dal token lato server (mai un id nel client): nessun IDOR. */
 
-/** Statistiche aggregate CORE di un utente. Specchio di UserStats (BE). */
+/** Periodo temporale delle statistiche. Specchio di StatsPeriod (BE). */
+export type StatsPeriod = "all" | "30d" | "season";
+
+/**
+ * Metrica del blocco analisi. `value` è null quando il campione è sotto soglia
+ * (dati insufficienti): la UI mostra "dati insufficienti (sampleSize/threshold)".
+ * Specchio di StatMetric (BE).
+ */
+export interface StatMetric {
+  value: number | null;
+  sampleSize: number;
+  threshold: number;
+}
+
+/** Serie d'andamento (sparkline): media punti per partita, cronologica. Specchio di StatTrend (BE). */
+export interface StatTrend {
+  points: number[];
+  sampleSize: number;
+  threshold: number;
+}
+
+/** Blocco analisi di stile ("come giochi"). Specchio di StyleAnalysis (BE). */
+export interface StyleAnalysis {
+  dealsPlayed: number;
+  burrachiPulitiPerDeal: StatMetric;
+  burrachiSporchiPerDeal: StatMetric;
+  cleanDirtyRatio: StatMetric;
+  pozzettoRate: StatMetric;
+  pozzettoInDirettaShare: StatMetric;
+  closureRate: StatMetric;
+  avgHandPenalty: StatMetric;
+  avgPointsPerDeal: StatMetric;
+  malusPozzettoCount: number;
+  trend: StatTrend;
+}
+
+/**
+ * Statistiche aggregate di un utente (base + analisi). Specchio di UserStats (BE).
+ *
+ * ROBUSTEZZA (contratto tollerante): i campi introdotti da questa feature sono
+ * OPZIONALI perché il FE può parlare con un backend non ancora aggiornato (es.
+ * preview Vercel del branch verso il Render di produzione ancora vecchio). In quel
+ * caso la risposta contiene solo i campi base: la UI deve degradare (nascondere il
+ * blocco analisi), MAI andare in crash dereferenziando `analysis` inesistente.
+ */
 export interface UserStats {
   matchesPlayed: number;
   matchesWon: number;
@@ -227,17 +278,28 @@ export interface UserStats {
   /** won/played in [0,1]; 0 quando played = 0. */
   winRate: number;
   totalPoints: number;
+  /** Partite abbandonate: non pesano su vinte/perse. Assente su backend non aggiornato. */
+  matchesAbandoned?: number;
+  /** Punteggio finale medio; null se played = 0. Assente su backend non aggiornato. */
+  avgFinalScore?: number | null;
+  /** Blocco analisi di stile. Assente su backend non aggiornato → sezione nascosta. */
+  analysis?: StyleAnalysis;
+  periodo?: StatsPeriod;
 }
 
 /** Sintesi di una partita conclusa nello storico. Specchio di MatchSummary (BE). */
 export interface MatchSummary {
   matchId: string;
-  /** Epoch millis di fine partita (best-effort); può essere null. */
+  /** Epoch millis di fine partita (matches.ended_at); può essere null. */
   endedAt: number | null;
   result: "won" | "lost";
   opponentName: string;
+  /** true se l'avversario era un ospite (suffisso "(ospite)" nella UI). Assente su backend non aggiornato. */
+  opponentIsGuest?: boolean;
   yourScore: number;
   opponentScore: number;
+  /** Numero di smazzate giocate nella partita. Assente su backend non aggiornato. */
+  dealsCount?: number;
 }
 
 /** Risposta paginata di GET /users/me/matches. */
@@ -245,6 +307,44 @@ export interface MatchesPage {
   items: MatchSummary[];
   limit: number;
   offset: number;
+}
+
+/** Stato di una partita nello storico (vocabolario DB). Specchio di MatchStatus (BE). */
+export type MatchStatus = "playing" | "completed" | "aborted" | "abandoned";
+
+/** Lato (utente/avversario) di una smazzata nel dettaglio. Specchio di MatchDealSide (BE). */
+export interface MatchDealSide {
+  puntiSmazzata: number;
+  puntiCarteInMano: number;
+  burrachiPuliti: number;
+  burrachiSporchi: number;
+  pozzettoPreso: boolean;
+  pozzettoInDiretta: boolean;
+  haChiuso: boolean;
+  malusPozzetto: boolean;
+}
+
+/** Una smazzata nel dettaglio partita. Specchio di MatchDeal (BE). */
+export interface MatchDeal {
+  numeroSmazzata: number;
+  dealerSeat: Seat;
+  closerSeat: Seat | null;
+  you: MatchDealSide;
+  opponent: MatchDealSide;
+}
+
+/** Dettaglio di una partita, smazzata-per-smazzata. Specchio di MatchDetail (BE). */
+export interface MatchDetail {
+  matchId: string;
+  endedAt: number | null;
+  status: MatchStatus;
+  /** won | lost per le partite completed; null altrimenti. */
+  result: "won" | "lost" | null;
+  opponent: { name: string; isGuest: boolean };
+  targetScore: number;
+  yourSeat: Seat;
+  finalScore: { you: number; opponent: number };
+  deals: MatchDeal[];
 }
 
 /* ─────────────────────────── ELENCO TAVOLI APERTI (HTTP) ─────────────────────

@@ -1,6 +1,6 @@
 import type { GameConfig, HandScoreDetail, Seat } from "../contract/types.js";
 import { db, schema } from "./client.js";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 
 /**
  * Persistenza best-effort (checkpoint + audit). Ogni operazione è isolata in
@@ -88,6 +88,15 @@ export const persistence = {
     );
   },
 
+  /**
+   * Fine smazzata: scrive i punteggi arricchiti, marca la smazzata conclusa e
+   * salva il checkpoint. Il trittico è avvolto in UNA transazione, così un
+   * fallimento parziale non lascia punteggi senza la smazzata marcata conclusa
+   * (o viceversa). Resta BEST-EFFORT: l'errore è catturato da `safe` e non risale
+   * mai al motore (il gioco non si blocca). Idempotente sulla scrittura punteggi
+   * grazie a `ON CONFLICT (hand_id, seat) DO NOTHING`: un eventuale secondo endHand
+   * sullo stesso hand_id non produce doppie righe né doppio conteggio.
+   */
   async endHand(
     matchId: string,
     handId: string | null,
@@ -96,31 +105,38 @@ export const persistence = {
     fullState: unknown,
   ): Promise<void> {
     if (!handId) return;
-    await safe("endHand.scores", () =>
-      db!.insert(schema.handScores).values(
-        scores.map((s) => ({
+    await safe("endHand", () =>
+      db!.transaction(async (tx) => {
+        await tx
+          .insert(schema.handScores)
+          .values(
+            scores.map((s) => ({
+              handId,
+              seat: s.seat,
+              ptsMelds: s.ptsMelds,
+              ptsBonus: s.ptsBonus,
+              ptsPenaltyHand: s.ptsPenaltyHand,
+              ptsPozzetto: s.ptsPozzetto,
+              totalDelta: s.totalDelta,
+              burrachiPuliti: s.burrachiPuliti,
+              burrachiSporchi: s.burrachiSporchi,
+              pozzettoInDiretta: s.pozzettoInDiretta,
+            })),
+          )
+          // Chiave d'idempotenza (UNIQUE hand_id, seat): la seconda scrittura è no-op.
+          .onConflictDoNothing({
+            target: [schema.handScores.handId, schema.handScores.seat],
+          });
+        await tx
+          .update(schema.hands)
+          .set({ status: "ended", closerSeat: closerSeat ?? null, endedAt: new Date() })
+          .where(eq(schema.hands.id, handId));
+        await tx.insert(schema.checkpoints).values({
+          matchId,
           handId,
-          seat: s.seat,
-          ptsMelds: s.ptsMelds,
-          ptsBonus: s.ptsBonus,
-          ptsPenaltyHand: s.ptsPenaltyHand,
-          ptsPozzetto: s.ptsPozzetto,
-          totalDelta: s.totalDelta,
-        })),
-      ),
-    );
-    await safe("endHand.update", () =>
-      db!
-        .update(schema.hands)
-        .set({ status: "ended", closerSeat: closerSeat ?? null, endedAt: new Date() })
-        .where(eq(schema.hands.id, handId)),
-    );
-    await safe("endHand.checkpoint", () =>
-      db!.insert(schema.checkpoints).values({
-        matchId,
-        handId,
-        seq: 0,
-        state: fullState as object,
+          seq: 0,
+          state: fullState as object,
+        });
       }),
     );
   },
@@ -137,7 +153,9 @@ export const persistence = {
       db!
         .update(schema.matches)
         .set({ status: "completed", winnerSeat: winnerSeat ?? null, endedAt: new Date() })
-        .where(eq(schema.matches.id, matchId)),
+        // Condizionale/idempotente: un doppio invio (o una gara con abort) non
+        // sovrascrive uno stato terminale già scritto.
+        .where(and(eq(schema.matches.id, matchId), ne(schema.matches.status, "completed"))),
     );
   },
 
