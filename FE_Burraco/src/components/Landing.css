@@ -1,12 +1,15 @@
 /* =====================================================================
-   Landing.css — stili ESCLUSIVI della vetrina (marketing).
+   Landing.css — v2, stili ESCLUSIVI della vetrina (marketing).
    ISOLAMENTO TOTALE: ogni selettore discende da `.landing-root`.
    Nessuna regola tocca body/html, così la vetrina non contamina il
    design system del gioco (che vive in globals.css).
 
-   CSP: nessuna risorsa esterna. Font di SISTEMA (font-src 'self'):
-   niente @import Google Fonts, niente @font-face. Immagini locali
-   (img-src 'self' data:) con percorsi assoluti /images/landing/*.
+   CSP: nessuna risorsa esterna. Nessun @import, nessun @font-face.
+   I font display/body passano da due CSS variable OPZIONALI
+   (--font-display / --font-body) che puoi popolare con next/font in
+   layout.tsx: next/font self-hosta gli asset, quindi resta dentro
+   font-src 'self'. Senza quelle variabili si cade su font di sistema.
+   Immagini locali (img-src 'self' data:) con percorsi /images/landing/*.
    ===================================================================== */
 
 /* Reset scopato (equivale al `*` globale del mockup, ma confinato). */
@@ -31,20 +34,48 @@
   --lp-felt-dark: #0d2818;
   --lp-cream: #f5e6d3;
   --lp-cream-dark: #d4b896;
+  --lp-ink: #1a1008;
+  --lp-bg: #0a0504;
+  --lp-bg-2: #120a06;
+  --lp-bg-3: #1c110a;
 
-  /* Catene di fallback REALI su font di sistema (nessun webfont). */
-  --lp-font-display: Georgia, "Times New Roman", serif;
-  --lp-font-body: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
-    "Times New Roman", serif;
+  /* Pergamena — contrasti verificati AA:
+     #4a3520 su #e8d6b0 ≈ 8:1 · #7d4f22 su pergamena ≈ 5.4:1.
+     Non schiarire l'inchiostro né scurire la carta. */
+  --lp-parch-1: #efdfbe;
+  --lp-parch-2: #e6d2a9;
+  --lp-parch-ink: #3d2510;
+  --lp-parch-ink-2: #4a3520;
+  --lp-parch-head: #4a2f14;
+  --lp-parch-rule: #8a6a3c;
+  --lp-parch-label: #7d4f22;
+
+  /* Catene con fallback REALI su font di sistema: la vetrina è leggibile
+     anche se next/font non è configurato. */
+  --lp-font-display: var(--font-display, Georgia, "Times New Roman", serif);
+  --lp-font-body: var(
+    --font-body,
+    "Iowan Old Style",
+    "Palatino Linotype",
+    Palatino,
+    Georgia,
+    "Times New Roman",
+    serif
+  );
 
   position: fixed;
   inset: 0;
   overflow: hidden;
   box-sizing: border-box;
-  background: #0a0504;
+  background: var(--lp-bg);
   color: var(--lp-cream);
   font-family: var(--lp-font-body);
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   GUSCIO — sfondo sala, cornice d'ottone, contenitore scrollabile
+   (invariati rispetto alla v1: la struttura funziona, non si tocca)
+   ───────────────────────────────────────────────────────────────────── */
 
 .landing-root .room-background {
   position: fixed;
@@ -144,6 +175,10 @@
   padding-bottom: 100px;
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+   HEADER + NAV (invariati)
+   ───────────────────────────────────────────────────────────────────── */
+
 .landing-root .site-header {
   text-align: center;
   padding: 20px 0 10px;
@@ -203,20 +238,21 @@
 }
 
 .landing-root .logo-subtitle {
-  font-family: var(--lp-font-body);
+  font-family: var(--lp-font-display);
   font-size: 1.1rem;
   color: var(--lp-cream-dark);
   font-style: italic;
-  letter-spacing: 2px;
-  /* Ombra per leggibilità sopra l'immagine della sala (nessuno scrim qui). */
+  letter-spacing: 3px;
+  text-transform: uppercase;
   text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.85);
 }
 
 .landing-root .main-nav {
   display: flex;
   justify-content: center;
-  gap: 40px;
-  padding: 15px 0;
+  flex-wrap: wrap;
+  gap: 14px 34px;
+  padding: 15px 20px;
   border-top: 1px solid rgba(212, 175, 55, 0.3);
   border-bottom: 1px solid rgba(212, 175, 55, 0.3);
   margin: 15px 0 30px;
@@ -234,7 +270,7 @@
   text-decoration: none;
   letter-spacing: 2px;
   text-transform: uppercase;
-  transition: all 0.3s ease;
+  transition: color 0.3s ease;
   position: relative;
   padding: 5px 0;
 }
@@ -264,11 +300,14 @@
 }
 
 /* Non-color cue (WCAG 1.4.1): la voce attiva mostra SEMPRE la sottolineatura
-   oro, non solo il cambio di colore. Distinguibile anche senza percezione del
-   colore, coerente con l'affordance di hover. */
+   oro, non solo il cambio di colore. */
 .landing-root .nav-link.active::after {
   width: 100%;
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   SEZIONI — intestazioni comuni
+   ───────────────────────────────────────────────────────────────────── */
 
 .landing-root .section {
   margin-bottom: 60px;
@@ -278,35 +317,61 @@
 
 .landing-root .section-title {
   font-family: var(--lp-font-display);
-  font-size: 2rem;
+  font-size: clamp(1.75rem, 3.4vw, 2.4rem);
+  font-weight: 700;
   color: var(--lp-gold-light);
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 8px;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-  letter-spacing: 2px;
+  letter-spacing: 1px;
 }
+
+.landing-root .section-lede {
+  text-align: center;
+  font-size: 1rem;
+  color: var(--lp-cream-dark);
+  margin-bottom: 30px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.landing-root .eyebrow {
+  font-family: var(--lp-font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--lp-gold-primary);
+  margin-bottom: 12px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   HERO — immagine grande, promessa e CTA SOPRA l'immagine
+   Il gradiente dal basso è ciò che rende leggibile il titolo: se le foto
+   hanno il soggetto in basso, alzare la seconda tappa a rgba(0,0,0,.9).
+   ───────────────────────────────────────────────────────────────────── */
 
 .landing-root .hero-section {
   position: relative;
-  margin: 20px 0 40px;
+  margin: 20px 0 50px;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
   border: 2px solid var(--lp-gold-dark);
+  background: var(--lp-bg-3);
+}
+
+.landing-root .hero-slider {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
 }
 
 .landing-root .hero-image {
   width: 100%;
-  height: 400px;
+  height: 100%;
   object-fit: cover;
   display: block;
-}
-
-.landing-root .hero-slider {
-  position: relative;
-  width: 100%;
-  height: 400px;
-  overflow: hidden;
 }
 
 .landing-root .hero-slide {
@@ -322,9 +387,60 @@
   opacity: 1;
 }
 
+/* Il contenuto è in FLUSSO (non assoluto): è lui a dare l'altezza all'hero,
+   così il testo non può mai essere tagliato dall'immagine. */
+.landing-root .hero-content {
+  position: relative;
+  z-index: 3;
+  padding: 200px 44px 56px;
+  background: linear-gradient(
+    transparent 18%,
+    rgba(0, 0, 0, 0.82) 62%,
+    rgba(0, 0, 0, 0.92)
+  );
+}
+
+.landing-root .hero-title {
+  font-family: var(--lp-font-display);
+  font-size: clamp(2rem, 4.6vw, 3.4rem);
+  font-weight: 700;
+  line-height: 1.06;
+  color: var(--lp-cream);
+  max-width: 22ch;
+  margin-bottom: 14px;
+  text-wrap: pretty;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+}
+
+.landing-root .hero-sub {
+  font-size: 1.15rem;
+  line-height: 1.55;
+  color: var(--lp-cream);
+  max-width: 54ch;
+  margin-bottom: 26px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+}
+
+.landing-root .hero-trust {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin-top: 22px;
+  font-size: 0.95rem;
+  color: var(--lp-cream-dark);
+}
+
+/* Separatore fra i badge, decorativo: generato in CSS, non nel markup. */
+.landing-root .hero-trust li + li::before {
+  content: "\00b7";
+  color: var(--lp-gold-dark);
+  margin-right: 22px;
+}
+
 .landing-root .hero-dots {
   position: absolute;
-  bottom: 22px;
+  top: 22px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -340,13 +456,12 @@
   background: rgba(0, 0, 0, 0.35);
   cursor: pointer;
   padding: 0;
-  transition: all 0.3s ease;
+  transition: background 0.3s ease, border-color 0.3s ease;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
 }
 
 .landing-root .hero-dot:hover {
   background: rgba(212, 175, 55, 0.5);
-  border-color: var(--lp-gold-primary);
 }
 
 .landing-root .hero-dot.active {
@@ -355,404 +470,569 @@
   box-shadow: 0 0 8px rgba(212, 175, 55, 0.8);
 }
 
-.landing-root .hero-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 30px;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-}
-
-.landing-root .hero-badge {
-  background: linear-gradient(135deg, var(--lp-gold-dark), var(--lp-gold-primary));
-  padding: 15px 30px;
-  border-radius: 8px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
-  position: relative;
-}
-
-.landing-root .hero-badge::before {
-  content: " \002660 \002665 \002666 ";
-  position: absolute;
-  top: -15px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 1.2rem;
-  color: var(--lp-gold-light);
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-}
-
-.landing-root .hero-badge-text {
-  font-family: var(--lp-font-display);
-  font-size: 1.5rem;
-  font-weight: 900;
-  color: white;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-  letter-spacing: 3px;
-}
-
-.landing-root .dealer-button {
-  background: white;
-  color: #333;
-  padding: 8px 20px;
-  border-radius: 20px;
-  font-family: var(--lp-font-display);
-  font-size: 0.8rem;
-  font-weight: bold;
-  letter-spacing: 1px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
-}
+/* ─────────────────────────────────────────────────────────────────────
+   BOTTONI — gerarchia esplicita: UN solo oro pieno per vista.
+   `.btn-primary-gold` = azione primaria (Gioca come ospite / Crea account /
+   Ko-fi). `.btn-ghost-gold` = secondarie. Min 56px di altezza tattile.
+   ───────────────────────────────────────────────────────────────────── */
 
 .landing-root .action-buttons {
   display: flex;
-  justify-content: center;
-  gap: 25px;
-  padding: 30px 0;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
 }
 
 .landing-root .btn {
   font-family: var(--lp-font-display);
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;
-  padding: 15px 40px;
-  border: none;
-  border-radius: 30px;
+  min-height: 56px;
+  padding: 16px 36px;
+  border-radius: 999px;
   cursor: pointer;
-  transition: all 0.3s ease;
   text-decoration: none;
-  display: inline-block;
-  position: relative;
-  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
 }
 
-.landing-root .btn::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.2),
-    transparent
-  );
-  transition: left 0.5s ease;
+.landing-root .btn-primary-gold {
+  background: linear-gradient(135deg, var(--lp-gold-dark), var(--lp-gold-primary));
+  color: var(--lp-ink); /* scuro su oro: ~8:1 */
+  border: 2px solid var(--lp-gold-light);
+  box-shadow: 0 8px 24px rgba(212, 175, 55, 0.35);
 }
 
-.landing-root .btn:hover::before {
-  left: 100%;
+.landing-root .btn-primary-gold:hover {
+  background: linear-gradient(135deg, var(--lp-gold-primary), var(--lp-gold-light));
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(212, 175, 55, 0.55);
 }
 
-.landing-root .btn-access {
-  background: linear-gradient(135deg, #1a1a1a, #333);
+.landing-root .btn-ghost-gold {
+  background: rgba(10, 5, 4, 0.7);
   color: var(--lp-gold-light);
   border: 2px solid var(--lp-gold-dark);
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
 }
 
-.landing-root .btn-access:hover {
-  background: linear-gradient(135deg, #333, #444);
-  border-color: var(--lp-gold-dark);
+.landing-root .btn-ghost-gold:hover {
+  background: rgba(28, 17, 10, 0.85);
+  border-color: var(--lp-gold-primary);
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(212, 175, 55, 0.3);
 }
 
-.landing-root .btn-register {
-  background: linear-gradient(135deg, var(--lp-gold-dark), var(--lp-gold-primary));
-  color: white;
-  border: 2px solid var(--lp-gold-light);
-  box-shadow: 0 5px 15px rgba(212, 175, 55, 0.4);
-  background-size: 200% auto;
-  animation: lp-shimmer 3s linear infinite;
+/* ─────────────────────────────────────────────────────────────────────
+   COME SI GIOCA — quattro passi
+   ───────────────────────────────────────────────────────────────────── */
+
+.landing-root .steps-grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 20px;
 }
 
-.landing-root .btn-register:hover {
-  background: linear-gradient(135deg, var(--lp-gold-primary), var(--lp-gold-light));
-  border-color: var(--lp-gold-light);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(212, 175, 55, 0.6);
+.landing-root .step-card {
+  padding: 26px 22px;
+  text-align: center;
+  background: linear-gradient(
+    135deg,
+    rgba(44, 24, 16, 0.9),
+    rgba(74, 44, 26, 0.9)
+  );
+  border: 1px solid var(--lp-gold-dark);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
 }
 
-.landing-root .btn-guest {
-  background: linear-gradient(135deg, var(--lp-wood-dark), var(--lp-wood-medium));
+.landing-root .step-num {
+  font-family: var(--lp-font-display);
+  font-size: 2.1rem;
+  font-weight: 700;
+  color: var(--lp-gold-primary);
+  display: block;
+}
+
+.landing-root .step-card h3 {
+  font-family: var(--lp-font-display);
+  font-size: 1.35rem;
+  font-weight: 600;
   color: var(--lp-cream);
-  border: 2px solid var(--lp-gold-dark);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+  margin: 6px 0 8px;
 }
 
-.landing-root .btn-guest:hover {
-  background: linear-gradient(135deg, var(--lp-wood-medium), #5a3a20);
-  border-color: var(--lp-gold-dark);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(212, 175, 55, 0.3);
+.landing-root .step-card p {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--lp-cream-dark);
 }
 
-.landing-root .rules-section {
-  position: relative;
-  margin: 40px 0;
-  min-height: 800px;
-}
-
-.landing-root .parchment-container {
-  position: relative;
-  background: url("/images/landing/pergamena.png") center top / 100% 100% no-repeat;
-  padding: 65px 80px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
-  border-radius: 5px;
-  overflow: hidden;
-  min-height: 1200px;
-}
-
-.landing-root .whiskey-glass-left,
-.landing-root .whiskey-glass-right {
-  position: absolute;
-  bottom: 20px;
-  width: 140px;
-  height: 175px;
-  z-index: 10;
-  filter: drop-shadow(0 5px 15px rgba(0, 0, 0, 0.5));
-}
-
-.landing-root .whiskey-glass-left {
-  left: 30px;
-}
-
-.landing-root .whiskey-glass-right {
-  right: 30px;
-}
-
-.landing-root .whiskey-glass-left img,
-.landing-root .whiskey-glass-right img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
+/* ─────────────────────────────────────────────────────────────────────
+   CHI SIAMO
+   ───────────────────────────────────────────────────────────────────── */
 
 .landing-root .about-content {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 40px;
   align-items: center;
 }
 
 .landing-root .about-text {
   font-size: 1.15rem;
-  line-height: 1.9;
+  line-height: 1.8;
   color: var(--lp-cream);
   /* Testo lungo sopra l'immagine della sala: ombra morbida per garantire
      leggibilità senza introdurre uno scrim (l'immagine è comunque scura). */
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
 }
 
-.landing-root .about-text p {
-  margin-bottom: 20px;
+.landing-root .about-text p + p {
+  margin-top: 16px;
+}
+
+.landing-root .about-text strong {
+  color: var(--lp-cream);
 }
 
 .landing-root .about-image {
   border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
   border: 3px solid var(--lp-gold-dark);
 }
 
 .landing-root .about-image img {
   width: 100%;
-  height: 300px;
+  height: 290px;
   object-fit: cover;
   display: block;
 }
 
-.landing-root .tournaments-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 30px;
+/* ─────────────────────────────────────────────────────────────────────
+   REGOLE — rotolo di pergamena come IMMAGINE + TESTO REALE
+
+   Il problema: il testo ha altezza variabile, il rotolo ha proporzioni
+   fisse. Un'unica immagine stirata deformerebbe i due rulli.
+   Soluzione: tre ritagli sovrapposti come layer di background —
+   rullo alto ancorato in cima, rullo basso in fondo, banda centrale
+   ripetuta in verticale a coprire tutto il resto.
+
+   Due accorgimenti sui file (già applicati agli asset):
+   · la banda centrale è SPECCHIATA (la seconda metà è il riflesso della
+     prima), così prima e ultima riga coincidono e la ripetizione non
+     lascia cuciture;
+   · i due rulli sfumano sul lato che confina con la banda, così il
+     ritaglio si fonde con la texture sottostante.
+
+   Il padding è in PERCENTUALE: le percentuali si risolvono sulla
+   larghezza, esattamente come `background-size: 100% auto`, quindi il
+   testo resta dentro il foglio a qualsiasi larghezza — nessuna media
+   query da tenere allineata.
+   ───────────────────────────────────────────────────────────────────── */
+
+.landing-root .rules-section {
+  padding: 8px 0 16px;
 }
 
-.landing-root .tournament-card {
+.landing-root .parchment {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px 0;
+  /* Bagliore caldo dietro il rotolo, che sfuma a TRASPARENTE: la carta è
+     chiara e sul fondo scuro i bordi strappati stagliavano di netto. Un
+     pannello con colore di fondo risolveva lo stacco ma introduceva un
+     rettangolo visibile — qui non c'è bordo, solo luce che si spegne. */
+  background: radial-gradient(
+    closest-side at 50% 50%,
+    rgba(120, 78, 38, 0.5) 0%,
+    rgba(90, 58, 28, 0.28) 46%,
+    rgba(60, 38, 18, 0.1) 72%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+.landing-root .parchment-sheet {
+  /* Nessun colore di fondo sotto le immagini: riempirebbe il RETTANGOLO del
+     box, non la sagoma del rotolo, e comparirebbe come un pannello crema
+     dietro la carta.
+     I tre ritagli stanno all'88% della larghezza, non al 100%: il margine
+     che resta è quello in cui si vede l'ombra, ed è ciò che fa leggere il
+     foglio come sospeso invece che incollato al contenitore. */
+  background:
+    url("/images/landing/rotolo-alto.png") top center / 88% auto no-repeat,
+    url("/images/landing/rotolo-basso.png") bottom center / 88% auto no-repeat,
+    url("/images/landing/rotolo-centro.png") top center / 88% auto repeat-y;
+  /* Percentuali: si risolvono sulla larghezza, come background-size, quindi
+     il testo resta dentro il foglio a ogni misura senza media query. */
+  padding: 15% 14% 14.5%;
+  /* Tre ombre: una corta e spostata che stacca il bordo della carta dal
+     fondo, due ampie che appoggiano il foglio sulla pagina. `drop-shadow`
+     segue l'alpha, quindi prende la sagoma vera del rotolo — bordi
+     strappati compresi — e non il rettangolo del box. */
+  filter:
+    drop-shadow(3px 4px 3px rgba(26, 16, 8, 0.75))
+    drop-shadow(0 18px 26px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 46px 70px rgba(0, 0, 0, 0.5));
+}
+
+.landing-root .parchment-head {
+  text-align: center;
+}
+
+.landing-root .parchment-eyebrow {
+  font-family: var(--lp-font-display);
+  font-size: 0.95rem;
+  font-style: italic;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--lp-parch-rule);
+}
+
+.landing-root .parchment-title {
+  font-family: var(--lp-font-display);
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--lp-parch-head);
+  margin: 6px 0 4px;
+  /* La pergamena è chiara: nessuna ombra scura ereditata dalla vetrina. */
+  text-shadow: none;
+}
+
+.landing-root .parchment-flourish {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--lp-parch-rule);
+}
+
+.landing-root .parchment-flourish .rule-line {
+  display: block;
+  width: clamp(40px, 12vw, 120px);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--lp-parch-rule));
+}
+
+.landing-root .parchment-flourish .rule-line:last-child {
+  background: linear-gradient(90deg, var(--lp-parch-rule), transparent);
+}
+
+.landing-root .parchment-flourish .ornament {
+  font-size: 1rem;
+  letter-spacing: 5px;
+}
+
+.landing-root .parchment-lede {
+  font-family: var(--lp-font-display);
+  font-size: 1.25rem;
+  font-style: italic;
+  line-height: 1.7;
+  color: var(--lp-parch-ink);
+  text-align: center;
+  margin: 22px 0 26px;
+}
+
+.landing-root .parchment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px 40px;
+}
+
+.landing-root .parchment-grid h3 {
+  font-family: var(--lp-font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--lp-parch-label);
+  margin-bottom: 6px;
+  text-shadow: none;
+}
+
+.landing-root .parchment-grid p {
+  font-family: var(--lp-font-display);
+  font-size: 1.125rem;
+  line-height: 1.65;
+  color: var(--lp-parch-ink-2);
+}
+
+.landing-root .parchment-seal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 34px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(138, 106, 60, 0.4);
+}
+
+.landing-root .parchment-seal .seal {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: 50%;
+  background: radial-gradient(70% 70% at 34% 30%, #a3283a, #6b1420 70%, #4d0e17);
+  box-shadow:
+    0 4px 10px rgba(0, 0, 0, 0.45),
+    inset 0 2px 6px rgba(255, 255, 255, 0.22);
+  display: grid;
+  place-items: center;
+  font-family: var(--lp-font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: rgba(255, 225, 225, 0.9);
+}
+
+.landing-root .parchment-seal p {
+  font-family: var(--lp-font-display);
+  font-size: 1.15rem;
+  font-style: italic;
+  line-height: 1.5;
+  color: #5c4630; /* su pergamena ≈ 6.3:1 */
+  max-width: 44ch;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   PERCHÉ REGISTRARSI — testo + card profilo di esempio
+   ───────────────────────────────────────────────────────────────────── */
+
+.landing-root .signup-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 40px;
+  align-items: center;
+}
+
+.landing-root .signup-title {
+  font-family: var(--lp-font-display);
+  font-size: clamp(1.75rem, 3.4vw, 2.4rem);
+  font-weight: 700;
+  color: var(--lp-cream);
+  margin-bottom: 16px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.landing-root .signup-text > p {
+  font-size: 1.125rem;
+  line-height: 1.75;
+  color: var(--lp-cream);
+  margin-bottom: 22px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.landing-root .profile-card {
+  padding: 28px;
+  border-radius: 10px;
+  background: rgba(44, 24, 16, 0.85);
+  border: 2px solid var(--lp-gold-dark);
+  backdrop-filter: blur(10px);
+}
+
+.landing-root .profile-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.landing-root .profile-avatar {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--lp-gold-dark), var(--lp-gold-primary));
+  color: var(--lp-ink);
+  display: grid;
+  place-items: center;
+  font-family: var(--lp-font-display);
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+.landing-root .profile-name {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--lp-cream);
+}
+
+/* Dicitura NON opzionale: i numeri sotto sono finti. */
+.landing-root .profile-note {
+  font-size: 0.875rem;
+  color: var(--lp-cream-dark);
+}
+
+.landing-root .profile-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 12px;
+}
+
+.landing-root .profile-stats > div {
+  padding: 16px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--lp-felt-green), var(--lp-felt-dark));
+  text-align: center;
+}
+
+.landing-root .profile-stats .num {
+  font-family: var(--lp-font-display);
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--lp-gold-light);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.landing-root .profile-stats dt {
+  font-size: 0.875rem;
+  color: var(--lp-cream);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   ROADMAP — sostituisce Tornei e Shop. Nessun montepremi, nessuna data.
+   La card "In sviluppo" ha il bordo oro acceso: unica gerarchia.
+   ───────────────────────────────────────────────────────────────────── */
+
+.landing-root .roadmap-grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.landing-root .roadmap-card {
+  padding: 28px;
+  text-align: center;
+  border-radius: 10px;
   background: linear-gradient(
     135deg,
     rgba(44, 24, 16, 0.9),
     rgba(74, 44, 26, 0.9)
   );
-  border: 2px solid var(--lp-gold-dark);
-  border-radius: 10px;
-  padding: 30px;
-  text-align: center;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-}
-
-.landing-root .tournament-card:hover {
-  transform: translateY(-5px);
-  border-color: var(--lp-gold-primary);
-  box-shadow: 0 10px 30px rgba(212, 175, 55, 0.3);
-}
-
-.landing-root .tournament-card h3 {
-  font-family: var(--lp-font-display);
-  color: var(--lp-gold-light);
-  font-size: 1.5rem;
-  margin-bottom: 15px;
-}
-
-.landing-root .tournament-card p {
-  color: var(--lp-cream);
-  line-height: 1.6;
-  margin-bottom: 10px;
-}
-
-.landing-root .tournament-date {
-  font-family: var(--lp-font-display);
-  color: var(--lp-gold-primary);
-  font-weight: bold;
-  font-size: 1.1rem;
-  margin-top: 15px;
-}
-
-.landing-root .shop-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 30px;
-}
-
-.landing-root .shop-item {
-  background: rgba(44, 24, 16, 0.8);
-  border: 2px solid var(--lp-gold-dark);
-  border-radius: 10px;
-  padding: 20px;
-  text-align: center;
-  transition: all 0.3s ease;
-}
-
-.landing-root .shop-item:hover {
-  border-color: var(--lp-gold-primary);
-  transform: scale(1.02);
-}
-
-.landing-root .shop-item-image {
-  width: 100%;
-  height: 200px;
-  background: linear-gradient(135deg, var(--lp-felt-green), var(--lp-felt-dark));
-  border-radius: 8px;
-  margin-bottom: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 4rem;
-}
-
-.landing-root .shop-item h4 {
-  font-family: var(--lp-font-display);
-  color: var(--lp-gold-light);
-  margin-bottom: 10px;
-}
-
-.landing-root .btn-buy {
-  background: var(--lp-gold-dark);
-  color: white;
-  padding: 10px 25px;
-  border: none;
-  border-radius: 20px;
-  cursor: pointer;
-  font-family: var(--lp-font-display);
-  font-weight: bold;
-  transition: all 0.3s ease;
-}
-
-.landing-root .btn-buy:hover:not(:disabled) {
-  background: var(--lp-gold-primary);
-}
-
-.landing-root .btn-buy:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.landing-root .contact-container {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.landing-root .contact-form {
-  background: rgba(44, 24, 16, 0.8);
-  padding: 40px;
-  border-radius: 10px;
-  border: 2px solid var(--lp-gold-dark);
-  backdrop-filter: blur(10px);
-}
-
-.landing-root .form-group {
-  margin-bottom: 20px;
-}
-
-.landing-root .form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-family: var(--lp-font-display);
-  color: var(--lp-gold-light);
-  font-size: 1.1rem;
-}
-
-.landing-root .form-group input,
-.landing-root .form-group textarea {
-  width: 100%;
-  padding: 12px;
-  background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--lp-gold-dark);
-  border-radius: 5px;
-  color: var(--lp-cream);
-  font-family: var(--lp-font-body);
-  font-size: 1rem;
+  backdrop-filter: blur(10px);
 }
 
-.landing-root .form-group input:focus,
-.landing-root .form-group textarea:focus {
-  outline: none;
+.landing-root .roadmap-card.lead {
   border-color: var(--lp-gold-primary);
-  background: rgba(0, 0, 0, 0.4);
 }
 
-.landing-root .form-group input:disabled,
-.landing-root .form-group textarea:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.landing-root .roadmap-stage {
+  font-size: 0.8rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--lp-cream-dark);
+  margin-bottom: 10px;
 }
 
-.landing-root .form-group textarea {
-  min-height: 150px;
-  resize: vertical;
+.landing-root .roadmap-card.lead .roadmap-stage {
+  color: var(--lp-gold-light);
 }
 
-.landing-root .contact-submit {
-  width: 100%;
+.landing-root .roadmap-card h3 {
+  font-family: var(--lp-font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--lp-cream);
+  margin-bottom: 8px;
 }
 
-.landing-root .contact-submit:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  animation: none;
-}
-
-.landing-root .contact-note {
-  margin-top: 14px;
-  text-align: center;
-  font-size: 0.9rem;
-  font-style: italic;
+.landing-root .roadmap-card p:last-child {
+  font-size: 0.95rem;
+  line-height: 1.6;
   color: var(--lp-cream-dark);
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+   SOSTIENI (Ko-fi)
+   ───────────────────────────────────────────────────────────────────── */
+
+.landing-root .support-section {
+  text-align: center;
+  padding: 52px 32px;
+  border-radius: 10px;
+  background: radial-gradient(100% 120% at 50% 0%, rgba(59, 36, 21, 0.9) 0%, rgba(28, 17, 10, 0.9) 70%);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+}
+
+.landing-root .support-body {
+  font-size: 1.125rem;
+  line-height: 1.75;
+  color: var(--lp-cream);
+  max-width: 62ch;
+  margin: 0 auto 10px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.landing-root .support-body.muted {
+  color: var(--lp-cream-dark);
+  margin-bottom: 28px;
+}
+
+.landing-root .support-note {
+  font-size: 0.95rem;
+  color: var(--lp-cream-dark);
+  margin-top: 16px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   CONTATTI — nessun form disabilitato: un CTA che funziona davvero
+   ───────────────────────────────────────────────────────────────────── */
+
+.landing-root .contact-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 40px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(212, 175, 55, 0.3);
+}
+
+.landing-root .contact-title {
+  font-family: var(--lp-font-display);
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--lp-gold-light);
+  margin-bottom: 12px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.landing-root .contact-content p {
+  font-size: 1.125rem;
+  line-height: 1.7;
+  color: var(--lp-cream);
+  margin-bottom: 18px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.landing-root .contact-aside {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+
+.landing-root .contact-aside p {
+  font-size: 1rem;
+  color: var(--lp-cream-dark);
+  margin-bottom: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   FOOTER
+   ───────────────────────────────────────────────────────────────────── */
+
 .landing-root .site-footer {
   text-align: center;
-  padding: 30px 0;
+  padding: 30px 0 0;
   border-top: 1px solid rgba(212, 175, 55, 0.3);
   margin-top: 40px;
   color: var(--lp-cream-dark);
@@ -762,35 +1042,31 @@
 
 .landing-root .footer-fine-print {
   margin-top: 10px;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  color: #a89178;
 }
 
 /* ─────────────────────────────────────────────────────────────────────
-   ACCESSIBILITÀ E STATI — rifiniture (non alterano l'estetica di base)
+   ACCESSIBILITÀ E STATI
    ───────────────────────────────────────────────────────────────────── */
 
 /* Focus visibile e coerente: anello oro chiaro. L'offset porta l'anello sul
-   fondo scuro della pagina (vale anche per il bottone oro, che ha attorno il
-   fondo scuro), così resta percepibile con separazione adeguata. Sovrascrive
-   il ring globale (var(--focus) ottone) mantenendo l'identità della vetrina. */
+   fondo scuro della pagina, così resta percepibile con separazione adeguata. */
 .landing-root .nav-link:focus-visible,
-.landing-root .btn:focus-visible,
-.landing-root .btn-buy:focus-visible {
+.landing-root .btn:focus-visible {
   outline: 3px solid var(--lp-gold-light);
   outline-offset: 3px;
 }
 
 /* I dot dello slider possono cadere su una porzione d'immagine più chiara:
-   aggiungo un alone scuro perché l'anello resti sempre leggibile. */
+   alone scuro perché l'anello resti sempre leggibile. */
 .landing-root .hero-dot:focus-visible {
   outline: 3px solid var(--lp-gold-light);
   outline-offset: 3px;
   box-shadow: 0 0 0 5px rgba(0, 0, 0, 0.6);
 }
 
-/* Alternativa testuale per contenuti resi come immagine (es. pergamena regole)
-   e per heading di sezione altrimenti assenti: fuori schermo ma letta dagli
-   screen reader (niente display:none, che la escluderebbe dall'accessibilità). */
+/* Utility conservata per eventuali etichette non visive future. */
 .landing-root .lp-visually-hidden {
   position: absolute;
   width: 1px;
@@ -803,29 +1079,15 @@
   border: 0;
 }
 
-/* Etichetta "in arrivo": comunica che una sezione/funzione non è ancora attiva
-   in modo chiaro e intenzionale (non un bug). In palette, contrasto AA. */
-.landing-root .soon-badge {
-  display: inline-block;
-  margin-left: 12px;
-  padding: 3px 12px;
-  font-family: var(--lp-font-display);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--lp-gold-light);
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid var(--lp-gold-dark);
-  border-radius: 20px;
-  vertical-align: middle;
-  text-shadow: none;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+@media (max-width: 900px) {
+  .landing-root .hero-content {
+    padding: 150px 28px 40px;
+  }
 }
 
 @media (max-width: 768px) {
   .landing-root .scroll-container {
-    padding: 20px 30px;
+    padding: 20px 24px;
   }
 
   .landing-root .logo-title {
@@ -837,48 +1099,55 @@
     height: 75px;
   }
 
-  .landing-root .main-nav {
-    flex-wrap: wrap;
-    gap: 15px;
-  }
-
   .landing-root .nav-link {
     font-size: 0.8rem;
+    letter-spacing: 1px;
   }
 
-  .landing-root .hero-image {
-    height: 250px;
-  }
-
-  .landing-root .hero-slider {
-    height: 250px;
-  }
-
-  .landing-root .parchment-container {
-    padding: 45px 30px;
-  }
-
-  .landing-root .about-content {
-    grid-template-columns: 1fr;
+  .landing-root .hero-content {
+    padding: 120px 20px 32px;
+    /* Su mobile la foto è più stretta e il soggetto sale: velo più fitto. */
+    background: linear-gradient(
+      transparent 8%,
+      rgba(0, 0, 0, 0.88) 48%,
+      rgba(0, 0, 0, 0.95)
+    );
   }
 
   .landing-root .action-buttons {
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
   }
 
   .landing-root .btn {
     width: 100%;
-    max-width: 300px;
   }
 
-  .landing-root .whiskey-glass-left,
-  .landing-root .whiskey-glass-right {
-    display: none;
+  .landing-root .parchment-seal {
+    justify-content: flex-start;
   }
 
-  .landing-root .contact-form {
-    padding: 25px;
+  .landing-root .support-section {
+    padding: 36px 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* A larghezze molto ridotte il titolo grande accanto alle 4 carte eccedeva
+     la riga: qui il logo va a capo e le misure calano ancora. */
+  .landing-root .logo-container {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .landing-root .logo-title {
+    font-size: 2rem;
+    letter-spacing: 2px;
+  }
+
+  .landing-root .logo-card {
+    width: 42px;
+    height: 62px;
   }
 }
 
@@ -893,20 +1162,10 @@
   }
 }
 
-@keyframes lp-shimmer {
-  0% {
-    background-position: -200% center;
-  }
-  100% {
-    background-position: 200% center;
-  }
-}
-
 /* ── prefers-reduced-motion: azzera il movimento non essenziale ─────────
    Scoped alla vetrina (non tocca il design system del gioco). Neutralizza
-   shimmer perpetuo (btn Registrati), fade d'ingresso delle sezioni, crossfade
-   dello slider, sollevamenti all'hover e lo sweep luminoso dei bottoni. Gli
-   stati finali restano quelli "a riposo" (sezioni opache, slide attiva visibile).
+   fade d'ingresso delle sezioni, crossfade dello slider e sollevamenti
+   all'hover. Gli stati finali restano quelli "a riposo".
    L'autoplay dello slider è fermato lato JS (Landing.tsx) nello stesso caso. */
 @media (prefers-reduced-motion: reduce) {
   .landing-root *,
@@ -917,29 +1176,11 @@
     transition-duration: 0.001ms !important;
   }
 
+  .landing-root .btn:hover {
+    transform: none;
+  }
+
   .landing-root .scroll-container {
     scroll-behavior: auto;
-  }
-}
-
-/* ── Mobile stretto (≤480px): il logo va a capo e si rimpicciolisce ───────
-   A larghezze molto ridotte il titolo grande accanto alle 4 carte eccedeva
-   la riga e, con il container centrato, il logo veniva troncato ai bordi.
-   Qui il logo-container va a capo (titolo sopra, carte sotto) e le misure
-   calano ancora, così "Burraco" resta interamente visibile. */
-@media (max-width: 480px) {
-  .landing-root .logo-container {
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .landing-root .logo-title {
-    font-size: 2rem;
-    letter-spacing: 2px;
-  }
-
-  .landing-root .logo-card {
-    width: 42px;
-    height: 62px;
   }
 }
