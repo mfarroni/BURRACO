@@ -121,7 +121,13 @@ test("NEW-1: una AZIONE DI GIOCO valida sul nuovo socket 'committa' il token →
   room.join(intruder.as(), oldToken, "Mallory");
   assert.ok(!intruder.has("room_joined"), "nessun room_joined per il vecchio token committato");
   assert.ok(!intruder.has("state"), "nessuno stato al vecchio token committato");
-  assert.ok(intruder.has("error"), "vecchio token committato: respinto");
+  // LOBBY (§5.4-C): con due posti VIVI (tavolo pieno) l'esito è il tipizzato
+  // join_rejected{ROOM_JUST_TAKEN}. L'invariante SEC-10 (nessun resume/leak col
+  // vecchio token) resta garantita dalle due asserzioni sopra.
+  assert.ok(
+    intruder.sent.some((m) => m.type === "join_rejected" && m.code === "ROOM_JUST_TAKEN"),
+    "vecchio token committato: respinto (ROOM_JUST_TAKEN)",
+  );
 
   // Il NUOVO token invece riconnette correttamente dopo una disconnessione.
   room.onDisconnect(a2.as());

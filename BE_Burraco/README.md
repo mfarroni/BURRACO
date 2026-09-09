@@ -55,7 +55,7 @@ Health check: `GET http://localhost:8080/health` → `{"status":"ok"}`.
 
 ## Migrazioni DB (Drizzle)
 ```bash
-export DATABASE_URL=postgresql://…-pooler.neon.tech/db?sslmode=require
+export DATABASE_URL=postgresql://…-pooler.neon.tech/db?sslmode=verify-full
 npm run db:generate    # genera SQL da schema.ts
 npm run db:migrate     # applica su Neon
 ```

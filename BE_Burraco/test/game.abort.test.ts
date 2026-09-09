@@ -67,7 +67,10 @@ afterEach(() => {
   else process.env.RECONNECT_GRACE_MS = ORIG_GRACE;
 });
 
-test("la costante di grazia è 45s (§6.3, definizione unica)", () => {
+test("la costante RECONNECT_GRACE_DEFAULT_MS è 45s (default della grazia auth/sessione)", () => {
+  // Nota lobby canonica: la grazia di GIOCO è ora CONDIZIONATA (Room.graceMs):
+  // 60s in attesa (WAITING_GRACE_MS) / 180s in partita (RECONNECT_GRACE_MS).
+  // Questa costante resta il default documentato della chiusura sessione auth.
   assert.equal(RECONNECT_GRACE_DEFAULT_MS, 45_000);
 });
 
@@ -125,12 +128,15 @@ test("codice tavolo immediatamente riutilizzabile dopo l'annullamento", () => {
   mgr.handleMessage(b.as(), { type: "join_room", roomCode: "REUSE", displayName: "Bob", clientId: "cB" });
   mgr.handleMessage(a.as(), { type: "game_abort" });
 
-  // Un nuovo giocatore apre di nuovo lo stesso codice: nuovo tavolo, di nuovo in attesa.
+  // Un nuovo giocatore apre di nuovo lo stesso codice: se il codice fosse ancora
+  // occupato dal tavolo annullato, Carla riceverebbe un rifiuto; invece entra come
+  // creatore (seat 0) di un NUOVO tavolo in attesa → il codice è tornato disponibile.
   const c = new FakeSocket();
   mgr.handleMessage(c.as(), { type: "join_room", roomCode: "REUSE", displayName: "Carla", clientId: "cC" });
-  const open = mgr.listOpenRooms();
-  assert.equal(open.length, 1);
-  assert.equal(open[0]!.hostName, "Carla", "il codice è tornato disponibile per una nuova partita");
+  const joined = c.find("room_joined");
+  assert.ok(joined, "Carla entra: il codice è tornato disponibile per una nuova partita");
+  assert.equal(joined!.yourSeat, 0, "nuovo tavolo, Carla è il creatore (seat 0)");
+  assert.equal(c.count("join_rejected"), 0, "nessun rifiuto: il codice non è più occupato");
 });
 
 test("autorizzazione: un socket non seduto non può annullare la partita altrui", () => {

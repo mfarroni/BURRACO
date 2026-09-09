@@ -161,26 +161,6 @@ export interface HandScoreDetail {
   pozzettoInDiretta: boolean;
 }
 
-/* ───────────────────────── ELENCO TAVOLI APERTI (HTTP) ──────────────────────
- * Macro-ciclo lobby. DTO di RISPOSTA di `GET /rooms/open` (endpoint PUBBLICO e
- * READ-ONLY). Espone SOLO i tavoli in attesa di un secondo giocatore, con il
- * MINIMO indispensabile: nessun dato personale oltre al `displayName` di chi
- * attende (mai email, mai id utente, mai indicazione ospite-vs-registrato). Il FE
- * ne tiene una COPIA allineata a mano (decisione #4/#8).
- */
-export interface OpenRoomInfo {
-  /** Codice tavolo (normalizzato, uppercase). */
-  code: string;
-  /** displayName autoritativo di chi ha aperto il tavolo ed è in attesa. */
-  hostName: string;
-  /** Posti occupati (1 finché in attesa). */
-  seats: number;
-  /** Posti totali del tavolo (2 in 1v1). */
-  maxSeats: number;
-  /** Momento in cui il tavolo ha iniziato ad attendere, ISO8601. */
-  waitingSince: string;
-}
-
 /* ───────────────────────── STATISTICHE & PROFILO (HTTP) ─────────────────────
  * Macro-ciclo 3. DTO di RISPOSTA degli endpoint REST /users/me/* (sotto Bearer).
  * Sono di proprietà del BACKEND: il FE ne tiene una COPIA allineata a mano
@@ -376,6 +356,31 @@ export type ClientMessage =
   // esito neutro. Adatta il nome `game:abort` della scheda alla convenzione
   // snake_case del contratto esistente.
   | { type: "game_abort" }
+  // LOBBY (door a) — "Apri un tavolo": crea un tavolo in ATTESA con un codice
+  // scelto dall'utente (precompilato dal server, modificabile). `private:true` →
+  // il tavolo NON compare nella lista pubblica (raggiungibile solo col codice).
+  // Origin = apertura_manuale: MAI fuso (§5.4-A). I campi di identità
+  // (displayName/clientId/authToken/playerToken) hanno la stessa semantica di
+  // join_room: l'identità AUTORITATIVA è derivata dal token, mai dal displayName.
+  | {
+      type: "open_table";
+      code: string;
+      private: boolean;
+      displayName: string;
+      clientId?: string;
+      authToken?: string;
+      playerToken?: string;
+    }
+  // LOBBY (door b) — "Gioca subito": il server cerca il tavolo pubblico in attesa
+  // di origine quick_match più vecchio e vi fa sedere il giocatore; se non esiste
+  // ne crea uno nuovo (poi tenta la fusione §5.4-A). Decisione tutta server-side.
+  | {
+      type: "quick_match";
+      displayName: string;
+      clientId?: string;
+      authToken?: string;
+      playerToken?: string;
+    }
   | { type: "heartbeat" };
 
 /** Codici di rifiuto mossa (stabili, il FE può mapparli a messaggi UX). */
@@ -403,6 +408,12 @@ export type ServerMessage =
       type: "room_joined";
       yourSeat: Seat;
       yourToken: string; // token effimero per la riconnessione
+      /**
+       * Codice normalizzato del tavolo. NECESSARIO per il quick_match: il codice
+       * è generato dal server e il client lo apprende solo qui (per riconnettersi
+       * poi via join_room e per mostrarlo nella schermata d'attesa).
+       */
+      code: string;
       players: PlayerPublic[];
       config: GameConfig;
       /**
@@ -463,7 +474,66 @@ export type ServerMessage =
    * SEC-08: senza authToken valido non si entra col solo codice tavolo.
    *  - "AUTH_REQUIRED" → authToken assente quando l'auth è obbligatoria;
    *  - "AUTH_INVALID"  → authToken presente ma scaduto/revocato/sconosciuto.
-   * Il client mostra un messaggio leggibile e riporta alla schermata d'ingresso.
+   *  - "ROOM_JUST_TAKEN" (LOBBY, §5.4-C) → si è tentato di sedersi a un tavolo che
+   *    nel frattempo si è riempito (2 posti vivi). Il FE mostra "Qualcuno si è
+   *    appena seduto a quel tavolo" e fa un refresh immediato della lista.
    */
-  | { type: "join_rejected"; code: "AUTH_REQUIRED" | "AUTH_INVALID"; reason: string }
+  | {
+      type: "join_rejected";
+      code: "AUTH_REQUIRED" | "AUTH_INVALID" | "ROOM_JUST_TAKEN";
+      reason: string;
+    }
+  /**
+   * LOBBY (§5.4-A) — FUSIONE: il giocatore è stato spostato in un tavolo pubblico
+   * quick_match già in attesa (più vecchio), che ora si completa e avvia la
+   * partita. `newCode` è il codice del tavolo di destinazione. Subito dopo
+   * arrivano `room_joined`/`state` del tavolo unito. Il FE aggiorna il codice
+   * mostrato e spiega la fusione. Tocca SOLO tavoli pubblici quick_match.
+   */
+  | { type: "room_merged"; newCode: string }
+  /**
+   * LOBBY (door a) — `open_table` su un codice GIÀ IN USO da un altro tavolo vivo.
+   * Nessun takeover: la modale resta aperta e invita a cambiare codice.
+   */
+  | { type: "open_rejected"; code: "CODE_IN_USE" }
+  /**
+   * LOBBY (§5.4-D) — SELF-PLAY: i due posti condividono la stessa identità
+   * per-browser (o lo stesso utente). Avviso NON bloccante ("Stai giocando contro
+   * te stesso"). La partita è comunque esclusa dalle statistiche (userId=null).
+   */
+  | { type: "self_play_notice" }
   | { type: "error"; message: string };
+
+/* ───────────────────────── LOBBY / LISTA TAVOLI (HTTP) ──────────────────────
+ * DTO di RISPOSTA delle rotte REST della lobby (sotto Bearer). Proprietà del
+ * BACKEND; il FE ne tiene una COPIA allineata a mano (decisione #4/#8). La lista
+ * è una WHITELIST rigorosa: NON espone mai tavoli privati né campi interni
+ * (userId/email/token/origin/clientId/visibility). L'avvio partita passa SEMPRE
+ * dal WebSocket, mai dal polling di questa lista.
+ */
+
+/** Riga della lista tavoli pubblici in attesa (whitelist anti-leak). */
+export interface WaitingTableView {
+  /** Codice normalizzato (`.trim().toUpperCase().slice(0,12)`). */
+  code: string;
+  /** display_name AUTORITATIVO del creatore (mai un valore arbitrario del client). */
+  creatorName: string;
+  /** epoch ms di apertura → il FE deriva "attende da MM:SS". */
+  openedAt: number;
+  /** Posti totali del tavolo (= config.numeroGiocatori; oggi sempre 2). */
+  seatsTotal: number;
+  /** Posti occupati da un socket VIVO (oggi 1 in attesa). */
+  seatsTaken: number;
+}
+
+/** Risposta di GET /tables: lista + contatore giocatori realmente in lobby. */
+export interface TablesResponse {
+  tables: WaitingTableView[];
+  /** Sessioni realmente in lobby (poll recente, non sedute). Vedi §6.2. */
+  lobbyPlayers: number;
+}
+
+/** Risposta di GET /tables/new-code: codice tavolo precompilato dal server. */
+export interface NewCodeResponse {
+  code: string;
+}
