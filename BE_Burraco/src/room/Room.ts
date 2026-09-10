@@ -10,6 +10,7 @@ import type {
   WaitingTableView,
 } from "../contract/types.js";
 import { GameEngine, type GameEffect, type MoveResult } from "../engine/game.js";
+import { teamOfSeat } from "../engine/teams.js";
 import { redactFor } from "./redact.js";
 import { persistence } from "../db/persistence.js";
 
@@ -538,6 +539,8 @@ export class Room {
       this.matchId,
       this.players.map((p) => ({
         seat: p.seat,
+        // 2v2: la SQUADRA del posto (in 1v1 team = seat). Persistita in match_players.team.
+        team: teamOfSeat(p.seat, this.config),
         displayName: p.displayName,
         tokenHash: p.tokenHash,
         userId: selfPlay ? null : p.userId,
@@ -664,8 +667,13 @@ export class Room {
           finalScores: eff.finalScores,
         });
         // §7: fine LEGITTIMA (obiettivo raggiunto) → UNICO percorso 'completed',
-        // l'unico conteggiato nelle statistiche.
-        void persistence.completeMatch(this.matchId, eff.winnerSeat);
+        // l'unico conteggiato nelle statistiche. Persiste anche la SQUADRA vincitrice
+        // (in 1v1 team = seat → winner_team = winner_seat).
+        void persistence.completeMatch(
+          this.matchId,
+          eff.winnerSeat,
+          eff.winnerSeat === null ? null : teamOfSeat(eff.winnerSeat, this.config),
+        );
         // SEC-05: partita conclusa → GC della room (rimozione dalla mappa RAM).
         this.dispose();
       } else if (eff.kind === "pozzetto_taken") {
@@ -944,8 +952,9 @@ export class Room {
       const finalScores: [number, number] = [e.cumulative[0] ?? 0, e.cumulative[1] ?? 0];
       this.broadcast({ type: "game_ended", winnerSeat, finalScores, reason: "forfeit" });
       // Decisione Gate 1: il forfeit da stallo dichiara un vincitore reale → conta
-      // come 'completed' (preserva il comportamento pre-esistente).
-      void persistence.completeMatch(this.matchId, winnerSeat);
+      // come 'completed' (preserva il comportamento pre-esistente). In 1v1 la
+      // squadra vincitrice coincide col posto vincitore.
+      void persistence.completeMatch(this.matchId, winnerSeat, teamOfSeat(winnerSeat, this.config));
     }
     this.dispose();
   }
