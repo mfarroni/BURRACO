@@ -302,8 +302,10 @@ test("Anti-leak: durante una mossa reale l'avversario non riceve clientMoveId n√
   for (const m of other.msgs) {
     assert.ok(!JSON.stringify(m).includes("secret-move-xyz"), "clientMoveId non trapela all'avversario");
   }
-  // L'avversario non vede mai la mano dell'attore per intero: solo il conteggio.
+  // L'avversario non vede mai la mano dell'attore per intero: solo il conteggio
+  // (C3: da opponentHandCount al conteggio del posto avversario in seats[]).
   const os = [...other.msgs].reverse().find(isState) as Extract<ServerMessage, { type: "state" }>;
-  assert.equal(typeof os.state.opponentHandCount, "number");
+  const actorSeatCount = os.state.seats.find((x) => x.seat !== os.state.yourSeat)!.handCount;
+  assert.equal(typeof actorSeatCount, "number");
   a.close(); b.close();
 });

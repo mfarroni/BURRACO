@@ -10,6 +10,7 @@ import type {
   RejectCode,
   Seat,
   ServerMessage,
+  TeamId,
 } from "./contract";
 import type { CelebrationInfo } from "@/components/StateBanners";
 import { getClientId, saveToken, storedToken } from "./sessionIdentity";
@@ -44,11 +45,14 @@ export interface RejectionInfo {
 export interface HandEndedInfo {
   closerSeat: Seat | null;
   scores: HandScoreDetail[];
-  cumulative: [number, number];
+  /** Cumulati PER SQUADRA (C6, `TeamId`). In 1v1 team = seat → [team0, team1]. */
+  cumulative: number[];
 }
 export interface GameEndedInfo {
-  winnerSeat: Seat | null;
-  finalScores: [number, number];
+  /** SQUADRA vincitrice (C8). In 1v1 coincide col posto vincitore. */
+  winnerTeam: TeamId | null;
+  /** Punteggi finali PER SQUADRA (C8). */
+  finalScores: number[];
   /** "forfeit" se la partita è finita per abbandono dell'avversario. */
   reason?: "forfeit";
 }
@@ -376,7 +380,7 @@ export function useGameSocket(): GameSocketApi {
           clearInFlight();
           break;
         case "game_ended":
-          setGameEnded({ winnerSeat: msg.winnerSeat, finalScores: msg.finalScores, reason: msg.reason });
+          setGameEnded({ winnerTeam: msg.winnerTeam, finalScores: msg.finalScores, reason: msg.reason });
           clearInFlight();
           break;
         case "room_closed":
@@ -462,12 +466,14 @@ export function useGameSocket(): GameSocketApi {
           // LOBBY (§5.4-D): avviso NON bloccante (i due posti sono lo stesso browser/utente).
           setSelfPlay(true);
           break;
-        case "opponent_disconnected":
-        case "opponent_reconnected":
+        case "player_disconnected":
+        case "player_reconnected":
+          // C9: aggiorna lo stato di connessione del posto interessato (in 1v1 è
+          // sempre l'avversario; a N posti può essere anche il compagno).
           setPlayers((prev) =>
             prev.map((p) =>
               p.seat === msg.seat
-                ? { ...p, connectionStatus: msg.type === "opponent_reconnected" ? "connected" : "disconnected" }
+                ? { ...p, connectionStatus: msg.type === "player_reconnected" ? "connected" : "disconnected" }
                 : p,
             ),
           );

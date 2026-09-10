@@ -732,8 +732,8 @@ test("redactFor: nessun leak della mano avversaria, pozzetti o mazzo", () => {
   // vede la propria mano
   assert.equal(view0.yourHand.length, g.handOf(0).length);
   assert.deepEqual(view0.yourHand.map((c) => c.id).sort(), g.handOf(0).map((c) => c.id).sort());
-  // dell'avversario solo il conteggio
-  assert.equal(view0.opponentHandCount, g.handOf(1).length);
+  // dell'avversario solo il conteggio (C3: da opponentHandCount a seats[].handCount)
+  assert.equal(view0.seats.find((s) => s.seat === 1)!.handCount, g.handOf(1).length);
   // niente contenuto mazzo/pozzetti: solo conteggi
   assert.equal(view0.drawPileCount, g.drawPile.length);
   assert.equal(view0.pozzettiRemaining, g.pozzetti.length);
@@ -746,11 +746,18 @@ test("redactFor: nessun leak della mano avversaria, pozzetti o mazzo", () => {
   assert.ok(view0.turnEndsAt! > Date.now());
   // whitelist: nessuna chiave inattesa che possa trasportare stato nascosto
   const allowed = new Set([
-    "yourHand", "tableMelds", "opponentHandCount", "discardTop", "discardCount",
+    "yourHand", "tableMelds", "seats", "discardTop", "discardCount",
     "drawPileCount", "pozzettiRemaining", "whoseTurn", "turnEndsAt", "phase",
     "yourPozzettoTaken", "canUndo", "yourSeat", "scores", "status",
   ]);
   for (const k of Object.keys(view0)) assert.ok(allowed.has(k), `chiave inattesa: ${k}`);
+  // P3: seats[] porta SOLO il conteggio, mai le carte (nessun `hand`/`cards` per posto).
+  for (const sp of view0.seats)
+    for (const k of Object.keys(sp))
+      assert.ok(
+        ["seat", "team", "handCount", "connectionStatus", "displayName"].includes(k),
+        `SeatPublic: chiave inattesa ${k}`,
+      );
   // serializzazione JSON completa: nessun riferimento all'oggetto interno
   const json = JSON.stringify(view0);
   for (const c of g.handOf(1)) assert.ok(!json.includes(c.id), `leak carta avversaria ${c.id}`);
@@ -761,8 +768,8 @@ test("redactFor: la vista dei due seat e' coerente e speculare", () => {
   const g = fresh();
   const v0 = redactFor(g, 0);
   const v1 = redactFor(g, 1);
-  assert.equal(v0.opponentHandCount, v1.yourHand.length);
-  assert.equal(v1.opponentHandCount, v0.yourHand.length);
+  assert.equal(v0.seats.find((s) => s.seat === 1)!.handCount, v1.yourHand.length);
+  assert.equal(v1.seats.find((s) => s.seat === 0)!.handCount, v0.yourHand.length);
   assert.equal(v0.whoseTurn, v1.whoseTurn);
   assert.equal(v0.drawPileCount, v1.drawPileCount);
   assert.equal(v0.yourSeat, 0);

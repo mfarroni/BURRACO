@@ -132,7 +132,8 @@ test("NEW-3: turno in stallo irrisolvibile (mano ridotta a una sola matta) → f
     | Extract<ServerMessage, { type: "game_ended" }>
     | undefined;
   assert.ok(geA && geB, "entrambi i giocatori ricevono game_ended");
-  assert.equal(geA!.winnerSeat, (1 - activeSeat) as 0 | 1, "vince l'avversario del seat in stallo");
+  // C8: game_ended espone winnerTeam (in 1v1 team = seat → l'avversario del seat in stallo).
+  assert.equal(geA!.winnerTeam, (1 - activeSeat) as 0 | 1, "vince la squadra avversaria del seat in stallo");
   assert.equal(geA!.reason, "forfeit", "risoluzione via forfeit deterministico (canale game_ended)");
   // Il turno NON resta congelato: la room è conclusa e smaltita.
   assert.equal((room as unknown as { isDisposed(): boolean }).isDisposed(), true, "room smaltita dopo il forfeit di stallo");
@@ -155,7 +156,7 @@ test("LIFECYCLE: scaduta la grace-window su disconnessione, la partita è ANNULL
 
   // A cade: parte la grace-window.
   mgr.handleClose(a.as());
-  assert.ok(b.has("opponent_disconnected"), "avversario notificato della disconnessione");
+  assert.ok(b.has("player_disconnected"), "gli altri posti notificati della disconnessione");
 
   await delay(160); // > grace
 

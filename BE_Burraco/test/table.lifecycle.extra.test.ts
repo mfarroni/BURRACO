@@ -90,8 +90,9 @@ test("(E1b) game_ended (forfeit da stallo) non espone mani/mazzo/pozzetti", () =
   const ge = a.find("game_ended")!;
   assert.ok(ge, "game_ended emesso");
   const keys = Object.keys(ge).sort().join(",");
-  assert.equal(keys, "finalScores,reason,type,winnerSeat", "solo campi pubblici del contratto");
-  assert.ok(Array.isArray(ge.finalScores) && ge.finalScores.length === 2, "solo i due totali");
+  // C8: game_ended espone winnerTeam (non più winnerSeat) + finalScores per squadra.
+  assert.equal(keys, "finalScores,reason,type,winnerTeam", "solo campi pubblici del contratto");
+  assert.ok(Array.isArray(ge.finalScores) && ge.finalScores.length === 2, "solo i due totali di squadra");
 });
 
 /* ── (E2) nessun clientMoveId/segreto nei broadcast di stato ── */

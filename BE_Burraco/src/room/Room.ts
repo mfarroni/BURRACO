@@ -10,8 +10,8 @@ import type {
   WaitingTableView,
 } from "../contract/types.js";
 import { GameEngine, type GameEffect, type MoveResult } from "../engine/game.js";
-import { teamOfSeat } from "../engine/teams.js";
-import { redactFor } from "./redact.js";
+import { teamOfSeat, teamScores } from "../engine/teams.js";
+import { redactFor, type SeatMeta } from "./redact.js";
 import { persistence } from "../db/persistence.js";
 
 /** LOBBY: visibilità di un tavolo in attesa (i privati non compaiono in lista). */
@@ -250,7 +250,23 @@ export class Room {
       seat: p.seat,
       displayName: p.displayName,
       connectionStatus: p.status,
+      // C5: SQUADRA del posto per il raggruppamento delle coppie lato UI. In 1v1
+      // team = seat → il roster "Tu / Avversario" non cambia.
+      team: teamOfSeat(p.seat, this.config),
     }));
+  }
+
+  /**
+   * Metadati per-posto (nome autoritativo + stato connessione) per la REDAZIONE.
+   * Il motore non li conosce: li fornisce il Room a `redactFor`, indicizzati per
+   * `seat`. Nessun dato sensibile (mai token/carte): solo ciò che è già pubblico.
+   */
+  private seatMeta(): SeatMeta[] {
+    const meta: SeatMeta[] = [];
+    for (const p of this.players) {
+      meta[p.seat] = { displayName: p.displayName, connectionStatus: p.status };
+    }
+    return meta;
   }
 
   /** Un posto è "vivo" se ha uno stato connesso E un socket effettivamente aperto. */
@@ -477,7 +493,7 @@ export class Room {
       config: this.config,
       resumed: true, // riconnessione/reclaim di una sessione esistente
     });
-    this.notifyOpponent(slot.seat, { type: "opponent_reconnected", seat: slot.seat });
+    this.notifyOthers(slot.seat, { type: "player_reconnected", seat: slot.seat });
     this.sendStateTo(slot); // no-op se il match non è ancora avviato
     this.maybeStartMatch();
   }
@@ -650,7 +666,8 @@ export class Room {
           type: "hand_ended",
           closerSeat: eff.closerSeat,
           scores: eff.scores,
-          cumulative: eff.cumulative,
+          // C6: cumulati PER SQUADRA. In 1v1 (team = seat) è [cum0, cum1], invariato.
+          cumulative: this.teamScoresNow(eff.cumulative),
         });
         void persistence.endHand(this.matchId, this.handId, eff.closerSeat, eff.scores, this.snapshot());
         // Avvia la smazzata successiva dopo un ritardo, così i client mostrano
@@ -663,8 +680,9 @@ export class Room {
       } else if (eff.kind === "game_ended") {
         this.broadcast({
           type: "game_ended",
-          winnerSeat: eff.winnerSeat,
-          finalScores: eff.finalScores,
+          // C8: SQUADRA vincitrice + punteggi PER SQUADRA. In 1v1 team = seat.
+          winnerTeam: eff.winnerSeat === null ? null : teamOfSeat(eff.winnerSeat, this.config),
+          finalScores: this.teamScoresNow(eff.finalScores),
         });
         // §7: fine LEGITTIMA (obiettivo raggiunto) → UNICO percorso 'completed',
         // l'unico conteggiato nelle statistiche. Persiste anche la SQUADRA vincitrice
@@ -707,7 +725,7 @@ export class Room {
     if (!slot) return;
     slot.ws = null;
     slot.status = "disconnected";
-    this.notifyOpponent(slot.seat, { type: "opponent_disconnected", seat: slot.seat });
+    this.notifyOthers(slot.seat, { type: "player_disconnected", seat: slot.seat });
 
     // LIFECYCLE: alla SCADENZA della grazia (default 180s) il disconnesso non
     // rientra più. Decisione di prodotto (sostituisce il forfeit-win di SEC-05):
@@ -947,10 +965,14 @@ export class Room {
       e.status = "game_ended";
       e.winnerSeat = winnerSeat;
       e.turnEndsAt = null;
-      // `cumulative` è ora `number[]`: si estrae la tupla binaria del contratto
-      // (forma invariata in Fase 1) con default difensivo sugli indici.
-      const finalScores: [number, number] = [e.cumulative[0] ?? 0, e.cumulative[1] ?? 0];
-      this.broadcast({ type: "game_ended", winnerSeat, finalScores, reason: "forfeit" });
+      // C8: SQUADRA vincitrice + punteggi PER SQUADRA. In 1v1 team = seat → il
+      // vincitore e i due totali coincidono col comportamento precedente.
+      this.broadcast({
+        type: "game_ended",
+        winnerTeam: teamOfSeat(winnerSeat, this.config),
+        finalScores: this.teamScoresNow(e.cumulative),
+        reason: "forfeit",
+      });
       // Decisione Gate 1: il forfeit da stallo dichiara un vincitore reale → conta
       // come 'completed' (preserva il comportamento pre-esistente). In 1v1 la
       // squadra vincitrice coincide col posto vincitore.
@@ -975,12 +997,28 @@ export class Room {
 
   private sendStateTo(slot: PlayerSlot): void {
     if (!this.engine) return;
-    send(slot.ws, { type: "state", state: redactFor(this.engine, slot.seat) });
+    send(slot.ws, { type: "state", state: redactFor(this.engine, slot.seat, this.seatMeta()) });
   }
 
-  private notifyOpponent(seat: Seat, msg: ServerMessage): void {
-    const opp = this.players.find((p) => p.seat !== seat);
-    if (opp) send(opp.ws, msg);
+  /**
+   * Notifica un messaggio a TUTTI gli altri posti (C9/D-B): a N posti l'avversario
+   * non è più unico. Usato per `player_disconnected/reconnected`, che devono
+   * raggiungere l'intera room tranne il posto interessato.
+   */
+  private notifyOthers(seat: Seat, msg: ServerMessage): void {
+    for (const p of this.players) {
+      if (p.seat !== seat) send(p.ws, msg);
+    }
+  }
+
+  /**
+   * Proiezione per SQUADRA dei cumulati per il CONTRATTO (C4/C6/C8). Usa l'array
+   * autoritativo del motore (`engine.cumulative`), ripiegando sul per-seat passato
+   * dall'effetto se il motore non è più presente. In 1v1 (team = seat) restituisce
+   * `[cumulative[0], cumulative[1]]` — valori invariati.
+   */
+  private teamScoresNow(fallbackPerSeat: readonly number[]): number[] {
+    return teamScores(this.engine ? this.engine.cumulative : fallbackPerSeat, this.config);
   }
 
   private logEvent(type: string, actorSeat: Seat, payload: unknown): void {
@@ -989,19 +1027,21 @@ export class Room {
 
   /** Stato pieno server-side per il checkpoint (MAI inviato ai client). */
   private snapshot(): unknown {
-    if (!this.engine) return {};
+    const e = this.engine;
+    if (!e) return {};
     return {
-      handNumber: this.engine.handNumber,
-      dealerSeat: this.engine.dealerSeat,
-      currentSeat: this.engine.currentSeat,
-      phase: this.engine.phase,
-      cumulative: this.engine.cumulative,
-      melds: this.engine.melds,
-      discardCount: this.engine.discard.length,
-      drawPileCount: this.engine.drawPile.length,
-      pozzettiRemaining: this.engine.pozzetti.length,
-      hands: [this.engine.handOf(0), this.engine.handOf(1)],
-      status: this.engine.status,
+      handNumber: e.handNumber,
+      dealerSeat: e.dealerSeat,
+      currentSeat: e.currentSeat,
+      phase: e.phase,
+      cumulative: e.cumulative,
+      melds: e.melds,
+      discardCount: e.discard.length,
+      drawPileCount: e.drawPile.length,
+      pozzettiRemaining: e.pozzetti.length,
+      // N posti: una mano per posto (in 1v1 resta [hand0, hand1]).
+      hands: e.seats.map((_, i) => e.handOf(i as Seat)),
+      status: e.status,
     };
   }
 }

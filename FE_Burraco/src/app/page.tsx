@@ -344,6 +344,13 @@ export default function Page() {
   const s = g.state;
   const you = g.yourSeat ?? 0;
   const oppSeat = (1 - you) as 0 | 1;
+  // C3/C4: lo stato ora porta `seats[]` (conteggio per posto) e `scores[]` PER SQUADRA.
+  // In 1v1 c'è un solo avversario e team = seat; deriviamo qui i valori usati dalla UI.
+  const mySeatView = s.seats.find((x) => x.seat === you);
+  const oppSeatView = s.seats.find((x) => x.seat !== you);
+  const opponentHandCount = oppSeatView?.handCount ?? 0;
+  const youTeam = mySeatView?.team ?? you;
+  const oppTeam = oppSeatView?.team ?? oppSeat;
   const isMyTurn = s.whoseTurn === g.yourSeat;
   const opponent = g.players.find((p) => p.seat !== g.yourSeat);
   const opponentName = opponent?.displayName ?? "Avversario";
@@ -419,7 +426,7 @@ export default function Page() {
             {isMyTurn ? "Tocca a te" : `Turno di ${opponentName}`}
           </span>
           {isMyTurn && turnEndsAt !== null && <Countdown turnEndsAt={turnEndsAt} />}
-          <OpponentStatus name={opponentName} handCount={s.opponentHandCount} connected={opponentConnected} />
+          <OpponentStatus name={opponentName} handCount={opponentHandCount} connected={opponentConnected} />
           {/* Annulla partita (§5.1): azione discreta nell'area comandi in alto, MAI
               accanto a presa/scarto (che vivono nella barra in basso). Sempre
               disponibile durante la partita. Apre una conferma modale. */}
@@ -436,12 +443,12 @@ export default function Page() {
         <div className="scoreboard">
           <div className="chip you">
             <span className="lbl">Tu</span>
-            <span className="val">{s.scores[you]}</span>
+            <span className="val">{s.scores[youTeam] ?? 0}</span>
           </div>
           <span className="vs" aria-hidden="true">/</span>
           <div className="chip">
             <span className="lbl">{opponentName}</span>
-            <span className="val">{s.scores[oppSeat]}</span>
+            <span className="val">{s.scores[oppTeam] ?? 0}</span>
           </div>
           <div className="chip">
             <span className="lbl">Obiettivo</span>
@@ -467,7 +474,7 @@ export default function Page() {
           <span className="crest" aria-hidden="true">●</span>
           <span className="seat-name">{opponentName}</span>
           <span className="team-tag">Loro</span>
-          <span className="seat-hand">{s.opponentHandCount} in mano</span>
+          <span className="seat-hand">{opponentHandCount} in mano</span>
           {!isMyTurn && <span className="turn-dot" aria-hidden="true" />}
           {!opponentConnected && <span className="seat-off">offline</span>}
         </div>
@@ -494,7 +501,7 @@ export default function Page() {
 
           <div className="pile">
             <div className="slot facedown" aria-hidden="true" />
-            <div className="num">{s.opponentHandCount}</div>
+            <div className="num">{opponentHandCount}</div>
             <div className="lbl">Mano avversario</div>
           </div>
 

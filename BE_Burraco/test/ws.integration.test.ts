@@ -80,6 +80,15 @@ function lastState(c: Client) {
   return s!.state;
 }
 
+/**
+ * Conteggio carte dell'UNICO avversario in 1v1 (C3): il posto diverso dal proprio in
+ * `seats[]`, che ha sostituito `opponentHandCount`. Il valore è invariato (numero di
+ * carte in mano dell'altro posto), cambia solo il modo di leggerlo.
+ */
+function oppCount(s: ReturnType<typeof lastState>): number {
+  return s.seats.find((x) => x.seat !== s.yourSeat)!.handCount;
+}
+
 /* ─────────────────────────── HANDSHAKE / CONTRATTO ─────────────────────────── */
 
 test("join a due: room_joined con seat 0/1, resumed=false, token presente", async () => {
@@ -98,8 +107,8 @@ test("stato iniziale redatto coerente per entrambi i client", async () => {
   const sa = lastState(a), sb = lastState(b);
   assert.equal(sa.yourHand.length, 11);
   assert.equal(sb.yourHand.length, 11);
-  assert.equal(sa.opponentHandCount, 11);
-  assert.equal(sb.opponentHandCount, 11);
+  assert.equal(oppCount(sa), 11);
+  assert.equal(oppCount(sb), 11);
   assert.equal(sa.drawPileCount, 64);
   assert.equal(sa.pozzettiRemaining, 2);
   assert.equal(typeof sa.turnEndsAt, "number", "SEC-05: turnEndsAt popolato nel turno attivo");
@@ -211,8 +220,8 @@ test("dopo una mossa entrambi i client ricevono stato coerente", async () => {
   await b.waitFor((m) => m.type === "state" && m.state.phase === "may_meld");
   const na = lastState(a), nb = lastState(b);
   // conteggi speculari coerenti
-  assert.equal(na.opponentHandCount, nb.yourHand.length);
-  assert.equal(nb.opponentHandCount, na.yourHand.length);
+  assert.equal(oppCount(na), nb.yourHand.length);
+  assert.equal(oppCount(nb), na.yourHand.length);
   assert.equal(na.drawPileCount, nb.drawPileCount);
   assert.equal(na.whoseTurn, nb.whoseTurn);
   // chi ha pescato ha 12 carte
@@ -238,8 +247,8 @@ test("riconnessione per token: room_joined.resumed=true e stato ripristinato", a
   a.close();
   await delay(100);
 
-  // B deve ricevere opponent_disconnected
-  assert.ok(b.has("opponent_disconnected"), "avversario notificato della disconnessione");
+  // B deve ricevere player_disconnected (C9: ex opponent_disconnected)
+  assert.ok(b.has("player_disconnected"), "gli altri posti notificati della disconnessione");
 
   // A rientra con lo stesso token
   const a2 = new Client(url); await a2.open();
@@ -249,8 +258,8 @@ test("riconnessione per token: room_joined.resumed=true e stato ripristinato", a
   assert.equal(rj.yourSeat, ja.yourSeat, "stesso seat");
   const st = (await a2.waitFor(isState)) as Extract<ServerMessage, { type: "state" }>;
   assert.deepEqual(st.state.yourHand.map((c) => c.id).sort(), handBefore, "mano ripristinata identica");
-  // B notificato del rientro
-  await b.waitFor((m) => m.type === "opponent_reconnected");
+  // B notificato del rientro (C9: ex opponent_reconnected)
+  await b.waitFor((m) => m.type === "player_reconnected");
   a2.close(); b.close();
 });
 

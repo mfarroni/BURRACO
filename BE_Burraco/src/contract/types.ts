@@ -85,8 +85,17 @@ export interface Meld {
 
 /** Configurazione di partita (v1: valori bloccati dalla scheda di regole). */
 export interface GameConfig {
-  numeroGiocatori: 2;
-  modalita: "individuale";
+  /**
+   * Posti al tavolo. `2` = 1v1 (individuale), `4` = coppie 2v2 (posti opposti).
+   * Widening C1 (Fase 2): il tipo ammette il 4, ma in questa tappa la lobby crea
+   * ancora solo partite a 2 (il ramo a 4 è attivato in una tappa successiva).
+   */
+  numeroGiocatori: 2 | 4;
+  /**
+   * Modalità di gioco. `"coppie"` attiva il ramo di `teamOfSeat` (posti opposti
+   * 0+2 / 1+3). Widening C2 (Fase 2). Oggi la lobby usa sempre `"individuale"`.
+   */
+  modalita: "individuale" | "coppie";
   punteggioObiettivo: number; // 2005
   varianteChiusura: "italiana" | "internazionale";
   presaPozzetto: "in_diretta_e_differita" | "solo_differita";
@@ -111,6 +120,26 @@ export interface PlayerPublic {
   seat: Seat;
   displayName: string;
   connectionStatus: ConnectionStatus;
+  /**
+   * SQUADRA del posto (C5). Serve alla UI per raggruppare le coppie (0+2 / 1+3)
+   * senza conoscere le regole. In individuale/1v1 `team === seat` (invariato).
+   */
+  team: TeamId;
+}
+
+/**
+ * Vista PUBBLICA di un posto al tavolo (C3, anti-leak P3). Descrive un posto SENZA
+ * mai esporne le carte: solo il CONTEGGIO. Vale per ogni posto — compagno incluso
+ * in coppie: la mano del compagno è privata esattamente come quella degli avversari.
+ * L'unica mano completa nel payload resta `GameStatePublic.yourHand` del destinatario.
+ */
+export interface SeatPublic {
+  seat: Seat;
+  team: TeamId;
+  /** Numero di carte in mano a questo posto (mai le carte). */
+  handCount: number;
+  connectionStatus: ConnectionStatus;
+  displayName: string;
 }
 
 /**
@@ -122,8 +151,13 @@ export interface GameStatePublic {
   yourHand: Card[];
   /** Tutti i giochi calati sul tavolo. */
   tableMelds: Meld[];
-  /** Quante carte ha in mano l'avversario (solo il conteggio). */
-  opponentHandCount: number;
+  /**
+   * TUTTI i posti del tavolo — VIEWER INCLUSO (decisione D-A) — ciascuno con il solo
+   * CONTEGGIO delle carte (mai le carte: anti-leak P3, compagno incluso). Sostituisce
+   * `opponentHandCount` (C3): a N posti l'avversario non è più unico. Il client
+   * ricava il conteggio del proprio posto e degli altri filtrando per `seat`.
+   */
+  seats: SeatPublic[];
   /** Carta in cima al monte scarti (o null se vuoto). */
   discardTop: Card | null;
   /** Quante carte compongono il monte scarti. */
@@ -155,8 +189,12 @@ export interface GameStatePublic {
   canUndo: boolean;
   /** Il mio seat (comodità per il client). */
   yourSeat: Seat;
-  /** Punteggi cumulativi di partita [seat0, seat1]. */
-  scores: [number, number];
+  /**
+   * Punteggi cumulativi di partita, INDICIZZATI PER SQUADRA (`TeamId`, C4/D-E):
+   * `scores[team]`. In individuale/1v1 team = seat, quindi `[scores[0], scores[1]]`
+   * coincide con la vecchia tupla per-seat: valori invariati, cambia la semantica.
+   */
+  scores: number[];
   /** Stato macro della partita. */
   status: "playing" | "hand_ended" | "game_ended";
 }
@@ -480,15 +518,21 @@ export type ServerMessage =
   | {
       type: "hand_ended";
       closerSeat: Seat | null;
+      /** Dettaglio PER-SEAT della smazzata (C7: invariato; il FE aggrega per squadra). */
       scores: HandScoreDetail[];
-      cumulative: [number, number];
+      /**
+       * Cumulati di partita PER SQUADRA (C6, `TeamId`): `cumulative[team]`. In 1v1
+       * team = seat → `[cumulative[0], cumulative[1]]`, valori invariati.
+       */
+      cumulative: number[];
     }
   /**
-   * Fine partita. `reason` è OPZIONALE: assente = fine normale (obiettivo
-   * raggiunto); "forfeit" = l'avversario si è disconnesso oltre la finestra di
-   * grazia e ha abbandonato (in 2 giocatori l'altro è dichiarato vincitore).
+   * Fine partita. `winnerTeam` è la SQUADRA vincitrice (C8, P4): in 1v1 coincide col
+   * posto. `finalScores` è per squadra (`TeamId`). `reason` è OPZIONALE: assente =
+   * fine normale (obiettivo raggiunto); "forfeit" = l'avversario si è disconnesso
+   * oltre la finestra di grazia e ha abbandonato (in 2 giocatori l'altra squadra vince).
    */
-  | { type: "game_ended"; winnerSeat: Seat | null; finalScores: [number, number]; reason?: "forfeit" }
+  | { type: "game_ended"; winnerTeam: TeamId | null; finalScores: number[]; reason?: "forfeit" }
   /**
    * LIFECYCLE: chiusura TERMINALE del tavolo SENZA vincitore, distinta da
    * `game_ended`. `reason`:
@@ -506,8 +550,14 @@ export type ServerMessage =
    * locale del tavolo.
    */
   | { type: "game_aborted"; byName: string }
-  | { type: "opponent_disconnected"; seat: Seat }
-  | { type: "opponent_reconnected"; seat: Seat }
+  /**
+   * Un POSTO ha perso/ripreso la connessione (C9/D-B, ex `opponent_*`). Rinominati
+   * perché a N posti "opponent" è ambiguo (può essere il COMPAGNO): il payload
+   * identifica sempre il `seat` interessato. Il server li notifica a TUTTI gli altri
+   * posti del tavolo (non solo "l'avversario"). Il FE aggiorna `players[seat]`.
+   */
+  | { type: "player_disconnected"; seat: Seat }
+  | { type: "player_reconnected"; seat: Seat }
   /**
    * Macro-ciclo 1 — Auth: rifiuto di `join_room` PRIMA di occupare un posto,
    * distinto da `error` (generico) e da `move_rejected` (mossa di gioco). Chiude
@@ -560,9 +610,9 @@ export interface WaitingTableView {
   creatorName: string;
   /** epoch ms di apertura → il FE deriva "attende da MM:SS". */
   openedAt: number;
-  /** Posti totali del tavolo (= config.numeroGiocatori; oggi sempre 2). */
+  /** Posti totali del tavolo (= config.numeroGiocatori; 2 in 1v1, 4 in coppie). */
   seatsTotal: number;
-  /** Posti occupati da un socket VIVO (oggi 1 in attesa). */
+  /** Posti occupati da un socket VIVO in attesa (1..seatsTotal-1). */
   seatsTaken: number;
 }
 
