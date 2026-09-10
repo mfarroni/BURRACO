@@ -31,8 +31,8 @@ export function teamCount(config: GameConfig): number {
 /**
  * PROIEZIONE per SQUADRA dei cumulati per-posto (SERVER-ONLY). Somma i valori dei
  * posti che appartengono alla stessa squadra e restituisce un array indicizzato per
- * `TeamId` (lunghezza = `teamCount`). È solo una proiezione per la REDAZIONE/CONTRATTO
- * (non l'attribuzione canonica del punteggio di coppia, che è un'altra tappa): in
+ * `TeamId` (lunghezza = `teamCount`). È la proiezione usata dalla REDAZIONE/CONTRATTO
+ * e dalla condizione di VITTORIA (confronto sui cumulati di squadra): in
  * individuale/1v1 (team = seat) restituisce esattamente `[perSeat[0], perSeat[1]]`.
  */
 export function teamScores(perSeat: readonly number[], config: GameConfig): number[] {
@@ -42,4 +42,23 @@ export function teamScores(perSeat: readonly number[], config: GameConfig): numb
     out[team] = (out[team] ?? 0) + (perSeat[seat] ?? 0);
   }
   return out;
+}
+
+/**
+ * POSTO CANONICO di una squadra (SERVER-ONLY, decisione D-C): il posto di indice
+ * MINORE fra quelli della squadra. È il posto a cui il punteggio attribuisce, UNA
+ * VOLTA SOLA, i fatti di COPPIA (giochi calati, burrachi, bonus chiusura, malus
+ * pozzetto), così la SUM delle due righe della coppia non li duplica.
+ *
+ *  - individuale (team = seat): la squadra ha un solo posto → il canonico è sé stesso.
+ *  - coppie (0+2 / 1+3): squadra 0 → posto 0, squadra 1 → posto 1.
+ *
+ * Il fallback `team` copre un input incoerente (nessun posto per la squadra): non
+ * accade con `teamOfSeat` denso, ma evita un ritorno indefinito.
+ */
+export function canonicalSeatForTeam(team: TeamId, config: GameConfig): Seat {
+  for (let seat = 0; seat < config.numeroGiocatori; seat++) {
+    if (teamOfSeat(seat, config) === team) return seat;
+  }
+  return team;
 }
