@@ -96,6 +96,9 @@ const pinellaSubstitute = z.object({
   type: z.literal("pinella_substitute"),
   meldId: z.string().max(MAX_ID),
   cardInHand: cardId,
+  // Scelta dell'estremità (solo forma; legalità decisa dal motore). Opzionale:
+  // assente = il client non ha ancora scelto / non serve scegliere.
+  edge: z.enum(["top", "bottom"]).optional(),
   clientMoveId,
 });
 

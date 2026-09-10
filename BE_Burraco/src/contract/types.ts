@@ -339,7 +339,19 @@ export type ClientMessage =
   | { type: "draw"; source: "deck" | "discard"; clientMoveId?: string }
   | { type: "meld_new"; cards: string[]; clientMoveId?: string } // CardId[]
   | { type: "meld_extend"; meldId: string; cards: string[]; clientMoveId?: string }
-  | { type: "pinella_substitute"; meldId: string; cardInHand: string; clientMoveId?: string }
+  // SOSTITUZIONE PINELLA: la carta naturale (`cardInHand`) prende il posto della
+  // matta calata; la matta NON torna mai in mano. In una SEQUENZA la matta si
+  // sposta a cima ("top") o fondo ("bottom") estendendo la scala di una posizione:
+  // `edge` è la scelta del giocatore, necessaria SOLO quando entrambe le estremità
+  // sono legali (altrimenti il server usa l'unica legale, o rifiuta se nessuna lo
+  // è). Nei GRUPPI la matta resta dentro e `edge` è ignorato.
+  | {
+      type: "pinella_substitute";
+      meldId: string;
+      cardInHand: string;
+      edge?: "top" | "bottom";
+      clientMoveId?: string;
+    }
   | { type: "discard"; card: string; clientMoveId?: string }
   // ANNULLA l'ultima calata annullabile del proprio turno (nessun payload oltre
   // al correlation id opzionale). Il server valida turno/fase e stack.
@@ -398,6 +410,12 @@ export type RejectCode =
   | "CANNOT_CLOSE_NO_BURRACO"
   | "ILLEGAL_LAST_DISCARD"
   | "NO_PINELLA_TO_SUBSTITUTE"
+  // Sostituzione pinella in una SEQUENZA: nessuna estremità (cima/fondo) è legale
+  // per la matta spostata (es. sequenza satura A-basso…A-alto) → rifiuto.
+  | "PINELLA_NO_LEGAL_POSITION"
+  // Sostituzione pinella in una SEQUENZA con ENTRAMBE le estremità legali ma senza
+  // `edge`: il server chiede al client di scegliere cima o fondo e ripetere.
+  | "PINELLA_EDGE_REQUIRED"
   | "NOTHING_TO_UNDO"
   | "GAME_NOT_ACTIVE"
   | "MALFORMED";

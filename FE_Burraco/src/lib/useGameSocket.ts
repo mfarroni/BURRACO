@@ -187,7 +187,7 @@ export interface GameSocketApi {
   drawDiscard: () => void;
   meldNew: (cards: string[]) => void;
   meldExtend: (meldId: string, cards: string[]) => void;
-  pinellaSubstitute: (meldId: string, cardInHand: string) => void;
+  pinellaSubstitute: (meldId: string, cardInHand: string, edge?: "top" | "bottom") => void;
   discard: (card: string) => void;
   /** Annulla l'ultima calata del turno (intenzione `undo_last`); il server decide. */
   undoLast: () => void;
@@ -753,8 +753,11 @@ export function useGameSocket(): GameSocketApi {
     drawDiscard: () => sendMove({ type: "draw", source: "discard" }),
     meldNew: (cards) => sendMove({ type: "meld_new", cards }, cards),
     meldExtend: (meldId, cards) => sendMove({ type: "meld_extend", meldId, cards }, cards),
-    pinellaSubstitute: (meldId, cardInHand) =>
-      sendMove({ type: "pinella_substitute", meldId, cardInHand }, [cardInHand]),
+    pinellaSubstitute: (meldId, cardInHand, edge) =>
+      sendMove(
+        { type: "pinella_substitute", meldId, cardInHand, ...(edge ? { edge } : {}) },
+        [cardInHand],
+      ),
     discard: (card) => sendMove({ type: "discard", card }, [card]),
     // Client muto: invia solo l'intenzione. Il server valida turno/fase/stack e,
     // se non c'è nulla da annullare, risponde NOTHING_TO_UNDO (→ RejectionToast).

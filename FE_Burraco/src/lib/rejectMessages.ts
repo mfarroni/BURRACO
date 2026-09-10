@@ -40,6 +40,9 @@ export const REJECT_MESSAGES: Record<RejectCode, string> = {
   ILLEGAL_LAST_DISCARD:
     "Quella carta non può essere l'ultimo scarto: annulla l'ultima mossa per liberarne un'altra da scartare.",
   NO_PINELLA_TO_SUBSTITUTE: "In quel gioco non c'è una pinella da sostituire con questa carta.",
+  PINELLA_NO_LEGAL_POSITION:
+    "La matta non ha una posizione valida in questa sequenza: non è possibile spostarla né in cima né in fondo.",
+  PINELLA_EDGE_REQUIRED: "Scegli dove spostare la matta: in cima o in fondo alla sequenza.",
   NOTHING_TO_UNDO: "In questo turno non c'è ancora nessuna mossa da annullare.",
   GAME_NOT_ACTIVE: "La partita non è in corso in questo momento.",
   MALFORMED: "Qualcosa non ha funzionato: riprova.",

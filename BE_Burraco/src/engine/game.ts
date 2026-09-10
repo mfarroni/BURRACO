@@ -6,8 +6,8 @@ import type {
   Phase,
   Seat,
 } from "../contract/types.js";
-import { createDeck, shuffle } from "./cards.js";
-import { interpretMeld, type MeldInterpretation } from "./meld.js";
+import { createDeck, orderToRank, rankOrder, shuffle } from "./cards.js";
+import { interpretMeld, type MeldInterpretation, type WildInfo } from "./meld.js";
 import { scoreHand, type SeatEndState } from "./scoring.js";
 
 /**
@@ -32,6 +32,8 @@ export interface RejectResult {
     | "CANNOT_CLOSE_NO_BURRACO"
     | "ILLEGAL_LAST_DISCARD"
     | "NO_PINELLA_TO_SUBSTITUTE"
+    | "PINELLA_NO_LEGAL_POSITION"
+    | "PINELLA_EDGE_REQUIRED"
     | "NOTHING_TO_UNDO"
     | "GAME_NOT_ACTIVE";
   reason: string;
@@ -280,7 +282,27 @@ export class GameEngine {
     return { ok: true, effects };
   }
 
-  pinellaSubstitute(seat: Seat, meldId: string, cardInHand: string): MoveResult {
+  /**
+   * SOSTITUZIONE DELLA MATTA (skill "SOSTITUZIONE DELLA MATTA").
+   *
+   * Il giocatore fornisce la carta naturale di cui una PINELLA calata fa le veci.
+   * La naturale prende il posto della matta; la matta NON torna MAI in mano:
+   *  - SEQUENZA: la matta si sposta a cima ("top") o fondo ("bottom"), estendendo
+   *    la scala di una posizione. `edge` è la scelta del giocatore ed è necessaria
+   *    solo quando ENTRAMBE le estremità sono legali; se una sola è legale si usa
+   *    quella; se nessuna lo è → rifiuto.
+   *  - GRUPPO: la matta resta dentro come carta in più (tris→poker); `edge` ignorato.
+   *
+   * Il gioco cresce di una carta: può scattare un burraco (6→7). Resta SPORCO
+   * (la matta è ancora dentro), salvo il caso-limite in cui la pinella finisca in
+   * posizione 2 del proprio seme e torni quindi naturale.
+   */
+  pinellaSubstitute(
+    seat: Seat,
+    meldId: string,
+    cardInHand: string,
+    edge?: "top" | "bottom",
+  ): MoveResult {
     const g = this.guardTurn(seat, "may_meld");
     if (g) return g;
 
@@ -295,31 +317,125 @@ export class GameEngine {
     const before = interpretMeld(meld.cards);
     if (!before) return reject("INVALID_MELD", "Stato del gioco incoerente.");
 
-    // Individua le pinelle (2 usati come matta) presenti nel gioco.
-    const pinelle = before.wilds.filter((w) => w.isPinella);
-    if (pinelle.length === 0)
+    // Solo una PINELLA (2 usato come matta) è sostituibile: i jolly non lo sono.
+    const pinella = before.wilds.find((w) => w.isPinella);
+    if (!pinella)
       return reject("NO_PINELLA_TO_SUBSTITUTE", "Nel gioco non c'è una pinella da sostituire.");
+    const pinellaCard = meld.cards.find((c) => c.id === pinella.cardId)!;
 
-    // Prova a sostituire: rimuovi la pinella, inserisci la carta naturale,
-    // rivalida. Deve restare valido e ridurre di uno le matte (recupero reale).
-    for (const p of pinelle) {
-      const rebuilt = meld.cards.filter((c) => c.id !== p.cardId).concat(card);
-      const after = interpretMeld(rebuilt);
-      if (after && after.wildCount === before.wildCount - 1) {
-        // Commit: la carta esce dalla mano, la pinella rientra in mano.
-        // La mano non si svuota (scambio 1:1) → nessun confine col pozzetto qui.
-        const pinellaCard = meld.cards.find((c) => c.id === p.cardId)!;
-        this.pushUndoSnapshot(seat);
-        this.removeFromHand(seat, [card.id]);
-        this.seats[seat].hand.push(pinellaCard);
-        this.replaceMeld(meld.id, this.buildMeld(after, seat, meld.id));
-        return { ok: true, effects: [] };
+    // La carta in mano deve essere ESATTAMENTE la naturale rappresentata dalla
+    // pinella: lo si verifica rimpiazzando la matta con la naturale e controllando
+    // che il gioco resti valido, dello stesso tipo, con una matta in meno.
+    const naturalSet = meld.cards.filter((c) => c.id !== pinellaCard.id).concat(card);
+    const substituted = interpretMeld(naturalSet);
+    if (
+      !substituted ||
+      substituted.type !== before.type ||
+      substituted.wildCount !== before.wildCount - 1
+    )
+      return reject(
+        "NO_PINELLA_TO_SUBSTITUTE",
+        "La carta indicata non corrisponde alla pinella calata.",
+      );
+
+    // Costruisce l'interpretazione RISULTANTE: la naturale entra, la matta RESTA
+    // nel gioco (mai in mano) e il numero di carte cresce di uno.
+    let resultInterp: MeldInterpretation;
+
+    if (before.type === "group") {
+      // GRUPPO: la matta resta dentro come carta in più; nessuna cima/fondo.
+      const grown = interpretMeld(meld.cards.concat(card));
+      if (!grown || grown.type !== "group")
+        return reject("INVALID_MELD", "La sostituzione non forma un gruppo valido.");
+      resultInterp = grown;
+    } else {
+      // SEQUENZA: la matta si sposta a cima/fondo estendendo la run di una
+      // posizione. La finestra [lo, hi] è quella occupata dai naturali dopo la
+      // sostituzione (run consecutiva di lunghezza N).
+      const run = substituted.orderedCards; // naturali consecutivi, ascendenti
+      const seqSuit = run[0]!.suit!;
+      const lo = run[0]!.rank === "A" ? 1 : rankOrder(run[0]!.rank);
+      const hi = lo + run.length - 1;
+      const topLegal = hi + 1 <= 14; // oltre l'Asso alto non si estende
+      const bottomLegal = lo - 1 >= 1; // sotto l'Asso basso non si estende
+
+      if (!topLegal && !bottomLegal)
+        return reject(
+          "PINELLA_NO_LEGAL_POSITION",
+          "La matta non ha una posizione legale in questa sequenza.",
+        );
+
+      let chosen: "top" | "bottom";
+      if (edge) {
+        // Il giocatore ha indicato l'estremità: se non è legale, si rifiuta (non
+        // si sceglie l'altra al suo posto — si rispetta l'intenzione esplicita).
+        if (edge === "top" && !topLegal)
+          return reject(
+            "PINELLA_NO_LEGAL_POSITION",
+            "La cima non è una posizione legale per la matta.",
+          );
+        if (edge === "bottom" && !bottomLegal)
+          return reject(
+            "PINELLA_NO_LEGAL_POSITION",
+            "Il fondo non è una posizione legale per la matta.",
+          );
+        chosen = edge;
+      } else if (topLegal && bottomLegal) {
+        // Ambiguità: il client deve scegliere cima o fondo e ripetere la mossa.
+        return reject(
+          "PINELLA_EDGE_REQUIRED",
+          "Scegli se spostare la matta in cima o in fondo alla sequenza.",
+        );
+      } else {
+        chosen = topLegal ? "top" : "bottom";
       }
+
+      const edgePos = chosen === "top" ? hi + 1 : lo - 1;
+      const orderedCards =
+        chosen === "top" ? [...run, pinellaCard] : [pinellaCard, ...run];
+
+      // Caso-limite: una pinella (un 2) che finisce in posizione 2 del PROPRIO
+      // seme torna NATURALE (non è più matta) → il gioco diventa pulito.
+      const pinellaIsNaturalTwo = edgePos === 2 && pinellaCard.suit === seqSuit;
+      const wilds: WildInfo[] = pinellaIsNaturalTwo
+        ? []
+        : [
+            {
+              cardId: pinellaCard.id,
+              represents: { rank: orderToRank(edgePos), suit: seqSuit },
+              isPinella: true,
+            },
+          ];
+
+      resultInterp = {
+        type: "sequence",
+        orderedCards,
+        wilds,
+        wildCount: wilds.length,
+        clean: wilds.length === 0,
+        isBurraco: orderedCards.length >= 7,
+      };
     }
-    return reject(
-      "NO_PINELLA_TO_SUBSTITUTE",
-      "La carta indicata non corrisponde a nessuna pinella calata.",
-    );
+
+    // La naturale esce dalla mano (la matta resta sul tavolo): la mano può
+    // svuotarsi → stessa guardia/gestione pozzetto di meld_extend.
+    const handAfter = this.seats[seat].hand.length - 1;
+    const guardEmpty = this.guardHandNotEmptied(seat, handAfter);
+    if (guardEmpty) return guardEmpty;
+
+    // Commit (da qui in poi nessun rifiuto): impila lo snapshot annullabile.
+    const wasBurraco = meld.isBurraco;
+    this.pushUndoSnapshot(seat);
+    this.removeFromHand(seat, [card.id]);
+    const rebuilt = this.buildMeld(resultInterp, seat, meld.id);
+    this.replaceMeld(meld.id, rebuilt);
+
+    const effects: GameEffect[] = [];
+    // Burraco realizzato SOLO alla transizione < 7 → >= 7 carte (6→7 tipica).
+    if (!wasBurraco && rebuilt.isBurraco)
+      effects.push({ kind: "burraco_made", seat, meldId: rebuilt.id, clean: rebuilt.clean });
+    effects.push(...this.afterMeldMutation(seat, handAfter));
+    return { ok: true, effects };
   }
 
   discardCard(seat: Seat, cardId: string): MoveResult {
