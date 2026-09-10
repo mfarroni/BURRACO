@@ -5,10 +5,12 @@ import type {
   Meld,
   Phase,
   Seat,
+  TeamId,
 } from "../contract/types.js";
 import { createDeck, orderToRank, rankOrder, shuffle } from "./cards.js";
 import { interpretMeld, type MeldInterpretation, type WildInfo } from "./meld.js";
 import { scoreHand, type SeatEndState } from "./scoring.js";
+import { teamOfSeat } from "./teams.js";
 
 /**
  * Motore di gioco autoritativo del Burraco 2p (SERVER-ONLY, decisione #3).
@@ -216,7 +218,9 @@ export class GameEngine {
     // numero finito > 0. Con `null` (default) non si rifiuta mai per questo motivo.
     const cap = this.config.limiteCalatePrimaDelPozzetto;
     if (cap !== null && Number.isFinite(cap) && cap > 0 && !this.seatOf(seat).pozzettoTaken) {
-      const own = this.melds.filter((m) => m.ownerSeat === seat).length;
+      // P4: il limite pre-pozzetto conta i giochi della SQUADRA, non del posto.
+      const team = teamOfSeat(seat, this.config);
+      const own = this.melds.filter((m) => this.teamOfMeld(m) === team).length;
       if (own >= cap)
         return reject(
           "MELD_LIMIT_REACHED",
@@ -254,8 +258,10 @@ export class GameEngine {
 
     const meld = this.melds.find((m) => m.id === meldId);
     if (!meld) return reject("MELD_NOT_FOUND", "Gioco inesistente.");
-    if (meld.ownerSeat !== seat)
-      return reject("NOT_MELD_OWNER", "Puoi ampliare solo i tuoi giochi.");
+    // P4: si può ampliare qualunque gioco della PROPRIA squadra (in coppie anche
+    // quelli del compagno). In 1v1 team===seat → invariato.
+    if (this.teamOfMeld(meld) !== teamOfSeat(seat, this.config))
+      return reject("NOT_MELD_OWNER", "Puoi ampliare solo i giochi della tua squadra.");
 
     const picked = this.pickFromHand(seat, cardIds);
     if (!picked) return reject("CARD_NOT_IN_HAND", "Carte non presenti in mano o duplicate.");
@@ -312,8 +318,10 @@ export class GameEngine {
 
     const meld = this.melds.find((m) => m.id === meldId);
     if (!meld) return reject("MELD_NOT_FOUND", "Gioco inesistente.");
-    if (meld.ownerSeat !== seat)
-      return reject("NOT_MELD_OWNER", "Puoi agire solo sui tuoi giochi.");
+    // P4: sostituzione della matta consentita sui giochi della PROPRIA squadra
+    // (in coppie anche quelli del compagno). In 1v1 team===seat → invariato.
+    if (this.teamOfMeld(meld) !== teamOfSeat(seat, this.config))
+      return reject("NOT_MELD_OWNER", "Puoi agire solo sui giochi della tua squadra.");
 
     const card = this.seatOf(seat).hand.find((c) => c.id === cardInHand);
     if (!card) return reject("CARD_NOT_IN_HAND", "Carta non presente in mano.");
@@ -538,6 +546,17 @@ export class GameEngine {
   }
 
   /**
+   * SQUADRA proprietaria di un gioco (P4). `ownerTeam` è la fonte autoritativa:
+   * `buildMeld` la popola sempre, quindi in gioco reale ogni proprietà è di squadra.
+   * Il fallback `teamOfSeat(m.ownerSeat, config)` copre SOLO i meld costruiti FUORI
+   * dal motore (fixture di test precedenti al campo): non scatta mai in partita e,
+   * anche scattando, restituisce la squadra CORRETTA (mai un confronto per posto).
+   */
+  private teamOfMeld(m: Meld): TeamId {
+    return m.ownerTeam ?? teamOfSeat(m.ownerSeat, this.config);
+  }
+
+  /**
    * Impila lo stato REVOCABILE del turno del seat attivo PRIMA di committare una
    * calata annullabile. Copie superficiali sufficienti (Card immutabili; la
    * shallow-copy di `melds` preserva i riferimenti agli oggetti Meld precedenti).
@@ -619,9 +638,12 @@ export class GameEngine {
   }
 
   private canClose(seat: Seat): boolean {
+    // P4: la chiusura richiede un burraco della SQUADRA (in coppie basta il burraco
+    // del compagno). In 1v1 team===seat → condizione invariata.
+    const team = teamOfSeat(seat, this.config);
     return this.melds.some(
       (m) =>
-        m.ownerSeat === seat &&
+        this.teamOfMeld(m) === team &&
         m.isBurraco &&
         (this.config.varianteChiusura === "italiana" || m.clean),
     );
@@ -648,7 +670,7 @@ export class GameEngine {
       pozzettoTaken: s.pozzettoTaken,
       pozzettoInDiretta: s.pozzettoInDiretta,
     }));
-    const scores = scoreHand(seatStates, this.melds, closerSeat);
+    const scores = scoreHand(seatStates, this.melds, closerSeat, this.config);
     this.lastHandScores = scores;
     this.turnEndsAt = null; // mano conclusa: nessun turno attivo
     this.undoStack = []; // mano conclusa: nulla è più annullabile
@@ -725,6 +747,8 @@ export class GameEngine {
       type: interp.type,
       cards: interp.orderedCards,
       ownerSeat: seat,
+      // P4: la proprietà è di SQUADRA. In individuale team===seat (1v1 invariato).
+      ownerTeam: teamOfSeat(seat, this.config),
       isBurraco: interp.isBurraco,
       clean: interp.clean,
       wildIndices,

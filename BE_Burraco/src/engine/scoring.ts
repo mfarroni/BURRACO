@@ -1,5 +1,6 @@
-import type { Card, HandScoreDetail, Meld, Seat } from "../contract/types.js";
+import type { Card, GameConfig, HandScoreDetail, Meld, Seat, TeamId } from "../contract/types.js";
 import { cardValue } from "./cards.js";
+import { teamOfSeat } from "./teams.js";
 
 /**
  * Punteggio di fine smazzata (SERVER-ONLY). Vedi skill "PUNTEGGIO":
@@ -29,9 +30,17 @@ export function scoreHand(
   seats: SeatEndState[],
   melds: Meld[],
   closerSeat: Seat | null,
+  config?: GameConfig,
 ): HandScoreDetail[] {
+  // P4: i punti dei giochi calati vanno alla SQUADRA, non al posto che li ha calati.
+  // `teamOf` mappa posto→squadra tramite config; senza config (chiamate dirette,
+  // es. test unit) ricade sul posto stesso — identico all'1v1. `ownerTeam` è la
+  // fonte autoritativa del gioco; il fallback a `ownerSeat` copre i meld costruiti
+  // fuori dal motore (fixture) e restituisce comunque la squadra corretta.
+  const teamOf = (seat: Seat): TeamId => (config ? teamOfSeat(seat, config) : seat);
   return seats.map((s) => {
-    const ownMelds = melds.filter((m) => m.ownerSeat === s.seat);
+    const seatTeam = teamOf(s.seat);
+    const ownMelds = melds.filter((m) => (m.ownerTeam ?? teamOf(m.ownerSeat)) === seatTeam);
 
     let ptsMelds = 0;
     let ptsBonus = 0;

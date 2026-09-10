@@ -62,7 +62,16 @@ export interface Meld {
   id: string;
   type: MeldType;
   cards: Card[]; // per la sequenza sono in ordine di run
+  /** Posto che ha materialmente calato il gioco (audit/log; NON per la proprietà). */
   ownerSeat: Seat;
+  /**
+   * SQUADRA proprietaria del gioco (P4). È QUESTA — non `ownerSeat` — a governare
+   * ogni controllo di proprietà: ampliamento, sostituzione matta, chiusura, limite
+   * calate pre-pozzetto, punteggio, raggruppamento nella UI. In individuale
+   * `ownerTeam === ownerSeat` (comportamento 1v1 invariato); in coppie i giochi
+   * appartengono alla coppia (posti opposti). Il FE raggruppa i giochi per questo campo.
+   */
+  ownerTeam: TeamId;
   isBurraco: boolean; // >= 7 carte
   clean: boolean; // burraco pulito (nessuna matta, salvo 2 al posto naturale)
   /**

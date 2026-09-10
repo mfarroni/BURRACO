@@ -51,7 +51,14 @@ export interface Meld {
   id: string;
   type: MeldType;
   cards: Card[];
+  /** Posto che ha calato il gioco (audit/log; NON usato per la proprietà). */
   ownerSeat: Seat;
+  /**
+   * SQUADRA proprietaria del gioco (specchio del BE, P4). Il FE raggruppa e decide
+   * la selezionabilità dei giochi per QUESTO campo, mai per `ownerSeat`. In 1v1
+   * `ownerTeam === ownerSeat`, quindi il raggruppamento "Noi/Loro" non cambia.
+   */
+  ownerTeam: TeamId;
   isBurraco: boolean;
   clean: boolean;
   /**

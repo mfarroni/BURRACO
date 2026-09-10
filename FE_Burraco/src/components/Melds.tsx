@@ -1,6 +1,6 @@
 "use client";
 
-import type { Meld, Seat } from "@/lib/contract";
+import type { Meld, Seat, TeamId } from "@/lib/contract";
 import { CardView } from "./CardView";
 
 /**
@@ -30,18 +30,25 @@ interface Props {
   yourSeat: Seat | null;
   selectedMeldId: string | null;
   onSelectMeld: (meldId: string) => void;
-  /** Squadra di appartenenza di un posto. Default 1v1: il tuo posto = "us". */
-  teamOf?: (seat: Seat) => Team;
+  /**
+   * Etichetta "us"/"them" per una SQUADRA (TeamId) rispetto al viewer. Default 1v1:
+   * la squadra del proprio posto (team===seat) è "us". Con 4 posti su 2 squadre
+   * basta fornire un `teamOf` coerente, senza riscrivere questo componente.
+   */
+  teamOf?: (team: TeamId) => Team;
   /** Se attivo, il tuo turno: accende la targa "I nostri giochi". */
   isMyTurn?: boolean;
 }
 
 export function Melds({ melds, yourSeat, selectedMeldId, onSelectMeld, teamOf, isMyTurn }: Props) {
-  const resolveTeam: (seat: Seat) => Team =
-    teamOf ?? ((seat) => (seat === yourSeat ? "us" : "them"));
+  // P4: il raggruppamento (e quindi la selezionabilità) è per SQUADRA via
+  // `ownerTeam`, mai per `ownerSeat`. In 1v1 team===seat, quindi "Noi/Loro" resta
+  // identico: i giochi del proprio posto sono "us", quelli dell'avversario "them".
+  const resolveTeam: (team: TeamId) => Team =
+    teamOf ?? ((team) => (team === yourSeat ? "us" : "them"));
 
-  const ours = melds.filter((m) => resolveTeam(m.ownerSeat) === "us");
-  const theirs = melds.filter((m) => resolveTeam(m.ownerSeat) === "them");
+  const ours = melds.filter((m) => resolveTeam(m.ownerTeam) === "us");
+  const theirs = melds.filter((m) => resolveTeam(m.ownerTeam) === "them");
 
   const renderMeld = (m: Meld, ownTeam: boolean) => {
     const wilds = new Set(m.wildIndices ?? []);
