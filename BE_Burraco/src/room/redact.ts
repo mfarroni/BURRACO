@@ -35,7 +35,9 @@ export function redactFor(engine: GameEngine, viewer: Seat): GameStatePublic {
     // giocatore di mano in may_meld con almeno una calata annullabile. Non
     // divulga stato nascosto (solo disponibilità dell'azione).
     canUndo: engine.canUndo(viewer),
-    scores: [engine.cumulative[0], engine.cumulative[1]],
+    // FORMA INVARIATA (Fase 1): `scores` resta la tupla binaria [seat0, seat1].
+    // `cumulative` è ora `number[]`: default difensivo sugli indici, valori identici.
+    scores: [engine.cumulative[0] ?? 0, engine.cumulative[1] ?? 0],
     status: engine.status,
   };
 }

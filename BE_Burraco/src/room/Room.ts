@@ -939,7 +939,9 @@ export class Room {
       e.status = "game_ended";
       e.winnerSeat = winnerSeat;
       e.turnEndsAt = null;
-      const finalScores: [number, number] = [e.cumulative[0], e.cumulative[1]];
+      // `cumulative` è ora `number[]`: si estrae la tupla binaria del contratto
+      // (forma invariata in Fase 1) con default difensivo sugli indici.
+      const finalScores: [number, number] = [e.cumulative[0] ?? 0, e.cumulative[1] ?? 0];
       this.broadcast({ type: "game_ended", winnerSeat, finalScores, reason: "forfeit" });
       // Decisione Gate 1: il forfeit da stallo dichiara un vincitore reale → conta
       // come 'completed' (preserva il comportamento pre-esistente).

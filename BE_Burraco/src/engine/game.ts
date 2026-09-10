@@ -107,10 +107,9 @@ export class GameEngine {
   discard: Card[] = [];
   pozzetti: Card[][] = [];
   melds: Meld[] = [];
-  seats: [SeatState, SeatState] = [
-    { hand: [], pozzettoTaken: false, pozzettoInDiretta: false },
-    { hand: [], pozzettoTaken: false, pozzettoInDiretta: false },
-  ];
+  // N posti: array (non più tupla a 2). Popolato da startHand con `numeroGiocatori`
+  // mani. In 1v1 resta lungo 2, quindi nulla di osservabile cambia.
+  seats: SeatState[] = [];
 
   dealerSeat: Seat = 0;
   currentSeat: Seat = 1;
@@ -123,7 +122,9 @@ export class GameEngine {
    */
   turnEndsAt: number | null = null;
   handNumber = 0;
-  cumulative: [number, number] = [0, 0];
+  // Cumulati di partita per posto (N posti). Inizializzato nel costruttore a n zeri
+  // e NON azzerato fra le mani. In 1v1 è lungo 2: `scores` redatto resta invariato.
+  cumulative: number[] = [];
   status: "playing" | "hand_ended" | "game_ended" = "playing";
   lastHandScores: HandScoreDetail[] = [];
   winnerSeat: Seat | null = null;
@@ -140,6 +141,8 @@ export class GameEngine {
   constructor(config: GameConfig, firstDealer: Seat) {
     this.config = config;
     this.dealerSeat = firstDealer;
+    // Un cumulato per posto, persistente per l'intera partita (mai azzerato fra le mani).
+    this.cumulative = new Array<number>(config.numeroGiocatori).fill(0);
     this.startHand(firstDealer);
   }
 
@@ -147,16 +150,21 @@ export class GameEngine {
 
   private startHand(dealer: Seat): void {
     const deck = shuffle(createDeck());
-    const take = (n: number): Card[] => deck.splice(0, n);
+    const take = (k: number): Card[] => deck.splice(0, k);
 
-    this.seats[0] = { hand: take(11), pozzettoTaken: false, pozzettoInDiretta: false }; // A1: 11 carte
-    this.seats[1] = { hand: take(11), pozzettoTaken: false, pozzettoInDiretta: false };
-    this.pozzetti = [take(11), take(11)]; // A2: due pozzetti da 11
-    this.drawPile = deck; // 64 carte residue
+    const seatCount = this.config.numeroGiocatori; // n posti (1v1: 2)
+    // A1: n mani da 11 carte, distribuite in ordine di posto (0..n-1).
+    this.seats = Array.from({ length: seatCount }, () => ({
+      hand: take(11),
+      pozzettoTaken: false,
+      pozzettoInDiretta: false,
+    }));
+    this.pozzetti = [take(11), take(11)]; // A2: due pozzetti da 11 (uno per squadra)
+    this.drawPile = deck; // carte residue
     this.discard = []; // A3-ter: monte scarti vuoto all'inizio
     this.melds = [];
     this.dealerSeat = dealer;
-    this.currentSeat = (1 - dealer) as Seat; // A6: inizia il non-mazziere
+    this.currentSeat = (dealer + 1) % seatCount; // A6: apre il posto dopo il mazziere
     this.phase = "must_draw";
     this.status = "playing";
     this.handNumber += 1;
@@ -650,7 +658,8 @@ export class GameEngine {
   }
 
   private endTurn(): OkResult {
-    this.currentSeat = (1 - this.currentSeat) as Seat;
+    // Rotazione oraria del turno su n posti. In 1v1 (currentSeat+1)%2 === 1-currentSeat.
+    this.currentSeat = (this.currentSeat + 1) % this.config.numeroGiocatori;
     this.phase = "must_draw";
     this.undoStack = []; // fine turno: nulla è più annullabile
     this.startTurnClock(); // nuova deadline per il giocatore entrante
@@ -678,30 +687,38 @@ export class GameEngine {
     for (const sc of scores)
       this.cumulative[sc.seat] = (this.cumulative[sc.seat] ?? 0) + sc.totalDelta;
 
+    // La FORMA del contratto resta binaria (perimetro Fase 1): per il caso a 2
+    // posti si emette la tupla [seat0, seat1]. La generalizzazione a N è Fase 2.
+    const scoresTuple: [number, number] = [this.cumulative[0] ?? 0, this.cumulative[1] ?? 0];
     const effects: GameEffect[] = [
-      { kind: "hand_ended", closerSeat, scores, cumulative: [...this.cumulative] as [number, number] },
+      { kind: "hand_ended", closerSeat, scores, cumulative: scoresTuple },
     ];
 
-    // Fine partita al raggiungimento dell'obiettivo.
-    const [a, b] = this.cumulative;
-    const reached = a >= this.config.punteggioObiettivo || b >= this.config.punteggioObiettivo;
+    // Fine partita al raggiungimento dell'obiettivo, confrontando gli N cumulati.
+    const target = this.config.punteggioObiettivo;
+    const reached = this.cumulative.some((c) => c >= target);
     let winner: Seat | null = null;
     if (reached) {
-      if (a !== b) {
-        // Vince chi ha il cumulato più alto.
-        winner = a > b ? 0 : 1;
-      } else if (closerSeat !== null) {
-        // Q4: parità esatta all'obiettivo -> vince chi ha CHIUSO la smazzata.
+      const max = Math.max(...this.cumulative);
+      const leaders: Seat[] = [];
+      this.cumulative.forEach((c, i) => {
+        if (c === max) leaders.push(i);
+      });
+      if (leaders.length === 1) {
+        // Un solo posto in testa: vince lui.
+        winner = leaders[0]!;
+      } else if (closerSeat !== null && leaders.includes(closerSeat)) {
+        // Q4: parità in testa all'obiettivo -> vince chi ha CHIUSO la smazzata.
         winner = closerSeat;
       }
-      // Parità esatta SENZA closer (smazzata finita per esaurimento): nessun
-      // vincitore -> si gioca un'altra smazzata (winner resta null).
+      // Parità in testa SENZA closer fra i leader (es. smazzata finita per
+      // esaurimento): nessun vincitore -> si gioca un'altra smazzata (winner null).
     }
 
     if (reached && winner !== null) {
       this.status = "game_ended";
       this.winnerSeat = winner;
-      effects.push({ kind: "game_ended", winnerSeat: winner, finalScores: [a, b] });
+      effects.push({ kind: "game_ended", winnerSeat: winner, finalScores: scoresTuple });
     } else {
       // Nuova smazzata: il mazziere alterna (A6).
       this.status = "hand_ended";
@@ -712,7 +729,8 @@ export class GameEngine {
   /** Avvia la smazzata successiva (chiamato dal Room dopo un hand_ended). */
   startNextHand(): void {
     if (this.status !== "hand_ended") return;
-    this.startHand((1 - this.dealerSeat) as Seat);
+    // Il mazziere ruota in senso orario. In 1v1 (dealer+1)%2 === 1-dealer.
+    this.startHand((this.dealerSeat + 1) % this.config.numeroGiocatori);
   }
 
   private pickFromHand(seat: Seat, cardIds: string[]): Card[] | null {
