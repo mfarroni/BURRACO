@@ -129,7 +129,9 @@ export class Room {
   }
 
   isFull(): boolean {
-    return this.players.length >= 2;
+    // A N posti: pieno = tanti slot quanti i posti del tavolo (`seatsTotal`).
+    // In 1v1 `seatsTotal()` vale 2 → comportamento identico a prima.
+    return this.players.length >= this.seatsTotal();
   }
 
   hasEngine(): boolean {
@@ -148,7 +150,7 @@ export class Room {
     return this.players.reduce((n, p) => n + (this.isSeatLive(p) ? 1 : 0), 0);
   }
 
-  /** Posti totali del tavolo (predisposizione 4 posti: oggi sempre 2). */
+  /** Posti totali del tavolo (= `config.numeroGiocatori`: 2 in 1v1, 4 in coppie). */
   seatsTotal(): number {
     return this.config.numeroGiocatori;
   }
@@ -165,15 +167,22 @@ export class Room {
   }
 
   /**
-   * LOBBY (§5.4-A/B): candidabile alla fusione quick_match SE è un tavolo pubblico
-   * quick_match, ancora in attesa, con ESATTAMENTE un posto vivo.
+   * LOBBY (§5.4-A/B): candidabile alla seduta/fusione quick_match SE è un tavolo
+   * pubblico quick_match, ancora in attesa, con ALMENO un posto vivo e ANCORA
+   * capienza (`seatsTakenLive < seatsTotal`). Generalizzato a N posti: in 1v1
+   * (`seatsTotal` = 2) equivale a "esattamente un posto vivo" (comportamento
+   * invariato). La FIRMA modalità/dimensione è confrontata a monte
+   * (RoomManager.findQuickMatchCandidate / mergeQuickMatchTables): un quick_match
+   * 2v2 non si siede né si fonde con un tavolo 1v1.
    */
   isMergeableQuickMatch(): boolean {
+    const taken = this.seatsTakenLive();
     return (
       this.isWaiting() &&
       this.visibility === "pubblico" &&
       this.origin === "quick_match" &&
-      this.seatsTakenLive() === 1
+      taken >= 1 &&
+      taken < this.seatsTotal()
     );
   }
 
@@ -187,13 +196,17 @@ export class Room {
     if (!this.isWaiting()) return null;
     const taken = this.seatsTakenLive();
     if (taken < 1) return null; // solo con ≥1 socket vivo (anti-fantasma)
-    return {
+    const view: WaitingTableView = {
       code: this.code,
       creatorName: this.creatorName(),
       openedAt: this.openedAt,
       seatsTotal: this.seatsTotal(),
       seatsTaken: taken,
     };
+    // MODALITÀ (Tappa 3a): campo additivo esposto SOLO per i tavoli 2v2, così la
+    // vista serializzata dell'1v1 resta byte-identica a prima (whitelist a 5 chiavi).
+    if (this.config.modalita === "coppie") view.modalita = "coppie";
+    return view;
   }
 
   /**
@@ -205,6 +218,23 @@ export class Room {
     const live = this.players.find((p) => this.isSeatLive(p));
     if (!live || !live.ws) return null;
     return { ws: live.ws, name: live.displayName, clientId: live.clientId, userId: live.userId };
+  }
+
+  /**
+   * LOBBY (§5.4-A, N posti): identità di TUTTI i posti vivi del tavolo, usata dalla
+   * FUSIONE per spostarli in blocco in un altro tavolo della stessa firma. A N posti
+   * un quick_match può avere più di un occupante, quindi la fusione non può muovere
+   * un solo posto: li elenca tutti e li sposta finché il tavolo di destinazione ha
+   * capienza. In 1v1 l'array ha al più un elemento (comportamento invariato).
+   */
+  liveSeatIdentities(): { ws: WebSocket; name: string; clientId?: string; userId: string | null }[] {
+    const out: { ws: WebSocket; name: string; clientId?: string; userId: string | null }[] = [];
+    for (const p of this.players) {
+      if (this.isSeatLive(p) && p.ws) {
+        out.push({ ws: p.ws, name: p.displayName, clientId: p.clientId, userId: p.userId });
+      }
+    }
+    return out;
   }
 
   /** Trova lo slot associato a un socket (o undefined). */
@@ -506,7 +536,10 @@ export class Room {
    */
   private maybeStartMatch(): void {
     if (this.engine) return;
-    if (this.players.length !== 2) return;
+    // Avvio a TAVOLO PIENO (N posti): servono `seatsTotal` slot, tutti vivi. In 1v1
+    // `seatsTotal()` = 2, quindi la partita parte all'ingresso del secondo, come
+    // prima; in 2v2 attende i quattro posti (nessuna partita a tavolo incompleto).
+    if (this.players.length !== this.seatsTotal()) return;
     if (!this.players.every((p) => this.isSeatLive(p))) return;
     for (const p of this.players) {
       send(p.ws, {
@@ -523,20 +556,28 @@ export class Room {
   }
 
   /**
-   * LOBBY (§5.4-D): i due posti condividono l'identità per-browser (clientId) o
-   * lo stesso utente (userId). Deve avere ESATTAMENTE 2 posti per essere valutato.
+   * LOBBY (§5.4-D): self-play = due posti QUALSIASI del tavolo condividono
+   * l'identità per-browser (clientId) o lo stesso utente (userId). Generalizzato a
+   * N posti (in 2v2 basta una coppia di posti collidente): in 1v1 (2 posti) è la
+   * stessa verifica di prima. Serve almeno 2 posti per essere valutato.
    */
   private isSelfPlay(): boolean {
-    if (this.players.length !== 2) return false;
-    const [a, b] = this.players;
-    if (!a || !b) return false;
-    if (a.clientId !== undefined && a.clientId === b.clientId) return true;
-    if (a.userId !== null && a.userId === b.userId) return true;
+    if (this.players.length < 2) return false;
+    for (let i = 0; i < this.players.length; i++) {
+      for (let j = i + 1; j < this.players.length; j++) {
+        const a = this.players[i]!;
+        const b = this.players[j]!;
+        if (a.clientId !== undefined && a.clientId === b.clientId) return true;
+        if (a.userId !== null && a.userId === b.userId) return true;
+      }
+    }
     return false;
   }
 
   private startMatch(): void {
-    const firstDealer: Seat = Math.random() < 0.5 ? 0 : 1; // A6: mazziere a caso
+    // A6: mazziere iniziale a caso fra i posti del tavolo. In 1v1 (`seatsTotal` = 2)
+    // è 0 o 1 come prima; in 2v2 è un posto qualsiasi in [0, seatsTotal).
+    const firstDealer: Seat = Math.floor(Math.random() * this.seatsTotal());
     this.engine = new GameEngine(this.config, firstDealer);
 
     // LOBBY (§5.4-D) — SELF-PLAY: i due posti sono lo stesso browser (clientId
@@ -777,8 +818,10 @@ export class Room {
    * modo leggibile (nessuno smontaggio unilaterale di una partita in corso).
    */
   private handleReset(slot: PlayerSlot): void {
-    const opp = this.players.find((p) => p.seat !== slot.seat);
-    if (opp && this.isSeatLive(opp)) {
+    // A N posti: lo smontaggio è vietato se un QUALSIASI altro posto è vivo (non
+    // solo "l'avversario"). In 1v1 c'è un solo altro posto → verifica identica.
+    const anyOtherLive = this.players.some((p) => p.seat !== slot.seat && this.isSeatLive(p));
+    if (anyOtherLive) {
       send(slot.ws, {
         type: "error",
         message: "Non puoi chiudere il tavolo mentre l'avversario è connesso.",
