@@ -10,7 +10,7 @@ import type {
 import { createDeck, orderToRank, rankOrder, shuffle } from "./cards.js";
 import { interpretMeld, type MeldInterpretation, type WildInfo } from "./meld.js";
 import { scoreHand, type SeatEndState } from "./scoring.js";
-import { teamOfSeat } from "./teams.js";
+import { canonicalSeatForTeam, teamOfSeat, teamScores } from "./teams.js";
 
 /**
  * Motore di gioco autoritativo del Burraco 2p (SERVER-ONLY, decisione #3).
@@ -44,8 +44,14 @@ export interface RejectResult {
 /** Effetti collaterali che il Room traduce in eventi WS + persistenza. */
 export type GameEffect =
   | { kind: "turn_changed"; seat: Seat; phase: Phase }
-  | { kind: "hand_ended"; closerSeat: Seat | null; scores: HandScoreDetail[]; cumulative: [number, number] }
-  | { kind: "game_ended"; winnerSeat: Seat | null; finalScores: [number, number] }
+  // `cumulative`/`finalScores` sono i cumulati PER-POSTO (tutti gli N posti): il Room
+  // li proietta per SQUADRA per il contratto (C6/C8). Array (non più tupla a 2) per
+  // reggere i tavoli a 4 posti; in 1v1 restano lunghi 2, invariati.
+  | { kind: "hand_ended"; closerSeat: Seat | null; scores: HandScoreDetail[]; cumulative: number[] }
+  // Fine partita di SQUADRA (P4). `winnerTeam` è la squadra vincitrice (fonte per il
+  // contratto `game_ended.winnerTeam`). `winnerSeat` resta come AUDIT (posto canonico
+  // della squadra vincitrice; in 1v1 coincide col posto vincitore) per la persistenza.
+  | { kind: "game_ended"; winnerTeam: TeamId | null; winnerSeat: Seat | null; finalScores: number[] }
   // Effetti CELEBRATIVI presentazionali (il Room li broadcasta, non persistono).
   | { kind: "pozzetto_taken"; seat: Seat }
   | { kind: "burraco_made"; seat: Seat; meldId: string; clean: boolean };
@@ -127,7 +133,10 @@ export class GameEngine {
   cumulative: number[] = [];
   status: "playing" | "hand_ended" | "game_ended" = "playing";
   lastHandScores: HandScoreDetail[] = [];
+  // Esito di partita. `winnerTeam` è la SQUADRA vincitrice (autoritativa, P4);
+  // `winnerSeat` è il posto canonico della squadra (audit; in 1v1 coincide col posto).
   winnerSeat: Seat | null = null;
+  winnerTeam: TeamId | null = null;
 
   /**
    * GIORNALE DI UNDO del turno corrente (in RAM). Pila di snapshot pre-mutazione
@@ -478,16 +487,17 @@ export class GameEngine {
       );
 
     if (willEmpty) {
-      const s = this.seatOf(seat);
-      if (!s.pozzettoTaken && this.pozzetti.length > 0) {
-        // Pozzetto DIFFERITA: prende il pozzetto ma lo gioca dal turno successivo.
+      const team = teamOfSeat(seat, this.config);
+      if (!this.teamHasPozzetto(team) && this.pozzetti.length > 0) {
+        // Pozzetto DIFFERITA: prende il pozzetto DELLA COPPIA (uno per coppia,
+        // riservato) ma lo gioca dal turno successivo.
         this.removeFromHand(seat, [cardId]);
         this.discard.push(card);
         this.takePozzetto(seat);
         const turn = this.endTurn();
         return { ok: true, effects: [{ kind: "pozzetto_taken", seat }, ...turn.effects] };
       }
-      // Deve chiudere: serve almeno un burraco (variante italiana: qualsiasi).
+      // Deve chiudere: serve almeno un burraco DI COPPIA (variante italiana: qualsiasi).
       if (!this.canClose(seat))
         return reject(
           "CANNOT_CLOSE_NO_BURRACO",
@@ -604,14 +614,28 @@ export class GameEngine {
   }
 
   /**
-   * Vieta di svuotare la mano con una calata quando il pozzetto è già preso
-   * (bisogna tenere una carta per lo scarto/chiusura). Se il pozzetto NON è
-   * ancora preso, svuotare è lecito: scatterà la presa "in diretta".
+   * Una SQUADRA ha preso il proprio pozzetto se ALMENO uno dei suoi posti l'ha
+   * preso (skill "Pozzetto: uno per coppia"): un solo pozzetto per coppia, riservato.
+   * In individuale (team = seat) equivale al flag per-posto: comportamento 1v1 invariato.
+   */
+  private teamHasPozzetto(team: TeamId): boolean {
+    return this.seats.some(
+      (s, i) => s.pozzettoTaken && teamOfSeat(i as Seat, this.config) === team,
+    );
+  }
+
+  /**
+   * Vieta di svuotare la mano con una calata quando la COPPIA ha già preso il
+   * pozzetto (bisogna tenere una carta per lo scarto/chiusura). Se la coppia NON
+   * ha ancora il proprio pozzetto ed è disponibile, svuotare è lecito: scatterà la
+   * presa "in diretta". Il controllo è per SQUADRA (P4): in 2v2 il pozzetto è uno
+   * per coppia, quindi un compagno non ne prende un secondo per la propria coppia.
    */
   private guardHandNotEmptied(seat: Seat, handAfter: number): RejectResult | null {
-    // Se il pozzetto è già preso (o non ce ne sono da prendere) non si può
-    // svuotare la mano con una calata: serve una carta per lo scarto/chiusura.
-    if (handAfter === 0 && (this.seatOf(seat).pozzettoTaken || this.pozzetti.length === 0))
+    // Se la coppia ha già preso il pozzetto (o non ce ne sono da prendere) non si
+    // può svuotare la mano con una calata: serve una carta per lo scarto/chiusura.
+    const team = teamOfSeat(seat, this.config);
+    if (handAfter === 0 && (this.teamHasPozzetto(team) || this.pozzetti.length === 0))
       return reject(
         "MUST_KEEP_CARD_TO_DISCARD",
         "Devi tenere almeno una carta per lo scarto finale.",
@@ -622,9 +646,12 @@ export class GameEngine {
   /**
    * Gestione post-calata: eventuale presa pozzetto "in diretta".
    * Ritorna gli effetti celebrativi generati (pozzetto_taken) da concatenare.
+   * La presa è per COPPIA (P4): consentita solo se la squadra non ha già il proprio
+   * pozzetto e ne resta almeno uno disponibile (mai due alla stessa coppia).
    */
   private afterMeldMutation(seat: Seat, handAfter: number): GameEffect[] {
-    if (handAfter === 0 && !this.seatOf(seat).pozzettoTaken && this.pozzetti.length > 0) {
+    const team = teamOfSeat(seat, this.config);
+    if (handAfter === 0 && !this.teamHasPozzetto(team) && this.pozzetti.length > 0) {
       // Pozzetto IN DIRETTA: prende subito il pozzetto e continua lo stesso turno.
       this.takePozzetto(seat);
       // Marca la MODALITÀ di presa (in diretta): svuotata la mano PRIMA dello scarto.
@@ -646,9 +673,14 @@ export class GameEngine {
   }
 
   private canClose(seat: Seat): boolean {
-    // P4: la chiusura richiede un burraco della SQUADRA (in coppie basta il burraco
-    // del compagno). In 1v1 team===seat → condizione invariata.
+    // Chiusura di coppia (skill "CHIUSURA" + "MODALITA' A COPPIE"): servono
+    //  (1) il pozzetto DELLA COPPIA preso (da uno qualsiasi dei due membri) e
+    //  (2) un burraco DELLA SQUADRA (in coppie basta il burraco del compagno).
+    // Entrambi i controlli sono per SQUADRA (P4). In 1v1 team===seat e, arrivati a
+    // questo punto del flusso, il posto ha già preso il proprio pozzetto: condizione
+    // invariata.
     const team = teamOfSeat(seat, this.config);
+    if (!this.teamHasPozzetto(team)) return false;
     return this.melds.some(
       (m) =>
         this.teamOfMeld(m) === team &&
@@ -687,38 +719,51 @@ export class GameEngine {
     for (const sc of scores)
       this.cumulative[sc.seat] = (this.cumulative[sc.seat] ?? 0) + sc.totalDelta;
 
-    // La FORMA del contratto resta binaria (perimetro Fase 1): per il caso a 2
-    // posti si emette la tupla [seat0, seat1]. La generalizzazione a N è Fase 2.
-    const scoresTuple: [number, number] = [this.cumulative[0] ?? 0, this.cumulative[1] ?? 0];
+    // Cumulati PER-POSTO (tutti gli N posti): il Room li proietta per SQUADRA per il
+    // contratto. In 1v1 è [cum0, cum1]. La VITTORIA è invece decisa sui cumulati di
+    // SQUADRA (P4), somma dei posti della coppia.
+    const perSeatCumulative = this.cumulative.slice();
     const effects: GameEffect[] = [
-      { kind: "hand_ended", closerSeat, scores, cumulative: scoresTuple },
+      { kind: "hand_ended", closerSeat, scores, cumulative: perSeatCumulative },
     ];
 
-    // Fine partita al raggiungimento dell'obiettivo, confrontando gli N cumulati.
+    // Fine partita al raggiungimento dell'obiettivo, confrontando i cumulati di
+    // SQUADRA. In 1v1 (team = seat) coincide col confronto per-posto: invariato.
+    const teamCumulative = teamScores(this.cumulative, this.config);
     const target = this.config.punteggioObiettivo;
-    const reached = this.cumulative.some((c) => c >= target);
-    let winner: Seat | null = null;
+    const reached = teamCumulative.some((c) => c >= target);
+    let winnerTeam: TeamId | null = null;
     if (reached) {
-      const max = Math.max(...this.cumulative);
-      const leaders: Seat[] = [];
-      this.cumulative.forEach((c, i) => {
-        if (c === max) leaders.push(i);
+      const max = Math.max(...teamCumulative);
+      const leaders: TeamId[] = [];
+      teamCumulative.forEach((c, t) => {
+        if (c === max) leaders.push(t);
       });
       if (leaders.length === 1) {
-        // Un solo posto in testa: vince lui.
-        winner = leaders[0]!;
-      } else if (closerSeat !== null && leaders.includes(closerSeat)) {
-        // Q4: parità in testa all'obiettivo -> vince chi ha CHIUSO la smazzata.
-        winner = closerSeat;
+        // Una sola squadra in testa: vince lei.
+        winnerTeam = leaders[0]!;
+      } else if (closerSeat !== null) {
+        // Q4: parità in testa all'obiettivo -> vince la SQUADRA che ha CHIUSO.
+        const closerTeam = teamOfSeat(closerSeat, this.config);
+        if (leaders.includes(closerTeam)) winnerTeam = closerTeam;
       }
       // Parità in testa SENZA closer fra i leader (es. smazzata finita per
       // esaurimento): nessun vincitore -> si gioca un'altra smazzata (winner null).
     }
 
-    if (reached && winner !== null) {
+    if (reached && winnerTeam !== null) {
       this.status = "game_ended";
-      this.winnerSeat = winner;
-      effects.push({ kind: "game_ended", winnerSeat: winner, finalScores: scoresTuple });
+      this.winnerTeam = winnerTeam;
+      // Posto canonico della squadra vincitrice, per l'audit. In 1v1 coincide col
+      // posto vincitore → `winnerSeat` conserva il valore del comportamento 1v1.
+      const winnerSeat = canonicalSeatForTeam(winnerTeam, this.config);
+      this.winnerSeat = winnerSeat;
+      effects.push({
+        kind: "game_ended",
+        winnerTeam,
+        winnerSeat,
+        finalScores: perSeatCumulative,
+      });
     } else {
       // Nuova smazzata: il mazziere alterna (A6).
       this.status = "hand_ended";

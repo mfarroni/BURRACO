@@ -680,18 +680,15 @@ export class Room {
       } else if (eff.kind === "game_ended") {
         this.broadcast({
           type: "game_ended",
-          // C8: SQUADRA vincitrice + punteggi PER SQUADRA. In 1v1 team = seat.
-          winnerTeam: eff.winnerSeat === null ? null : teamOfSeat(eff.winnerSeat, this.config),
+          // C8: SQUADRA vincitrice (autoritativa dal motore, P4) + punteggi PER
+          // SQUADRA. In 1v1 team = seat → valori invariati.
+          winnerTeam: eff.winnerTeam,
           finalScores: this.teamScoresNow(eff.finalScores),
         });
         // §7: fine LEGITTIMA (obiettivo raggiunto) → UNICO percorso 'completed',
-        // l'unico conteggiato nelle statistiche. Persiste anche la SQUADRA vincitrice
-        // (in 1v1 team = seat → winner_team = winner_seat).
-        void persistence.completeMatch(
-          this.matchId,
-          eff.winnerSeat,
-          eff.winnerSeat === null ? null : teamOfSeat(eff.winnerSeat, this.config),
-        );
+        // l'unico conteggiato nelle statistiche. Persiste il posto canonico (audit)
+        // e la SQUADRA vincitrice (in 1v1 team = seat → winner_team = winner_seat).
+        void persistence.completeMatch(this.matchId, eff.winnerSeat, eff.winnerTeam);
         // SEC-05: partita conclusa → GC della room (rimozione dalla mappa RAM).
         this.dispose();
       } else if (eff.kind === "pozzetto_taken") {
