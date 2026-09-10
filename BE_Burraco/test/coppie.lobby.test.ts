@@ -316,3 +316,61 @@ test("1v1 (non-regressione): due sessioni dallo STESSO browser possono comunque 
   assert.ok(a.has("self_play_notice") && b.has("self_play_notice"), "self-play solo AVVISATO");
   disposeOf(room);
 });
+
+/* ─────────────────── FORFAIT DI COPPIA (stallo → perde la COPPIA) ────────── */
+
+/** Siede quattro socket in un tavolo 2v2 e avvia la partita (ritorna la Room). */
+function start2v2(code: string): {
+  room: Room; a: FakeSocket; b: FakeSocket; c: FakeSocket; d: FakeSocket;
+} {
+  const room = new Room(code, coppie4());
+  const a = new FakeSocket();
+  const b = new FakeSocket();
+  const c = new FakeSocket();
+  const d = new FakeSocket();
+  room.join(a.as(), undefined, "A", "cA"); // seat 0 (squadra 0)
+  room.join(b.as(), undefined, "B", "cB"); // seat 1 (squadra 1)
+  room.join(c.as(), undefined, "C", "cC"); // seat 2 (squadra 0)
+  room.join(d.as(), undefined, "D", "cD"); // seat 3 (squadra 1)
+  return { room, a, b, c, d };
+}
+
+test("forfait di coppia: lo stallo del posto 2 (squadra 0) fa VINCERE la squadra 1 (non il compagno)", () => {
+  process.env.RECONNECT_GRACE_MS = "100000";
+  const { room, a, b, c, d } = start2v2("FF4A");
+  assert.equal(engineStarted(room), true, "partita 2v2 avviata a tavolo pieno");
+
+  // Forfait deterministico del posto 2 (squadra 0). Vincitrice attesa: squadra 1.
+  (room as unknown as { forfeitStalledSeat(s: Seat): void }).forfeitStalledSeat(2);
+
+  for (const [name, sock] of [["A", a], ["B", b], ["C", c], ["D", d]] as const) {
+    const ge = sock.find("game_ended");
+    assert.ok(ge, `game_ended ricevuto dal posto ${name}`);
+    assert.equal(ge!.winnerTeam, 1, `vince la squadra AVVERSARIA (1), non il compagno — visto da ${name}`);
+    assert.equal(ge!.reason, "forfeit");
+    assert.equal(ge!.finalScores.length, 2, "due totali di squadra");
+  }
+  assert.equal((room as unknown as { isDisposed(): boolean }).isDisposed(), true, "room smaltita dopo il forfait");
+});
+
+test("forfait di coppia: lo stallo del posto 1 (squadra 1) fa VINCERE la squadra 0", () => {
+  process.env.RECONNECT_GRACE_MS = "100000";
+  const { room, a } = start2v2("FF4B");
+  (room as unknown as { forfeitStalledSeat(s: Seat): void }).forfeitStalledSeat(1);
+  const ge = a.find("game_ended")!;
+  assert.equal(ge.winnerTeam, 0, "perde la squadra 1 dello stallato → vince la squadra 0");
+  assert.equal(ge.reason, "forfeit");
+});
+
+test("forfait 1v1 (non-regressione): stallo del posto 0 → vince la squadra 1 (invariato)", () => {
+  process.env.RECONNECT_GRACE_MS = "100000";
+  const room = new Room("FF2", { ...defaultGameConfig(), turnTimeoutMs: 100_000 });
+  const a = new FakeSocket();
+  const b = new FakeSocket();
+  room.join(a.as(), undefined, "A", "cA");
+  room.join(b.as(), undefined, "B", "cB");
+  (room as unknown as { forfeitStalledSeat(s: Seat): void }).forfeitStalledSeat(0);
+  const ge = a.find("game_ended")!;
+  assert.equal(ge.winnerTeam, 1, "1v1: team = seat → vince il posto 1, valore identico a prima");
+  assert.equal(ge.reason, "forfeit");
+});

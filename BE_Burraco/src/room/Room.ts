@@ -7,10 +7,11 @@ import type {
   PlayerPublic,
   Seat,
   ServerMessage,
+  TeamId,
   WaitingTableView,
 } from "../contract/types.js";
 import { GameEngine, type GameEffect, type MoveResult } from "../engine/game.js";
-import { teamOfSeat, teamScores } from "../engine/teams.js";
+import { canonicalSeatForTeam, teamCount, teamOfSeat, teamScores } from "../engine/teams.js";
 import { redactFor, type SeatMeta } from "./redact.js";
 import { persistence } from "../db/persistence.js";
 
@@ -992,33 +993,54 @@ export class Room {
   }
 
   /**
-   * NEW-3: chiusura deterministica di un turno in stallo irrisolvibile: il seat
-   * in stallo perde d'ufficio, l'avversario è dichiarato vincitore della
-   * partita. Riusa il canale `game_ended` (reason "forfeit"). Poi GC della room.
+   * NEW-3 / FORFAIT DI COPPIA (P4): chiusura deterministica di un turno in stallo
+   * irrisolvibile. A perdere è la SQUADRA del posto in stallo, non un singolo posto:
+   * la vincitrice è la squadra AVVERSARIA (mai il compagno). Riusa il canale
+   * `game_ended` (reason "forfeit"). Poi GC della room.
+   *
+   * In 1v1 (team = seat, due squadre) la squadra avversaria è `1 - stalledSeat`:
+   * vincitore e totali coincidono ESATTAMENTE col comportamento precedente. In 2v2
+   * (squadre 0+2 / 1+3) la vecchia logica `players.find(seat !== stalled)` avrebbe
+   * potuto premiare il COMPAGNO dello stallato: qui la vittoria va sempre all'altra
+   * squadra. Lo scope ammette solo tavoli a 2 squadre, quindi l'avversaria è l'unica
+   * squadra diversa da quella dello stallato.
    */
   private forfeitStalledSeat(stalledSeat: Seat): void {
     if (this.disposed) return;
     const e = this.engine;
-    const opp = this.players.find((p) => p.seat !== stalledSeat);
-    const winnerSeat = (opp ? opp.seat : (1 - stalledSeat)) as Seat;
+    const loserTeam = teamOfSeat(stalledSeat, this.config);
+    const winnerTeam = this.opposingTeam(loserTeam);
+    // Posto canonico della squadra vincitrice per l'audit/persistenza (in 1v1
+    // coincide col posto vincitore, come prima).
+    const winnerSeat = canonicalSeatForTeam(winnerTeam, this.config);
     if (e && e.status === "playing") {
       e.status = "game_ended";
+      e.winnerTeam = winnerTeam;
       e.winnerSeat = winnerSeat;
       e.turnEndsAt = null;
-      // C8: SQUADRA vincitrice + punteggi PER SQUADRA. In 1v1 team = seat → il
-      // vincitore e i due totali coincidono col comportamento precedente.
+      // C8: SQUADRA vincitrice + punteggi PER SQUADRA.
       this.broadcast({
         type: "game_ended",
-        winnerTeam: teamOfSeat(winnerSeat, this.config),
+        winnerTeam,
         finalScores: this.teamScoresNow(e.cumulative),
         reason: "forfeit",
       });
       // Decisione Gate 1: il forfeit da stallo dichiara un vincitore reale → conta
-      // come 'completed' (preserva il comportamento pre-esistente). In 1v1 la
-      // squadra vincitrice coincide col posto vincitore.
-      void persistence.completeMatch(this.matchId, winnerSeat, teamOfSeat(winnerSeat, this.config));
+      // come 'completed' (preserva il comportamento pre-esistente). Persiste il
+      // posto canonico (audit) e la SQUADRA vincitrice (autoritativa, P4).
+      void persistence.completeMatch(this.matchId, winnerSeat, winnerTeam);
     }
     this.dispose();
+  }
+
+  /**
+   * Squadra AVVERSARIA di `team` in un tavolo a due squadre (scope 2v2:
+   * {2, individuale} e {4, coppie} hanno entrambe 2 squadre). In 1v1 team = seat →
+   * `1 - team`, identico a prima; in 2v2 è l'altra coppia.
+   */
+  private opposingTeam(team: TeamId): TeamId {
+    // Due sole squadre nello scope corrente: l'avversaria è l'altra.
+    return teamCount(this.config) === 2 ? ((team === 0 ? 1 : 0) as TeamId) : team;
   }
 
   /* ─────────────────────────── broadcast/redaction ─────────────────────── */
