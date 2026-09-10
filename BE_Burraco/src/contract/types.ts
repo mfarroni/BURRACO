@@ -17,8 +17,20 @@ export type Rank =
   | "A" | "2" | "3" | "4" | "5" | "6" | "7"
   | "8" | "9" | "10" | "J" | "Q" | "K" | "JOKER";
 
-/** Un seat identifica un giocatore nel tavolo 1v1. */
-export type Seat = 0 | 1;
+/**
+ * Un seat identifica un POSTO al tavolo. NUMERICO (non più il letterale binario
+ * `0 | 1`): predisposizione ai tavoli a N posti (Fase 1). In 1v1 i valori restano
+ * 0 e 1, quindi nulla di ciò che viene serializzato verso il client cambia.
+ */
+export type Seat = number;
+
+/**
+ * Identità di SQUADRA (P4: la proprietà dei giochi calati è di squadra, mai di
+ * posto). In modalità individuale ogni posto è la propria squadra (`team === seat`);
+ * in modalità coppie (predisposizione, NON attiva in Fase 1) posti opposti
+ * condividono la squadra (0+2, 1+3). Il mapping vive in `teamOfSeat` (server-only).
+ */
+export type TeamId = number;
 
 /**
  * IDENTITÀ "matta" della carta (non il ruolo che assume in un gioco):

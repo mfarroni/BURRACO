@@ -186,7 +186,7 @@ export class GameEngine {
         if (this.discard.length === 0) return this.endHand(null);
         return reject("DECK_EMPTY", "Il mazzo di pesca è esaurito: pesca dal monte scarti.");
       }
-      this.seats[seat].hand.push(this.drawPile.shift()!);
+      this.seatOf(seat).hand.push(this.drawPile.shift()!);
     } else {
       if (this.discard.length === 0) {
         // Se anche il mazzo è vuoto -> entrambe le fonti esaurite: fine smazzata.
@@ -194,7 +194,7 @@ export class GameEngine {
         return reject("EMPTY_DISCARD", "Il monte scarti è vuoto.");
       }
       // A3: si prende l'INTERO monte scarti (inclusa la carta in cima).
-      this.seats[seat].hand.push(...this.discard);
+      this.seatOf(seat).hand.push(...this.discard);
       this.discard = [];
     }
 
@@ -215,7 +215,7 @@ export class GameEngine {
     // house-rule OPZIONALE, attiva solo se `limiteCalatePrimaDelPozzetto` è un
     // numero finito > 0. Con `null` (default) non si rifiuta mai per questo motivo.
     const cap = this.config.limiteCalatePrimaDelPozzetto;
-    if (cap !== null && Number.isFinite(cap) && cap > 0 && !this.seats[seat].pozzettoTaken) {
+    if (cap !== null && Number.isFinite(cap) && cap > 0 && !this.seatOf(seat).pozzettoTaken) {
       const own = this.melds.filter((m) => m.ownerSeat === seat).length;
       if (own >= cap)
         return reject(
@@ -230,7 +230,7 @@ export class GameEngine {
     const interp = interpretMeld(picked);
     if (!interp) return reject("INVALID_MELD", "Le carte non formano un gioco valido.");
 
-    const handAfter = this.seats[seat].hand.length - picked.length;
+    const handAfter = this.seatOf(seat).hand.length - picked.length;
     const guardEmpty = this.guardHandNotEmptied(seat, handAfter);
     if (guardEmpty) return guardEmpty;
 
@@ -263,7 +263,7 @@ export class GameEngine {
     const interp = interpretMeld([...meld.cards, ...picked]);
     if (!interp) return reject("INVALID_MELD", "L'ampliamento non forma un gioco valido.");
 
-    const handAfter = this.seats[seat].hand.length - picked.length;
+    const handAfter = this.seatOf(seat).hand.length - picked.length;
     const guardEmpty = this.guardHandNotEmptied(seat, handAfter);
     if (guardEmpty) return guardEmpty;
 
@@ -315,7 +315,7 @@ export class GameEngine {
     if (meld.ownerSeat !== seat)
       return reject("NOT_MELD_OWNER", "Puoi agire solo sui tuoi giochi.");
 
-    const card = this.seats[seat].hand.find((c) => c.id === cardInHand);
+    const card = this.seatOf(seat).hand.find((c) => c.id === cardInHand);
     if (!card) return reject("CARD_NOT_IN_HAND", "Carta non presente in mano.");
 
     const before = interpretMeld(meld.cards);
@@ -426,7 +426,7 @@ export class GameEngine {
 
     // La naturale esce dalla mano (la matta resta sul tavolo): la mano può
     // svuotarsi → stessa guardia/gestione pozzetto di meld_extend.
-    const handAfter = this.seats[seat].hand.length - 1;
+    const handAfter = this.seatOf(seat).hand.length - 1;
     const guardEmpty = this.guardHandNotEmptied(seat, handAfter);
     if (guardEmpty) return guardEmpty;
 
@@ -449,10 +449,10 @@ export class GameEngine {
     const g = this.guardTurn(seat, "may_meld");
     if (g) return g;
 
-    const card = this.seats[seat].hand.find((c) => c.id === cardId);
+    const card = this.seatOf(seat).hand.find((c) => c.id === cardId);
     if (!card) return reject("CARD_NOT_IN_HAND", "Carta non presente in mano.");
 
-    const willEmpty = this.seats[seat].hand.length === 1;
+    const willEmpty = this.seatOf(seat).hand.length === 1;
 
     // Ultimo scarto non può essere una matta (jolly o pinella).
     if (willEmpty && card.isWild)
@@ -462,7 +462,7 @@ export class GameEngine {
       );
 
     if (willEmpty) {
-      const s = this.seats[seat];
+      const s = this.seatOf(seat);
       if (!s.pozzettoTaken && this.pozzetti.length > 0) {
         // Pozzetto DIFFERITA: prende il pozzetto ma lo gioca dal turno successivo.
         this.removeFromHand(seat, [cardId]);
@@ -525,15 +525,28 @@ export class GameEngine {
   /* ─────────────────────────── helper interni ─────────────────────────── */
 
   /**
+   * Accesso GUARDATO al posto. Con `Seat` numerico, indicizzare `seats` restituisce
+   * `SeatState | undefined` (noUncheckedIndexedAccess): il seat è già validato dai
+   * guard di turno a monte, quindi il throw copre solo un indice fuori range (bug
+   * interno), mai un input del client. Comportamento invariato rispetto all'accesso
+   * diretto per i seat legittimi 0/1.
+   */
+  private seatOf(seat: Seat): SeatState {
+    const s = this.seats[seat];
+    if (!s) throw new Error(`Seat ${seat} inesistente`);
+    return s;
+  }
+
+  /**
    * Impila lo stato REVOCABILE del turno del seat attivo PRIMA di committare una
    * calata annullabile. Copie superficiali sufficienti (Card immutabili; la
    * shallow-copy di `melds` preserva i riferimenti agli oggetti Meld precedenti).
    */
   private pushUndoSnapshot(seat: Seat): void {
     this.undoStack.push({
-      hand: this.seats[seat].hand.slice(),
-      pozzettoTaken: this.seats[seat].pozzettoTaken,
-      pozzettoInDiretta: this.seats[seat].pozzettoInDiretta,
+      hand: this.seatOf(seat).hand.slice(),
+      pozzettoTaken: this.seatOf(seat).pozzettoTaken,
+      pozzettoInDiretta: this.seatOf(seat).pozzettoInDiretta,
       melds: this.melds.slice(),
       pozzetti: this.pozzetti.map((p) => p.slice()),
       phase: this.phase,
@@ -571,7 +584,7 @@ export class GameEngine {
   private guardHandNotEmptied(seat: Seat, handAfter: number): RejectResult | null {
     // Se il pozzetto è già preso (o non ce ne sono da prendere) non si può
     // svuotare la mano con una calata: serve una carta per lo scarto/chiusura.
-    if (handAfter === 0 && (this.seats[seat].pozzettoTaken || this.pozzetti.length === 0))
+    if (handAfter === 0 && (this.seatOf(seat).pozzettoTaken || this.pozzetti.length === 0))
       return reject(
         "MUST_KEEP_CARD_TO_DISCARD",
         "Devi tenere almeno una carta per lo scarto finale.",
@@ -584,11 +597,11 @@ export class GameEngine {
    * Ritorna gli effetti celebrativi generati (pozzetto_taken) da concatenare.
    */
   private afterMeldMutation(seat: Seat, handAfter: number): GameEffect[] {
-    if (handAfter === 0 && !this.seats[seat].pozzettoTaken && this.pozzetti.length > 0) {
+    if (handAfter === 0 && !this.seatOf(seat).pozzettoTaken && this.pozzetti.length > 0) {
       // Pozzetto IN DIRETTA: prende subito il pozzetto e continua lo stesso turno.
       this.takePozzetto(seat);
       // Marca la MODALITÀ di presa (in diretta): svuotata la mano PRIMA dello scarto.
-      this.seats[seat].pozzettoInDiretta = true;
+      this.seatOf(seat).pozzettoInDiretta = true;
       // CONFINE COL POZZETTO: l'undo NON attraversa la presa. La calata che ha
       // preso il pozzetto e tutte le calate precedenti del turno diventano NON
       // annullabili; le mosse successive ricostruiscono un nuovo giornale dallo
@@ -601,8 +614,8 @@ export class GameEngine {
 
   private takePozzetto(seat: Seat): void {
     const pozzetto = this.pozzetti.shift();
-    if (pozzetto) this.seats[seat].hand.push(...pozzetto);
-    this.seats[seat].pozzettoTaken = true;
+    if (pozzetto) this.seatOf(seat).hand.push(...pozzetto);
+    this.seatOf(seat).pozzettoTaken = true;
   }
 
   private canClose(seat: Seat): boolean {
@@ -640,7 +653,8 @@ export class GameEngine {
     this.turnEndsAt = null; // mano conclusa: nessun turno attivo
     this.undoStack = []; // mano conclusa: nulla è più annullabile
 
-    for (const sc of scores) this.cumulative[sc.seat] += sc.totalDelta;
+    for (const sc of scores)
+      this.cumulative[sc.seat] = (this.cumulative[sc.seat] ?? 0) + sc.totalDelta;
 
     const effects: GameEffect[] = [
       { kind: "hand_ended", closerSeat, scores, cumulative: [...this.cumulative] as [number, number] },
@@ -682,7 +696,7 @@ export class GameEngine {
   private pickFromHand(seat: Seat, cardIds: string[]): Card[] | null {
     if (cardIds.length === 0) return null;
     if (new Set(cardIds).size !== cardIds.length) return null; // duplicati nell'input
-    const hand = this.seats[seat].hand;
+    const hand = this.seatOf(seat).hand;
     const picked: Card[] = [];
     for (const id of cardIds) {
       const c = hand.find((h) => h.id === id);
@@ -694,7 +708,7 @@ export class GameEngine {
 
   private removeFromHand(seat: Seat, cardIds: string[]): void {
     const ids = new Set(cardIds);
-    this.seats[seat].hand = this.seats[seat].hand.filter((c) => !ids.has(c.id));
+    this.seatOf(seat).hand = this.seatOf(seat).hand.filter((c) => !ids.has(c.id));
   }
 
   private buildMeld(interp: MeldInterpretation, seat: Seat, keepId?: string): Meld {
@@ -725,14 +739,14 @@ export class GameEngine {
   /* ─────────────────── viste per la redazione (anti-leak) ─────────────────── */
 
   handCount(seat: Seat): number {
-    return this.seats[seat].hand.length;
+    return this.seatOf(seat).hand.length;
   }
 
   handOf(seat: Seat): Card[] {
-    return this.seats[seat].hand;
+    return this.seatOf(seat).hand;
   }
 
   pozzettoTaken(seat: Seat): boolean {
-    return this.seats[seat].pozzettoTaken;
+    return this.seatOf(seat).pozzettoTaken;
   }
 }

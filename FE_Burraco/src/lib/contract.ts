@@ -17,7 +17,18 @@ export type Rank =
   | "A" | "2" | "3" | "4" | "5" | "6" | "7"
   | "8" | "9" | "10" | "J" | "Q" | "K" | "JOKER";
 
-export type Seat = 0 | 1;
+/**
+ * POSTO al tavolo. NUMERICO (non più il letterale `0 | 1`): copia allineata a mano
+ * del contratto BE (Fase 1, predisposizione N posti). In 1v1 i valori restano 0 e 1.
+ */
+export type Seat = number;
+
+/**
+ * Identità di SQUADRA (specchio di `TeamId` del BE). In individuale `team === seat`;
+ * in coppie (predisposizione, non attiva) posti opposti condividono la squadra.
+ * Il FE non calcola le regole: usa `Meld.ownerTeam` così com'è redatto dal server.
+ */
+export type TeamId = number;
 
 /**
  * IDENTITÀ "matta" della carta (non il ruolo che assume in un gioco):
