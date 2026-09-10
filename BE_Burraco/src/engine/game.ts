@@ -31,9 +31,9 @@ export interface RejectResult {
     | "MUST_KEEP_CARD_TO_DISCARD"
     | "CANNOT_CLOSE_NO_BURRACO"
     | "ILLEGAL_LAST_DISCARD"
-    | "NO_PINELLA_TO_SUBSTITUTE"
-    | "PINELLA_NO_LEGAL_POSITION"
-    | "PINELLA_EDGE_REQUIRED"
+    | "NO_WILD_TO_SUBSTITUTE"
+    | "WILD_NO_LEGAL_POSITION"
+    | "WILD_EDGE_REQUIRED"
     | "NOTHING_TO_UNDO"
     | "GAME_NOT_ACTIVE";
   reason: string;
@@ -70,7 +70,7 @@ interface SeatState {
 /**
  * Snapshot dello stato REVOCABILE di una singola calata nel turno del giocatore
  * attivo. Serve al giornale di undo (`undoStack`): prima di committare una delle
- * tre azioni annullabili (meldNew/meldExtend/pinellaSubstitute) si impila lo
+ * tre azioni annullabili (meldNew/meldExtend/wildSubstitute) si impila lo
  * stato pre-mutazione, così `undoLast` può ripristinarlo esattamente.
  *
  * Le `Card` sono valori immutabili: una copia superficiale degli array basta.
@@ -285,8 +285,10 @@ export class GameEngine {
   /**
    * SOSTITUZIONE DELLA MATTA (skill "SOSTITUZIONE DELLA MATTA").
    *
-   * Il giocatore fornisce la carta naturale di cui una PINELLA calata fa le veci.
-   * La naturale prende il posto della matta; la matta NON torna MAI in mano:
+   * Il giocatore fornisce la carta naturale di cui la matta calata fa le veci. La
+   * matta può essere QUALSIASI matta presente nel gioco — jolly O pinella (al più
+   * una per gioco, skill). La naturale prende il posto della matta; la matta NON
+   * torna MAI in mano:
    *  - SEQUENZA: la matta si sposta a cima ("top") o fondo ("bottom"), estendendo
    *    la scala di una posizione. `edge` è la scelta del giocatore ed è necessaria
    *    solo quando ENTRAMBE le estremità sono legali; se una sola è legale si usa
@@ -294,10 +296,12 @@ export class GameEngine {
    *  - GRUPPO: la matta resta dentro come carta in più (tris→poker); `edge` ignorato.
    *
    * Il gioco cresce di una carta: può scattare un burraco (6→7). Resta SPORCO
-   * (la matta è ancora dentro), salvo il caso-limite in cui la pinella finisca in
-   * posizione 2 del proprio seme e torni quindi naturale.
+   * (la matta è ancora dentro), con UNA SOLA eccezione riservata alla PINELLA: se
+   * la pinella (un 2) finisce in posizione 2 del proprio seme torna naturale e il
+   * gioco diventa pulito. Un JOLLY non è mai una carta naturale: lascia SEMPRE il
+   * gioco sporco.
    */
-  pinellaSubstitute(
+  wildSubstitute(
     seat: Seat,
     meldId: string,
     cardInHand: string,
@@ -317,16 +321,17 @@ export class GameEngine {
     const before = interpretMeld(meld.cards);
     if (!before) return reject("INVALID_MELD", "Stato del gioco incoerente.");
 
-    // Solo una PINELLA (2 usato come matta) è sostituibile: i jolly non lo sono.
-    const pinella = before.wilds.find((w) => w.isPinella);
-    if (!pinella)
-      return reject("NO_PINELLA_TO_SUBSTITUTE", "Nel gioco non c'è una pinella da sostituire.");
-    const pinellaCard = meld.cards.find((c) => c.id === pinella.cardId)!;
+    // Qualsiasi matta è sostituibile (jolly o pinella): il gioco ne contiene al più
+    // una. `before.wilds` esclude già i 2 al posto naturale (non sono matte).
+    const wild = before.wilds[0];
+    if (!wild)
+      return reject("NO_WILD_TO_SUBSTITUTE", "Nel gioco non c'è una matta da sostituire.");
+    const wildCard = meld.cards.find((c) => c.id === wild.cardId)!;
 
     // La carta in mano deve essere ESATTAMENTE la naturale rappresentata dalla
-    // pinella: lo si verifica rimpiazzando la matta con la naturale e controllando
+    // matta: lo si verifica rimpiazzando la matta con la naturale e controllando
     // che il gioco resti valido, dello stesso tipo, con una matta in meno.
-    const naturalSet = meld.cards.filter((c) => c.id !== pinellaCard.id).concat(card);
+    const naturalSet = meld.cards.filter((c) => c.id !== wildCard.id).concat(card);
     const substituted = interpretMeld(naturalSet);
     if (
       !substituted ||
@@ -334,8 +339,8 @@ export class GameEngine {
       substituted.wildCount !== before.wildCount - 1
     )
       return reject(
-        "NO_PINELLA_TO_SUBSTITUTE",
-        "La carta indicata non corrisponde alla pinella calata.",
+        "NO_WILD_TO_SUBSTITUTE",
+        "La carta indicata non corrisponde alla matta calata.",
       );
 
     // Costruisce l'interpretazione RISULTANTE: la naturale entra, la matta RESTA
@@ -361,7 +366,7 @@ export class GameEngine {
 
       if (!topLegal && !bottomLegal)
         return reject(
-          "PINELLA_NO_LEGAL_POSITION",
+          "WILD_NO_LEGAL_POSITION",
           "La matta non ha una posizione legale in questa sequenza.",
         );
 
@@ -371,19 +376,19 @@ export class GameEngine {
         // si sceglie l'altra al suo posto — si rispetta l'intenzione esplicita).
         if (edge === "top" && !topLegal)
           return reject(
-            "PINELLA_NO_LEGAL_POSITION",
+            "WILD_NO_LEGAL_POSITION",
             "La cima non è una posizione legale per la matta.",
           );
         if (edge === "bottom" && !bottomLegal)
           return reject(
-            "PINELLA_NO_LEGAL_POSITION",
+            "WILD_NO_LEGAL_POSITION",
             "Il fondo non è una posizione legale per la matta.",
           );
         chosen = edge;
       } else if (topLegal && bottomLegal) {
         // Ambiguità: il client deve scegliere cima o fondo e ripetere la mossa.
         return reject(
-          "PINELLA_EDGE_REQUIRED",
+          "WILD_EDGE_REQUIRED",
           "Scegli se spostare la matta in cima o in fondo alla sequenza.",
         );
       } else {
@@ -392,18 +397,20 @@ export class GameEngine {
 
       const edgePos = chosen === "top" ? hi + 1 : lo - 1;
       const orderedCards =
-        chosen === "top" ? [...run, pinellaCard] : [pinellaCard, ...run];
+        chosen === "top" ? [...run, wildCard] : [wildCard, ...run];
 
-      // Caso-limite: una pinella (un 2) che finisce in posizione 2 del PROPRIO
-      // seme torna NATURALE (non è più matta) → il gioco diventa pulito.
-      const pinellaIsNaturalTwo = edgePos === 2 && pinellaCard.suit === seqSuit;
-      const wilds: WildInfo[] = pinellaIsNaturalTwo
+      // Caso-limite RISERVATO ALLA PINELLA: una pinella (un 2) che finisce in
+      // posizione 2 del PROPRIO seme torna NATURALE (non è più matta) → il gioco
+      // diventa pulito. Un JOLLY non è mai naturale: `wild.isPinella` è false e il
+      // gioco resta sempre sporco.
+      const isNaturalTwo = wild.isPinella && edgePos === 2 && wildCard.suit === seqSuit;
+      const wilds: WildInfo[] = isNaturalTwo
         ? []
         : [
             {
-              cardId: pinellaCard.id,
+              cardId: wildCard.id,
               represents: { rank: orderToRank(edgePos), suit: seqSuit },
-              isPinella: true,
+              isPinella: wild.isPinella,
             },
           ];
 
@@ -484,7 +491,7 @@ export class GameEngine {
 
   /**
    * ANNULLA l'ultima calata annullabile del PROPRIO turno (meldNew/meldExtend/
-   * pinellaSubstitute). Server-autoritativo: protetto dal guard di turno/fase
+   * wildSubstitute). Server-autoritativo: protetto dal guard di turno/fase
    * (solo proprio turno, solo may_meld, solo partita in corso) → l'avversario non
    * annulla mai mosse altrui e, dopo lo scarto (fase non più may_meld), l'undo è
    * impossibile. Se il giornale è vuoto → NOTHING_TO_UNDO. Altrimenti fa POP e

@@ -342,9 +342,14 @@ test("meld_extend su gioco altrui -> NOT_MELD_OWNER", () => {
  * La matta NON torna MAI in mano: nelle sequenze si sposta a cima/fondo (scelta
  * del giocatore quando entrambe legali), nei gruppi resta dentro come carta in
  * più. Il gioco cresce di uno (può scattare un burraco 6→7) e resta SPORCO.
+ *
+ * FASE 0b — la mossa `wild_substitute` vale per QUALSIASI matta (jolly O pinella):
+ * i casi PINELLA sotto restano invariati nella semantica (inclusa l'eccezione
+ * "2 al posto naturale → PULITO", riservata alla sola pinella); in coda i nuovi
+ * casi JOLLY, che lasciano SEMPRE il gioco SPORCO.
  */
 
-test("pinella_substitute SEQUENZA con edge=top: la matta va in CIMA, mai in mano", () => {
+test("wild_substitute SEQUENZA con edge=top: la matta va in CIMA, mai in mano", () => {
   const g = fresh();
   g.currentSeat = 1; g.phase = "may_meld";
   // sequenza 4S,5S,pinella(2H come 6S),7S di seat 1 → dopo il 6S la run è 4..7
@@ -354,7 +359,7 @@ test("pinella_substitute SEQUENZA con edge=top: la matta va in CIMA, mai in mano
   g.melds = [meld];
   const six = card("6", "spades");
   g.seats[1].hand = [six, card("K", "hearts")];
-  const r = g.pinellaSubstitute(1, meld.id, six.id, "top");
+  const r = g.wildSubstitute(1, meld.id, six.id, "top");
   assert.equal(r.ok, true);
   const handIds = g.handOf(1).map((c) => c.id);
   assert.ok(!handIds.includes(pinella.id), "la matta NON torna mai in mano");
@@ -369,7 +374,7 @@ test("pinella_substitute SEQUENZA con edge=top: la matta va in CIMA, mai in mano
   assert.equal(rebuilt.cards[rebuilt.cards.length - 1]!.id, pinella.id, "matta in cima");
 });
 
-test("pinella_substitute SEQUENZA con edge=bottom: la matta va in FONDO", () => {
+test("wild_substitute SEQUENZA con edge=bottom: la matta va in FONDO", () => {
   const g = fresh();
   g.currentSeat = 1; g.phase = "may_meld";
   const pinella = card("2", "hearts");
@@ -377,7 +382,7 @@ test("pinella_substitute SEQUENZA con edge=bottom: la matta va in FONDO", () => 
   g.melds = [meld];
   const six = card("6", "spades");
   g.seats[1].hand = [six, card("K", "hearts")];
-  const r = g.pinellaSubstitute(1, meld.id, six.id, "bottom");
+  const r = g.wildSubstitute(1, meld.id, six.id, "bottom");
   assert.equal(r.ok, true);
   const rebuilt = g.melds.find((m) => m.id === meld.id)!;
   assert.equal(rebuilt.cards.length, 5);
@@ -386,7 +391,7 @@ test("pinella_substitute SEQUENZA con edge=bottom: la matta va in FONDO", () => 
   assert.equal(rebuilt.cards[0]!.id, pinella.id, "matta in fondo");
 });
 
-test("pinella_substitute SEQUENZA con entrambe le estremità legali e senza edge -> PINELLA_EDGE_REQUIRED", () => {
+test("wild_substitute SEQUENZA con entrambe le estremità legali e senza edge -> WILD_EDGE_REQUIRED", () => {
   const g = fresh();
   g.currentSeat = 1; g.phase = "may_meld";
   const pinella = card("2", "hearts");
@@ -395,15 +400,15 @@ test("pinella_substitute SEQUENZA con entrambe le estremità legali e senza edge
   const six = card("6", "spades");
   g.seats[1].hand = [six, card("K", "hearts")];
   const before = g.handOf(1).map((c) => c.id).slice();
-  const r = g.pinellaSubstitute(1, meld.id, six.id); // niente edge
+  const r = g.wildSubstitute(1, meld.id, six.id); // niente edge
   assert.equal(r.ok, false);
-  if (!r.ok) assert.equal(r.code, "PINELLA_EDGE_REQUIRED");
+  if (!r.ok) assert.equal(r.code, "WILD_EDGE_REQUIRED");
   // Nulla è cambiato: mano intatta e gioco ancora a 4 carte con la matta.
   assert.deepEqual(g.handOf(1).map((c) => c.id), before, "mano invariata dopo il rifiuto");
   assert.equal(g.melds.find((m) => m.id === meld.id)!.cards.length, 4);
 });
 
-test("pinella_substitute SEQUENZA all'Asso alto: solo FONDO legale, senza edge la usa", () => {
+test("wild_substitute SEQUENZA all'Asso alto: solo FONDO legale, senza edge la usa", () => {
   const g = fresh();
   g.currentSeat = 1; g.phase = "may_meld";
   // Q,K,pinella(come Asso alto) → dopo l'Asso la run è Q,K,A: solo il fondo (J) è legale.
@@ -412,14 +417,14 @@ test("pinella_substitute SEQUENZA all'Asso alto: solo FONDO legale, senza edge l
   g.melds = [meld];
   const ace = card("A", "spades");
   g.seats[1].hand = [ace, card("3", "hearts")];
-  const r = g.pinellaSubstitute(1, meld.id, ace.id); // niente edge: unica legale = fondo
+  const r = g.wildSubstitute(1, meld.id, ace.id); // niente edge: unica legale = fondo
   assert.equal(r.ok, true);
   const rebuilt = g.melds.find((m) => m.id === meld.id)!;
   assert.equal(rebuilt.cards.length, 4);
   assert.equal(rebuilt.cards[0]!.id, pinella.id, "matta in fondo (unica estremità legale)");
 });
 
-test("pinella_substitute SEQUENZA all'Asso alto con edge=top (illegale) -> PINELLA_NO_LEGAL_POSITION", () => {
+test("wild_substitute SEQUENZA all'Asso alto con edge=top (illegale) -> WILD_NO_LEGAL_POSITION", () => {
   const g = fresh();
   g.currentSeat = 1; g.phase = "may_meld";
   const pinella = card("2", "hearts");
@@ -427,13 +432,13 @@ test("pinella_substitute SEQUENZA all'Asso alto con edge=top (illegale) -> PINEL
   g.melds = [meld];
   const ace = card("A", "spades");
   g.seats[1].hand = [ace, card("3", "hearts")];
-  const r = g.pinellaSubstitute(1, meld.id, ace.id, "top"); // cima oltre l'Asso: illegale
+  const r = g.wildSubstitute(1, meld.id, ace.id, "top"); // cima oltre l'Asso: illegale
   assert.equal(r.ok, false);
-  if (!r.ok) assert.equal(r.code, "PINELLA_NO_LEGAL_POSITION");
+  if (!r.ok) assert.equal(r.code, "WILD_NO_LEGAL_POSITION");
   assert.equal(g.melds.find((m) => m.id === meld.id)!.cards.length, 3, "gioco invariato");
 });
 
-test("pinella_substitute SEQUENZA satura ad entrambe le estremità -> PINELLA_NO_LEGAL_POSITION", () => {
+test("wild_substitute SEQUENZA satura ad entrambe le estremità -> WILD_NO_LEGAL_POSITION", () => {
   const g = fresh();
   g.currentSeat = 1; g.phase = "may_meld";
   // Scala completa di picche A(basso)…K…A(alto) con la matta al posto del 7:
@@ -453,12 +458,12 @@ test("pinella_substitute SEQUENZA satura ad entrambe le estremità -> PINELLA_NO
   g.melds = [meld];
   const seven = card("7", "spades");
   g.seats[1].hand = [seven, card("K", "hearts")];
-  const r = g.pinellaSubstitute(1, meld.id, seven.id, "top");
+  const r = g.wildSubstitute(1, meld.id, seven.id, "top");
   assert.equal(r.ok, false);
-  if (!r.ok) assert.equal(r.code, "PINELLA_NO_LEGAL_POSITION");
+  if (!r.ok) assert.equal(r.code, "WILD_NO_LEGAL_POSITION");
 });
 
-test("pinella_substitute GRUPPO: la matta resta dentro, tris→poker, edge ignorato", () => {
+test("wild_substitute GRUPPO: la matta resta dentro, tris→poker, edge ignorato", () => {
   const g = fresh();
   g.currentSeat = 1; g.phase = "may_meld";
   const pinella = card("2", "hearts"); // matta per un 9
@@ -468,7 +473,7 @@ test("pinella_substitute GRUPPO: la matta resta dentro, tris→poker, edge ignor
   g.melds = [meld];
   const nine = card("9", "spades");
   g.seats[1].hand = [nine, card("K", "hearts")];
-  const r = g.pinellaSubstitute(1, meld.id, nine.id, "top"); // edge presente ma ignorato
+  const r = g.wildSubstitute(1, meld.id, nine.id, "top"); // edge presente ma ignorato
   assert.equal(r.ok, true);
   const rebuilt = g.melds.find((m) => m.id === meld.id)!;
   assert.equal(rebuilt.type, "group");
@@ -481,7 +486,7 @@ test("pinella_substitute GRUPPO: la matta resta dentro, tris→poker, edge ignor
   assert.ok(rebuilt.cards.map((c) => c.id).includes(nine.id), "il 9S è nel gruppo");
 });
 
-test("pinella_substitute: transizione 6→7 carte fa scattare un burraco SPORCO", () => {
+test("wild_substitute: transizione 6→7 carte fa scattare un burraco SPORCO", () => {
   const g = fresh();
   g.currentSeat = 1; g.phase = "may_meld";
   // Sequenza di 6 carte con la matta al posto del 6: dopo la sostituzione e lo
@@ -497,7 +502,7 @@ test("pinella_substitute: transizione 6→7 carte fa scattare un burraco SPORCO"
   g.melds = [meld];
   const six = card("6", "spades");
   g.seats[1].hand = [six, card("K", "hearts")];
-  const r = g.pinellaSubstitute(1, meld.id, six.id, "top");
+  const r = g.wildSubstitute(1, meld.id, six.id, "top");
   assert.equal(r.ok, true);
   if (r.ok) {
     const bm = r.effects.find((e) => e.kind === "burraco_made");
@@ -513,7 +518,7 @@ test("pinella_substitute: transizione 6→7 carte fa scattare un burraco SPORCO"
   assert.equal(rebuilt.clean, false);
 });
 
-test("pinella_substitute con carta che non è la naturale della matta -> NO_PINELLA_TO_SUBSTITUTE", () => {
+test("wild_substitute con carta che non è la naturale della matta -> NO_WILD_TO_SUBSTITUTE", () => {
   const g = fresh();
   g.currentSeat = 1; g.phase = "may_meld";
   const pinella = card("2", "hearts");
@@ -521,13 +526,13 @@ test("pinella_substitute con carta che non è la naturale della matta -> NO_PINE
   g.melds = [meld];
   const eight = card("8", "spades"); // NON è il 6 rappresentato dalla matta
   g.seats[1].hand = [eight, card("K", "hearts")];
-  const r = g.pinellaSubstitute(1, meld.id, eight.id, "top");
+  const r = g.wildSubstitute(1, meld.id, eight.id, "top");
   assert.equal(r.ok, false);
-  if (!r.ok) assert.equal(r.code, "NO_PINELLA_TO_SUBSTITUTE");
+  if (!r.ok) assert.equal(r.code, "NO_WILD_TO_SUBSTITUTE");
   assert.equal(g.melds.find((m) => m.id === meld.id)!.cards.length, 4, "gioco invariato");
 });
 
-test("pinella_substitute con carta NON in mano -> CARD_NOT_IN_HAND", () => {
+test("wild_substitute con carta NON in mano -> CARD_NOT_IN_HAND", () => {
   const g = fresh();
   g.currentSeat = 1; g.phase = "may_meld";
   const pinella = card("2", "hearts");
@@ -536,13 +541,13 @@ test("pinella_substitute con carta NON in mano -> CARD_NOT_IN_HAND", () => {
   // Il 6S sarebbe la naturale della matta, ma NON è in mano al giocatore.
   const sixNotInHand = card("6", "spades");
   g.seats[1].hand = [card("K", "hearts")];
-  const r = g.pinellaSubstitute(1, meld.id, sixNotInHand.id, "top");
+  const r = g.wildSubstitute(1, meld.id, sixNotInHand.id, "top");
   assert.equal(r.ok, false);
   if (!r.ok) assert.equal(r.code, "CARD_NOT_IN_HAND");
   assert.equal(g.melds.find((m) => m.id === meld.id)!.cards.length, 4, "gioco invariato");
 });
 
-test("pinella_substitute: matta (2 del seme) che finisce in posizione 2 torna naturale → gioco PULITO", () => {
+test("wild_substitute: matta (2 del seme) che finisce in posizione 2 torna naturale → gioco PULITO", () => {
   const g = fresh();
   g.currentSeat = 1; g.phase = "may_meld";
   // 3S, pinella(2S come 4S), 5S. Sostituendo il 4S e scegliendo il FONDO, la matta
@@ -553,7 +558,7 @@ test("pinella_substitute: matta (2 del seme) che finisce in posizione 2 torna na
   g.melds = [meld];
   const four = card("4", "spades");
   g.seats[1].hand = [four, card("K", "hearts")];
-  const r = g.pinellaSubstitute(1, meld.id, four.id, "bottom");
+  const r = g.wildSubstitute(1, meld.id, four.id, "bottom");
   assert.equal(r.ok, true);
   const rebuilt = g.melds.find((m) => m.id === meld.id)!;
   assert.equal(rebuilt.cards.length, 4, "2S,3S,4S,5S");
@@ -562,16 +567,160 @@ test("pinella_substitute: matta (2 del seme) che finisce in posizione 2 torna na
   assert.ok(rebuilt.cards.map((c) => c.id).includes(pinella.id), "il 2S resta nel gioco");
 });
 
-test("pinella_substitute senza pinella nel gioco -> NO_PINELLA_TO_SUBSTITUTE", () => {
+// FASE 0b — copertura della clausola `wildCard.suit === seqSuit` (game.ts:406):
+// SOLO un 2 dello STESSO seme della scala può tornare naturale in posizione 2. Una
+// pinella di seme DIVERSO (qui 2H in una scala di picche) resta matta → SPORCO.
+// Nessun test preesistente esercitava questa clausola: il caso 2-naturale usa lo
+// stesso seme, il caso jolly ha isPinella=false.
+test("wild_substitute: pinella di seme DIVERSO in posizione 2 resta SPORCO (non è il 2 naturale della scala)", () => {
+  const g = fresh();
+  g.currentSeat = 1; g.phase = "may_meld";
+  // 3S, pinella(2H come 4S), 5S. Sostituendo il 4S e scegliendo il FONDO, la matta
+  // 2H atterra in posizione 2 di PICCHE: ma è un 2 di CUORI, non il 2 naturale della
+  // scala di picche → resta matta e il gioco resta SPORCO.
+  const pinella = card("2", "hearts"); // pinella di seme DIVERSO dalla scala
+  const meld = buildMeld([card("3", "spades"), pinella, card("5", "spades")], 1);
+  assert.equal(meld.wildIndices!.length, 1, "il 2H è matta (rappresenta il 4S)");
+  g.melds = [meld];
+  const four = card("4", "spades");
+  g.seats[1].hand = [four, card("K", "hearts")];
+  const r = g.wildSubstitute(1, meld.id, four.id, "bottom");
+  assert.equal(r.ok, true);
+  const rebuilt = g.melds.find((m) => m.id === meld.id)!;
+  assert.equal(rebuilt.cards.length, 4, "2H,3S,4S,5S");
+  assert.equal(rebuilt.clean, false, "una pinella di seme diverso NON rende pulito il gioco");
+  assert.equal(rebuilt.wildIndices!.length, 1, "il 2H resta matta dentro il gioco");
+  assert.equal(rebuilt.cards[0]!.id, pinella.id, "il 2H è in fondo, ancora matta");
+});
+
+test("wild_substitute senza matta nel gioco -> NO_WILD_TO_SUBSTITUTE", () => {
   const g = fresh();
   g.currentSeat = 1; g.phase = "may_meld";
   const meld = buildMeld([card("4", "spades"), card("5", "spades"), card("6", "spades")], 1);
   g.melds = [meld];
   const c = card("7", "spades");
   g.seats[1].hand = [c];
-  const r = g.pinellaSubstitute(1, meld.id, c.id);
+  const r = g.wildSubstitute(1, meld.id, c.id);
   assert.equal(r.ok, false);
-  if (!r.ok) assert.equal(r.code, "NO_PINELLA_TO_SUBSTITUTE");
+  if (!r.ok) assert.equal(r.code, "NO_WILD_TO_SUBSTITUTE");
+});
+
+/*
+ * FASE 0b — CASI JOLLY. La mossa vale per QUALSIASI matta: un JOLLY è sostituibile
+ * come una pinella (sequenza cima/fondo, gruppo che cresce, burraco 6→7), MA a
+ * differenza della pinella un jolly NON è mai una carta naturale → lascia SEMPRE
+ * il gioco SPORCO, anche quando atterra su un rango che per una pinella sarebbe
+ * "naturale".
+ */
+
+test("wild_substitute JOLLY in SEQUENZA con edge=top: il jolly va in CIMA e resta SPORCO", () => {
+  const g = fresh();
+  g.currentSeat = 1; g.phase = "may_meld";
+  // 4S,5S,jolly(come 6S),7S: il jolly è la matta che rappresenta il 6 di picche.
+  const joker = card("JOKER", null);
+  const meld = buildMeld([card("4", "spades"), card("5", "spades"), joker, card("7", "spades")], 1);
+  assert.equal(meld.wildIndices!.length, 1, "il jolly è matta nel gioco");
+  g.melds = [meld];
+  const six = card("6", "spades");
+  g.seats[1].hand = [six, card("K", "hearts")];
+  const r = g.wildSubstitute(1, meld.id, six.id, "top");
+  assert.equal(r.ok, true);
+  const handIds = g.handOf(1).map((c) => c.id);
+  assert.ok(!handIds.includes(joker.id), "il jolly NON torna mai in mano");
+  assert.ok(!handIds.includes(six.id), "6S uscito dalla mano");
+  const rebuilt = g.melds.find((m) => m.id === meld.id)!;
+  assert.equal(rebuilt.cards.length, 5, "la sequenza è cresciuta di una carta");
+  assert.ok(rebuilt.cards.map((c) => c.id).includes(joker.id), "il jolly resta nel gioco");
+  assert.equal(rebuilt.clean, false, "un jolly lascia SEMPRE il gioco SPORCO");
+  assert.equal(rebuilt.wildIndices!.length, 1, "il jolly resta matta dentro il gioco");
+  assert.equal(rebuilt.cards[rebuilt.cards.length - 1]!.id, joker.id, "jolly in cima");
+});
+
+test("wild_substitute JOLLY in SEQUENZA con edge=bottom: il jolly va in FONDO e resta SPORCO", () => {
+  const g = fresh();
+  g.currentSeat = 1; g.phase = "may_meld";
+  const joker = card("JOKER", null);
+  const meld = buildMeld([card("4", "spades"), card("5", "spades"), joker, card("7", "spades")], 1);
+  g.melds = [meld];
+  const six = card("6", "spades");
+  g.seats[1].hand = [six, card("K", "hearts")];
+  const r = g.wildSubstitute(1, meld.id, six.id, "bottom");
+  assert.equal(r.ok, true);
+  const rebuilt = g.melds.find((m) => m.id === meld.id)!;
+  assert.equal(rebuilt.cards.length, 5);
+  assert.equal(rebuilt.clean, false, "resta sporco (jolly dentro)");
+  assert.equal(rebuilt.cards[0]!.id, joker.id, "jolly in fondo");
+});
+
+test("wild_substitute JOLLY in GRUPPO: il jolly resta dentro, tris→poker, resta SPORCO", () => {
+  const g = fresh();
+  g.currentSeat = 1; g.phase = "may_meld";
+  const joker = card("JOKER", null); // matta per un 9
+  const meld = buildMeld([card("9", "clubs"), card("9", "diamonds"), joker], 1);
+  assert.equal(meld.type, "group");
+  assert.equal(meld.wildIndices!.length, 1);
+  g.melds = [meld];
+  const nine = card("9", "spades");
+  g.seats[1].hand = [nine, card("K", "hearts")];
+  const r = g.wildSubstitute(1, meld.id, nine.id, "top"); // edge ignorato nei gruppi
+  assert.equal(r.ok, true);
+  const rebuilt = g.melds.find((m) => m.id === meld.id)!;
+  assert.equal(rebuilt.type, "group");
+  assert.equal(rebuilt.cards.length, 4, "tris → poker di 4");
+  assert.equal(rebuilt.clean, false, "resta sporco (jolly dentro)");
+  assert.equal(rebuilt.wildIndices!.length, 1);
+  const handIds = g.handOf(1).map((c) => c.id);
+  assert.ok(!handIds.includes(joker.id), "il jolly NON torna in mano");
+  assert.ok(rebuilt.cards.map((c) => c.id).includes(joker.id), "il jolly resta nel gruppo");
+  assert.ok(rebuilt.cards.map((c) => c.id).includes(nine.id), "il 9S è nel gruppo");
+});
+
+test("wild_substitute JOLLY che atterra in posizione 2 del seme resta SPORCO (mai naturale)", () => {
+  const g = fresh();
+  g.currentSeat = 1; g.phase = "may_meld";
+  // 3S, jolly(come 4S), 5S. Sostituendo il 4S e scegliendo il FONDO, il jolly
+  // atterra in posizione 2 di picche: dove una PINELLA (2S) diventerebbe naturale
+  // (gioco PULITO), il JOLLY resta matta e il gioco resta SPORCO. Asserzione chiave.
+  const joker = card("JOKER", null);
+  const meld = buildMeld([card("3", "spades"), joker, card("5", "spades")], 1);
+  assert.equal(meld.wildIndices!.length, 1, "il jolly è matta (rappresenta il 4S)");
+  g.melds = [meld];
+  const four = card("4", "spades");
+  g.seats[1].hand = [four, card("K", "hearts")];
+  const r = g.wildSubstitute(1, meld.id, four.id, "bottom");
+  assert.equal(r.ok, true);
+  const rebuilt = g.melds.find((m) => m.id === meld.id)!;
+  assert.equal(rebuilt.cards.length, 4, "jolly,3S,4S,5S");
+  assert.equal(rebuilt.clean, false, "un JOLLY in posizione 2 NON rende pulito il gioco");
+  assert.equal(rebuilt.wildIndices!.length, 1, "il jolly resta matta dentro il gioco");
+  assert.equal(rebuilt.cards[0]!.id, joker.id, "il jolly è in fondo, matta");
+});
+
+test("wild_substitute JOLLY: transizione 6→7 carte fa scattare un burraco SPORCO", () => {
+  const g = fresh();
+  g.currentSeat = 1; g.phase = "may_meld";
+  const joker = card("JOKER", null); // matta per il 6 di picche
+  const meld = buildMeld(
+    [card("4", "spades"), card("5", "spades"), joker, card("7", "spades"),
+     card("8", "spades"), card("9", "spades")],
+    1,
+  );
+  assert.equal(meld.cards.length, 6);
+  assert.equal(meld.isBurraco, false);
+  g.melds = [meld];
+  const six = card("6", "spades");
+  g.seats[1].hand = [six, card("K", "hearts")];
+  const r = g.wildSubstitute(1, meld.id, six.id, "top");
+  assert.equal(r.ok, true);
+  if (r.ok) {
+    const bm = r.effects.find((e) => e.kind === "burraco_made");
+    assert.ok(bm, "emesso burraco_made sulla transizione 6→7");
+    if (bm && bm.kind === "burraco_made") assert.equal(bm.clean, false, "burraco SPORCO (jolly dentro)");
+  }
+  const rebuilt = g.melds.find((m) => m.id === meld.id)!;
+  assert.equal(rebuilt.cards.length, 7);
+  assert.equal(rebuilt.isBurraco, true);
+  assert.equal(rebuilt.clean, false);
 });
 
 /* ─────────────────────────── REDACT / ANTI-LEAK ─────────────────────────── */

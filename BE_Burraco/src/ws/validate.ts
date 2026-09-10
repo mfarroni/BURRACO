@@ -92,8 +92,8 @@ const meldExtend = z.object({
   clientMoveId,
 });
 
-const pinellaSubstitute = z.object({
-  type: z.literal("pinella_substitute"),
+const wildSubstitute = z.object({
+  type: z.literal("wild_substitute"),
   meldId: z.string().max(MAX_ID),
   cardInHand: cardId,
   // Scelta dell'estremità (solo forma; legalità decisa dal motore). Opzionale:
@@ -121,7 +121,7 @@ const clientMessageSchema = z.discriminatedUnion("type", [
   draw,
   meldNew,
   meldExtend,
-  pinellaSubstitute,
+  wildSubstitute,
   discard,
   undoLast,
   resetRoom,

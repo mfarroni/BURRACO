@@ -265,7 +265,7 @@ test("SEC-07: parseClientMessage rifiuta gli input malformati (forma) senza ecce
     { type: "discard" }, // manca card
     { type: "join_room", roomCode: "X" }, // manca displayName
     { type: "meld_extend", cards: ["a"] }, // manca meldId
-    { type: "pinella_substitute", meldId: "m" }, // manca cardInHand
+    { type: "wild_substitute", meldId: "m" }, // manca cardInHand
     null,
     42,
     "stringa",
@@ -283,7 +283,7 @@ test("SEC-07: parseClientMessage rifiuta gli input malformati (forma) senza ecce
     { type: "draw", source: "discard", clientMoveId: "m1" },
     { type: "meld_new", cards: ["a", "b", "c"] },
     { type: "meld_extend", meldId: "m", cards: ["a"] },
-    { type: "pinella_substitute", meldId: "m", cardInHand: "c" },
+    { type: "wild_substitute", meldId: "m", cardInHand: "c" },
     { type: "discard", card: "c" },
     { type: "heartbeat" },
   ];
@@ -301,7 +301,7 @@ test("NEW-4: input oltre i limiti di lunghezza sono rifiutati come forma non con
     { type: "discard", card: "z".repeat(65) }, // cardId > 64
     { type: "meld_new", cards: Array.from({ length: 21 }, (_, i) => `c${i}`) }, // > 20 carte
     { type: "meld_extend", meldId: "z".repeat(65), cards: ["a"] }, // meldId > 64
-    { type: "pinella_substitute", meldId: "m", cardInHand: "z".repeat(65) }, // cardInHand > 64
+    { type: "wild_substitute", meldId: "m", cardInHand: "z".repeat(65) }, // cardInHand > 64
     { type: "draw", source: "deck", clientMoveId: "z".repeat(65) }, // clientMoveId > 64
     { type: "join_room", roomCode: "X", playerToken: "z".repeat(65), displayName: "A" }, // token > 64
   ];

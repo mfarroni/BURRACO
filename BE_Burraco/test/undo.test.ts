@@ -9,7 +9,7 @@ import type { Card, Meld, Rank, Suit, Seat } from "../src/contract/types.js";
 
 /**
  * FEATURE "Annulla ultima mossa del turno" (undo). Verifica il GIORNALE A
- * SNAPSHOT del motore: undo di meldNew/meldExtend/pinellaSubstitute ripristina lo
+ * SNAPSHOT del motore: undo di meldNew/meldExtend/wildSubstitute ripristina lo
  * STATO ESATTO, il confine col pozzetto, l'anti-stallo (turnEndsAt), il guard di
  * turno/fase e i reset del giornale. Regole di gioco INVARIATE.
  */
@@ -106,14 +106,14 @@ test("undo di meldExtend: meld torna all'oggetto precedente (cards e isBurraco)"
   assert.ok(ids(g.handOf(1)).includes(ext.id));
 });
 
-/* ───────────── undo pinellaSubstitute: pinella nel gioco, carta in mano ─────── */
+/* ───────────── undo wildSubstitute: matta nel gioco, carta in mano ─────── */
 
 // NOTA (Fase 0 - correzione matta): la SEMANTICA post-mossa è cambiata (la matta
 // NON torna più in mano, resta nel gioco e la scala cresce di una carta). Il
 // MECCANISMO di undo è invariato ed è ciò che questo test verifica: snapshot →
 // ripristino esatto della mano e del Meld ORIGINALE per riferimento. Il caso è
 // quello ambiguo (entrambe le estremità legali) → si passa `edge`.
-test("undo di pinellaSubstitute: ripristina il gioco e la mano al pre-mossa", () => {
+test("undo di wildSubstitute: ripristina il gioco e la mano al pre-mossa", () => {
   const g = fresh();
   g.currentSeat = 1; g.phase = "may_meld"; g.seats[1].pozzettoTaken = true;
   const pinella = card("2", "hearts");
@@ -126,7 +126,7 @@ test("undo di pinellaSubstitute: ripristina il gioco e la mano al pre-mossa", ()
   g.seats[1].hand = [six, keep];
   const handBefore = ids(g.handOf(1));
 
-  const r = g.pinellaSubstitute(1, "P1", six.id, "top");
+  const r = g.wildSubstitute(1, "P1", six.id, "top");
   assert.equal(r.ok, true);
   // Nuova semantica: la matta resta nel gioco, il 6S entra, la mano perde il 6S.
   assert.ok(!ids(g.handOf(1)).includes(pinella.id), "la matta NON torna in mano");

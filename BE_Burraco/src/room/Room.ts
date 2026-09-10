@@ -604,8 +604,8 @@ export class Room {
       case "meld_extend":
         result = this.engine.meldExtend(seat, msg.meldId, msg.cards);
         break;
-      case "pinella_substitute":
-        result = this.engine.pinellaSubstitute(seat, msg.meldId, msg.cardInHand, msg.edge);
+      case "wild_substitute":
+        result = this.engine.wildSubstitute(seat, msg.meldId, msg.cardInHand, msg.edge);
         break;
       case "discard":
         result = this.engine.discardCard(seat, msg.card);

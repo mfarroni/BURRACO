@@ -59,10 +59,10 @@ export default function Page() {
   // Stato di SELEZIONE locale (nessuna regola: solo UI).
   const [selectedCards, setSelectedCards] = useState<string[]>([]);
   const [selectedMeldId, setSelectedMeldId] = useState<string | null>(null);
-  // Ultimo tentativo di sostituzione pinella (meld + carta), memorizzato per poter
-  // RIPETERE la mossa con la scelta cima/fondo quando il server risponde
-  // PINELLA_EDGE_REQUIRED. Nessuna logica di regole: si conserva solo l'intenzione.
-  const [pinellaAttempt, setPinellaAttempt] = useState<{ meldId: string; cardId: string } | null>(
+  // Ultimo tentativo di sostituzione della matta (meld + carta), memorizzato per
+  // poter RIPETERE la mossa con la scelta cima/fondo quando il server risponde
+  // WILD_EDGE_REQUIRED. Nessuna logica di regole: si conserva solo l'intenzione.
+  const [wildAttempt, setWildAttempt] = useState<{ meldId: string; cardId: string } | null>(
     null,
   );
   // Conferma modale dell'annullamento partita (§5.1) — stato UI locale.
@@ -548,16 +548,16 @@ export default function Page() {
 
       {/* Scelta CIMA/FONDO per la sostituzione della matta in una sequenza:
           compare SOLO quando il server segnala che entrambe le estremità sono
-          legali (PINELLA_EDGE_REQUIRED). Il client non deduce nulla dalle regole:
+          legali (WILD_EDGE_REQUIRED). Il client non deduce nulla dalle regole:
           si limita a offrire i due controlli e a ripetere la mossa con `edge`.
           (Controllo minimo/funzionale: la rifinitura è rinviata alla Fase 4.) */}
-      {g.rejection?.code === "PINELLA_EDGE_REQUIRED" && pinellaAttempt && (
-        <div className="pinella-edge-choice" role="group" aria-label="Sposta la matta">
+      {g.rejection?.code === "WILD_EDGE_REQUIRED" && wildAttempt && (
+        <div className="wild-edge-choice" role="group" aria-label="Sposta la matta">
           <span>Dove sposto la matta?</span>
           <button
             type="button"
             onClick={() =>
-              g.pinellaSubstitute(pinellaAttempt.meldId, pinellaAttempt.cardId, "top")
+              g.wildSubstitute(wildAttempt.meldId, wildAttempt.cardId, "top")
             }
           >
             Cima
@@ -565,7 +565,7 @@ export default function Page() {
           <button
             type="button"
             onClick={() =>
-              g.pinellaSubstitute(pinellaAttempt.meldId, pinellaAttempt.cardId, "bottom")
+              g.wildSubstitute(wildAttempt.meldId, wildAttempt.cardId, "bottom")
             }
           >
             Fondo
@@ -583,12 +583,12 @@ export default function Page() {
         onDrawDiscard={g.drawDiscard}
         onMeldNew={() => g.meldNew(selectedCards)}
         onMeldExtend={() => selectedMeldId && g.meldExtend(selectedMeldId, selectedCards)}
-        onPinellaSubstitute={() => {
+        onWildSubstitute={() => {
           if (selectedMeldId && selectedCards[0]) {
             // Memorizza il tentativo così da poterlo ripetere con edge se il
-            // server chiede la scelta cima/fondo (PINELLA_EDGE_REQUIRED).
-            setPinellaAttempt({ meldId: selectedMeldId, cardId: selectedCards[0] });
-            g.pinellaSubstitute(selectedMeldId, selectedCards[0]);
+            // server chiede la scelta cima/fondo (WILD_EDGE_REQUIRED).
+            setWildAttempt({ meldId: selectedMeldId, cardId: selectedCards[0] });
+            g.wildSubstitute(selectedMeldId, selectedCards[0]);
           }
         }}
         onDiscard={() => selectedCards[0] && g.discard(selectedCards[0])}
