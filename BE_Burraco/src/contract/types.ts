@@ -87,13 +87,16 @@ export interface Meld {
 export interface GameConfig {
   /**
    * Posti al tavolo. `2` = 1v1 (individuale), `4` = coppie 2v2 (posti opposti).
-   * Widening C1 (Fase 2): il tipo ammette il 4, ma in questa tappa la lobby crea
-   * ancora solo partite a 2 (il ramo a 4 è attivato in una tappa successiva).
+   * Widening C1 (Fase 2). Dalla Tappa 3a la lobby crea tavoli a 4 posti quando
+   * il messaggio di apertura (open_table/quick_match) sceglie {4, coppie}; il
+   * default resta {2, individuale} (1v1 invariato).
    */
   numeroGiocatori: 2 | 4;
   /**
    * Modalità di gioco. `"coppie"` attiva il ramo di `teamOfSeat` (posti opposti
-   * 0+2 / 1+3). Widening C2 (Fase 2). Oggi la lobby usa sempre `"individuale"`.
+   * 0+2 / 1+3). Widening C2 (Fase 2). Dalla Tappa 3a è scelta all'apertura del
+   * tavolo (default `"individuale"`); le combinazioni ammesse sono solo
+   * {2, individuale} e {4, coppie}.
    */
   modalita: "individuale" | "coppie";
   punteggioObiettivo: number; // 2005
@@ -434,6 +437,13 @@ export type ClientMessage =
   // Origin = apertura_manuale: MAI fuso (§5.4-A). I campi di identità
   // (displayName/clientId/authToken/playerToken) hanno la stessa semantica di
   // join_room: l'identità AUTORITATIVA è derivata dal token, mai dal displayName.
+  //
+  // MODALITÀ (Tappa 3a) — scelta del formato del tavolo, ADDITIVA e OPZIONALE:
+  //  - `numeroGiocatori`: 2 (1v1) o 4 (coppie 2v2); default 2 → 1v1 invariato;
+  //  - `modalita`: "individuale" o "coppie"; default "individuale".
+  // Il server VALIDA la combinazione: ammesse SOLO {2, individuale} e {4, coppie};
+  // ogni altra combinazione è normalizzata a 1v1 (server-side). L'assenza di
+  // entrambi i campi (client vecchio) resta un tavolo 1v1.
   | {
       type: "open_table";
       code: string;
@@ -442,16 +452,23 @@ export type ClientMessage =
       clientId?: string;
       authToken?: string;
       playerToken?: string;
+      numeroGiocatori?: 2 | 4;
+      modalita?: "individuale" | "coppie";
     }
   // LOBBY (door b) — "Gioca subito": il server cerca il tavolo pubblico in attesa
-  // di origine quick_match più vecchio e vi fa sedere il giocatore; se non esiste
-  // ne crea uno nuovo (poi tenta la fusione §5.4-A). Decisione tutta server-side.
+  // di origine quick_match più vecchio E DELLA STESSA MODALITÀ/DIMENSIONE e vi fa
+  // sedere il giocatore; se non esiste ne crea uno nuovo (poi tenta la fusione
+  // §5.4-A, solo fra tavoli della stessa firma). Decisione tutta server-side.
+  // `numeroGiocatori`/`modalita`: come in open_table (default 2/individuale → 1v1
+  // invariato; validati con la stessa regola {2,individuale} | {4,coppie}).
   | {
       type: "quick_match";
       displayName: string;
       clientId?: string;
       authToken?: string;
       playerToken?: string;
+      numeroGiocatori?: 2 | 4;
+      modalita?: "individuale" | "coppie";
     }
   | { type: "heartbeat" };
 
@@ -614,6 +631,13 @@ export interface WaitingTableView {
   seatsTotal: number;
   /** Posti occupati da un socket VIVO in attesa (1..seatsTotal-1). */
   seatsTaken: number;
+  /**
+   * MODALITÀ del tavolo (Tappa 3a), ADDITIVA e OPZIONALE. Presente e valorizzata
+   * "coppie" SOLO per i tavoli 2v2: consente alla lista di distinguerli (oltre a
+   * `seatsTotal` = 4). OMESSA per i tavoli 1v1 (individuale, comportamento legacy),
+   * così la vista serializzata dell'1v1 resta byte-identica a prima.
+   */
+  modalita?: "individuale" | "coppie";
 }
 
 /** Risposta di GET /tables: lista + contatore giocatori realmente in lobby. */

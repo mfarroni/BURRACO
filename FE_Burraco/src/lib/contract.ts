@@ -234,6 +234,11 @@ export type ClientMessage =
   | { type: "game_abort" }
   // LOBBY (door a) — "Apri un tavolo". `private:true` → non compare in lista.
   // I campi identità hanno la stessa semantica di join_room (nome autoritativo dal token).
+  //
+  // MODALITÀ (Tappa 3a), ADDITIVA/OPZIONALE: `numeroGiocatori` 2 (1v1) | 4 (2v2),
+  // `modalita` "individuale" | "coppie". Default 2/individuale → 1v1 invariato. Il
+  // server VALIDA: ammesse SOLO {2, individuale} e {4, coppie}; altre combinazioni
+  // sono normalizzate a 1v1. Copia allineata a mano al BE (P2).
   | {
       type: "open_table";
       code: string;
@@ -242,14 +247,20 @@ export type ClientMessage =
       clientId?: string;
       authToken?: string;
       playerToken?: string;
+      numeroGiocatori?: 2 | 4;
+      modalita?: "individuale" | "coppie";
     }
-  // LOBBY (door b) — "Gioca subito". Decisione tutta server-side.
+  // LOBBY (door b) — "Gioca subito". Decisione tutta server-side. `numeroGiocatori`/
+  // `modalita`: come open_table (default 2/individuale; il quick_match fonde/siede
+  // solo su tavoli della stessa firma modalità+dimensione).
   | {
       type: "quick_match";
       displayName: string;
       clientId?: string;
       authToken?: string;
       playerToken?: string;
+      numeroGiocatori?: 2 | 4;
+      modalita?: "individuale" | "coppie";
     }
   | { type: "heartbeat" };
 
@@ -309,6 +320,12 @@ export interface WaitingTableView {
   seatsTotal: number;
   /** Posti occupati da un socket vivo in attesa (1..seatsTotal-1). */
   seatsTaken: number;
+  /**
+   * MODALITÀ del tavolo (Tappa 3a), ADDITIVA/OPZIONALE. Valorizzata "coppie" SOLO
+   * per i tavoli 2v2 (per distinguerli in lista oltre a `seatsTotal` = 4); OMESSA
+   * per l'1v1 (individuale). Specchio del BE, copia allineata a mano (P2).
+   */
+  modalita?: "individuale" | "coppie";
 }
 
 /** Risposta di GET /tables. Specchio di TablesResponse (BE). */
