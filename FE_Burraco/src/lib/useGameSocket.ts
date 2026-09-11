@@ -103,13 +103,29 @@ export interface MergedInfo {
 }
 
 /**
+ * MODALITÀ del tavolo alla CREAZIONE (open_table / quick_match). Copia allineata a
+ * mano ai campi opzionali del contratto BE (`numeroGiocatori`/`modalita`). Default
+ * 1v1 = { 2, individuale }: chi non la specifica ottiene il comportamento invariato.
+ * Il server è comunque l'autorità: valida e normalizza le combinazioni non ammesse.
+ */
+export interface TableMode {
+  numeroGiocatori: 2 | 4;
+  modalita: "individuale" | "coppie";
+}
+
+/** Modalità 1v1 (default): comportamento storico, invariato. */
+export const DEFAULT_TABLE_MODE: TableMode = { numeroGiocatori: 2, modalita: "individuale" };
+
+/**
  * Intento del PRIMO frame da inviare all'apertura del socket. Alla riconnessione
- * si usa sempre join_room col codice noto (reclaim del posto).
+ * si usa sempre join_room col codice noto (reclaim del posto). La MODALITÀ viaggia
+ * solo su open_table/quick_match (creazione): il reclaim non la ritrasmette (il
+ * server la conosce già dal tavolo esistente).
  */
 type FirstFrame =
   | { kind: "join_room"; code: string }
-  | { kind: "open_table"; code: string; private: boolean }
-  | { kind: "quick_match" };
+  | { kind: "open_table"; code: string; private: boolean; mode: TableMode }
+  | { kind: "quick_match"; mode: TableMode };
 
 export interface GameSocketApi {
   connPhase: ConnPhase;
@@ -161,10 +177,17 @@ export interface GameSocketApi {
   sitRejected: SitRejectedInfo | null;
 
   join: (roomCode: string, displayName: string) => void;
-  /** LOBBY door (b) — "Gioca subito": il server decide seduta/creazione/fusione. */
-  quickMatch: (displayName?: string) => void;
-  /** LOBBY door (a) — "Apri un tavolo" (origin apertura_manuale; private = non in lista). */
-  openTable: (code: string, isPrivate: boolean, displayName?: string) => void;
+  /**
+   * LOBBY door (b) — "Gioca subito": il server decide seduta/creazione/fusione.
+   * `mode` (opz.) sceglie 1v1 o 2v2; il quick_match si fonde/siede solo su tavoli
+   * della stessa firma modalità+dimensione. Omesso ⇒ 1v1 (invariato).
+   */
+  quickMatch: (displayName?: string, mode?: TableMode) => void;
+  /**
+   * LOBBY door (a) — "Apri un tavolo" (origin apertura_manuale; private = non in
+   * lista). `mode` (opz.) sceglie 1v1 o 2v2. Omesso ⇒ 1v1 (invariato).
+   */
+  openTable: (code: string, isPrivate: boolean, displayName?: string, mode?: TableMode) => void;
   /** LOBBY — "Siediti" a un tavolo pubblico esistente della lista (= join_room). */
   sit: (code: string, displayName?: string) => void;
   /** LOBBY — "Annulla e torna alla lobby": invia reset_room e torna alla lista. */
@@ -498,9 +521,25 @@ export function useGameSocket(): GameSocketApi {
       const authToken = getAuthToken() ?? undefined;
       const displayName = nameRef.current;
       if (frame.kind === "quick_match") {
-        sendRaw({ type: "quick_match", displayName, clientId, authToken });
+        sendRaw({
+          type: "quick_match",
+          displayName,
+          clientId,
+          authToken,
+          numeroGiocatori: frame.mode.numeroGiocatori,
+          modalita: frame.mode.modalita,
+        });
       } else if (frame.kind === "open_table") {
-        sendRaw({ type: "open_table", code: frame.code, private: frame.private, displayName, clientId, authToken });
+        sendRaw({
+          type: "open_table",
+          code: frame.code,
+          private: frame.private,
+          displayName,
+          clientId,
+          authToken,
+          numeroGiocatori: frame.mode.numeroGiocatori,
+          modalita: frame.mode.modalita,
+        });
       } else {
         sendRaw({
           type: "join_room",
@@ -630,18 +669,18 @@ export function useGameSocket(): GameSocketApi {
   );
 
   const quickMatch = useCallback(
-    (displayName?: string) => {
+    (displayName?: string, mode: TableMode = DEFAULT_TABLE_MODE) => {
       // Il codice è generato dal server: `code:null` finché non arriva room_joined.
-      startConnection({ kind: "quick_match" }, { isPrivate: false, code: null, name: displayName });
+      startConnection({ kind: "quick_match", mode }, { isPrivate: false, code: null, name: displayName });
     },
     [startConnection],
   );
 
   const openTable = useCallback(
-    (code: string, isPrivate: boolean, displayName?: string) => {
+    (code: string, isPrivate: boolean, displayName?: string, mode: TableMode = DEFAULT_TABLE_MODE) => {
       const c = code.trim().toUpperCase().slice(0, 12);
       startConnection(
-        { kind: "open_table", code: c, private: isPrivate },
+        { kind: "open_table", code: c, private: isPrivate, mode },
         { isPrivate, code: c || null, name: displayName },
       );
     },

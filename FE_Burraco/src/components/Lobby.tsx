@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { WaitingTableView } from "@/lib/contract";
 import type { LobbyStatus } from "@/lib/lobby";
-import type { SitRejectedInfo } from "@/lib/useGameSocket";
+import type { SitRejectedInfo, TableMode } from "@/lib/useGameSocket";
+
+/** Un tavolo della lista è 2v2 se lo dichiara `modalita` o se ha 4 posti. */
+function isCouplesTable(t: WaitingTableView): boolean {
+  return t.modalita === "coppie" || t.seatsTotal === 4;
+}
 
 /**
  * LOBBY (`in_lobby`) — lista dei tavoli pubblici in attesa, contatore giocatori,
@@ -32,7 +37,16 @@ interface LobbyProps {
   onJoinByCode: (code: string) => void;
   /** Annulla una connessione in corso (utile se il server è lento a svegliarsi). */
   onAbort: () => void;
+  /**
+   * MODALITÀ scelta per "Gioca subito" / "Apri un tavolo" (1v1 o 2v2). Sorgente
+   * unica sollevata a page: governa entrambe le porte di creazione. Default 1v1.
+   */
+  mode: TableMode;
+  onChangeMode: (mode: TableMode) => void;
 }
+
+const MODE_1V1: TableMode = { numeroGiocatori: 2, modalita: "individuale" };
+const MODE_2V2: TableMode = { numeroGiocatori: 4, modalita: "coppie" };
 
 /** "attende da MM:SS" dal timestamp di apertura (timer locale, aggiornato ogni 1s). */
 function formatWait(ms: number): string {
@@ -54,7 +68,10 @@ export function Lobby({
   onSit,
   onJoinByCode,
   onAbort,
+  mode,
+  onChangeMode,
 }: LobbyProps) {
+  const is2v2 = mode.numeroGiocatori === 4;
   const [codeInput, setCodeInput] = useState("");
   // Un solo tick al secondo per tutti i timer "attende da" delle righe.
   const [now, setNow] = useState(() => Date.now());
@@ -135,6 +152,41 @@ export function Lobby({
         !isEmpty && <p className="lobby-lead">Siediti a un tavolo esistente, oppure aprine uno tuo.</p>
       )}
 
+      {/* MODALITÀ del tavolo (Tappa 3b): segmentato 1v1 / 2v2, sorgente unica che
+          governa sia "Gioca subito" sia "Apri un tavolo". Client muto: nessuna
+          regola qui, solo la firma inviata al server, che valida/normalizza. */}
+      <div
+        className="mode-select"
+        role="radiogroup"
+        aria-label="Modalità del tavolo"
+        data-mode={is2v2 ? "coppie" : "individuale"}
+      >
+        <button
+          type="button"
+          className="mode-option"
+          role="radio"
+          aria-checked={!is2v2}
+          data-active={!is2v2 ? "true" : "false"}
+          onClick={() => onChangeMode(MODE_1V1)}
+          disabled={connecting}
+        >
+          <span className="mode-option-title">1 contro 1</span>
+          <span className="mode-option-sub">Testa a testa, 2 giocatori</span>
+        </button>
+        <button
+          type="button"
+          className="mode-option"
+          role="radio"
+          aria-checked={is2v2}
+          data-active={is2v2 ? "true" : "false"}
+          onClick={() => onChangeMode(MODE_2V2)}
+          disabled={connecting}
+        >
+          <span className="mode-option-title">2 contro 2</span>
+          <span className="mode-option-sub">A coppie, 4 giocatori</span>
+        </button>
+      </div>
+
       {/* Le due azioni: elemento più evidente della schermata (§6.3). "Gioca
           subito" è primaria (oro), "Apri un tavolo" secondaria (feltro). */}
       <div className="lobby-actions" role="group" aria-label="Come vuoi iniziare a giocare">
@@ -156,7 +208,9 @@ export function Lobby({
               </span>
               <span className="lobby-action-text">
                 <span className="lobby-action-title">Gioca subito</span>
-                <span className="lobby-action-sub">Ti sediamo al primo tavolo in attesa</span>
+                <span className="lobby-action-sub">
+                  {is2v2 ? "Ti sediamo al primo tavolo 2v2 in attesa" : "Ti sediamo al primo tavolo in attesa"}
+                </span>
               </span>
             </>
           )}
@@ -172,7 +226,9 @@ export function Lobby({
           </span>
           <span className="lobby-action-text">
             <span className="lobby-action-title">Apri un tavolo</span>
-            <span className="lobby-action-sub">Crea il tuo e invita un amico</span>
+            <span className="lobby-action-sub">
+              {is2v2 ? "Crea un tavolo a coppie e invita 3 giocatori" : "Crea il tuo e invita un amico"}
+            </span>
           </span>
         </button>
       </div>
@@ -237,7 +293,12 @@ export function Lobby({
                 <li key={t.code} className="table-row" style={{ "--row-index": i } as CSSProperties}>
                   <span className="table-avatar" aria-hidden="true">{initial}</span>
                   <div className="table-row-main">
-                    <span className="table-creator">{t.creatorName || "Giocatore"}</span>
+                    <span className="table-creator">
+                      {t.creatorName || "Giocatore"}
+                      {isCouplesTable(t) && (
+                        <span className="table-mode-badge" data-mode="coppie">2v2 · coppie</span>
+                      )}
+                    </span>
                     <div className="table-row-meta">
                       <span className="table-wait">
                         <span className="wait-dot" aria-hidden="true" />
