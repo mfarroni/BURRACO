@@ -9,6 +9,7 @@ import type {
   MatchSummary,
   Seat,
   StatsPeriod,
+  TeamId,
   UserStats,
 } from "../contract/types.js";
 import type { Pagination, StatsStore } from "./types.js";
@@ -37,9 +38,14 @@ export class DrizzleStatsStore implements StatsStore {
     const periodConds = (): SQL[] =>
       fromDate ? [gte(schema.matches.endedAt, fromDate)] : [];
 
-    // Partite CONCLUSE dell'utente col suo posto e il vincitore (per played/won/lost).
+    // Partite CONCLUSE dell'utente con la sua SQUADRA e la squadra vincitrice.
     const rows = await this.db
-      .select({ seat: schema.matchPlayers.seat, winnerSeat: schema.matches.winnerSeat })
+      .select({
+        seat: schema.matchPlayers.seat,
+        team: schema.matchPlayers.team,
+        winnerSeat: schema.matches.winnerSeat,
+        winnerTeam: schema.matches.winnerTeam,
+      })
       .from(schema.matchPlayers)
       .innerJoin(schema.matches, eq(schema.matches.id, schema.matchPlayers.matchId))
       .where(
@@ -53,7 +59,12 @@ export class DrizzleStatsStore implements StatsStore {
     const matchesPlayed = rows.length;
     let matchesWon = 0;
     for (const r of rows) {
-      if (r.winnerSeat !== null && r.winnerSeat === r.seat) matchesWon += 1;
+      // ITEM 2: vinta = SQUADRA dell'utente == squadra vincitrice. In 1v1
+      // (team ?? seat, winner_team ?? winner_seat) coincide col vecchio
+      // `winner_seat === seat`: righe pre-migrazione incluse.
+      const t = r.team ?? r.seat;
+      const w = r.winnerTeam ?? r.winnerSeat;
+      if (w !== null && w === t) matchesWon += 1;
     }
     const matchesLost = matchesPlayed - matchesWon;
     const winRate = matchesPlayed === 0 ? 0 : matchesWon / matchesPlayed;
@@ -171,7 +182,9 @@ export class DrizzleStatsStore implements StatsStore {
       .select({
         matchId: schema.matches.id,
         winnerSeat: schema.matches.winnerSeat,
+        winnerTeam: schema.matches.winnerTeam,
         seat: schema.matchPlayers.seat,
+        team: schema.matchPlayers.team,
         endedAt: schema.matches.endedAt,
         createdAt: schema.matches.createdAt,
       })
@@ -189,11 +202,12 @@ export class DrizzleStatsStore implements StatsStore {
 
     const matchIds = paged.map((r) => r.matchId);
 
-    // Nomi + flag ospite di tutti i posti delle partite in pagina (join users).
+    // Nomi + flag ospite + SQUADRA di tutti i posti delle partite in pagina (join users).
     const players = await this.db
       .select({
         matchId: schema.matchPlayers.matchId,
         seat: schema.matchPlayers.seat,
+        team: schema.matchPlayers.team,
         displayName: schema.matchPlayers.displayName,
         isGuest: schema.users.isGuest,
       })
@@ -214,8 +228,9 @@ export class DrizzleStatsStore implements StatsStore {
       .where(inArray(schema.hands.matchId, matchIds))
       .groupBy(schema.hands.matchId, schema.handScores.seat);
 
-    const playerOf = (matchId: string, seat: Seat) =>
-      players.find((p) => p.matchId === matchId && p.seat === seat);
+    // Posti di una partita ordinati per seat (ITEM 2: la coppia può avere 2 posti).
+    const playersOf = (matchId: string) =>
+      players.filter((p) => p.matchId === matchId).sort((a, b) => a.seat - b.seat);
     const scoreOf = (matchId: string, seat: Seat): number =>
       num(scores.find((s) => s.matchId === matchId && s.seat === seat)?.total);
     const dealsOf = (matchId: string, seat: Seat): number =>
@@ -223,19 +238,27 @@ export class DrizzleStatsStore implements StatsStore {
 
     return paged.map((r) => {
       const yourSeat = r.seat as Seat;
-      const oppSeat = (1 - yourSeat) as Seat;
-      const opp = playerOf(r.matchId, oppSeat);
-      const result: "won" | "lost" =
-        r.winnerSeat !== null && r.winnerSeat === yourSeat ? "won" : "lost";
+      const yourTeam = (r.team ?? r.seat) as TeamId;
+      // ITEM 2: coppia = posti della propria squadra; avversari = posti dell'altra.
+      // In 1v1 (una squadra = un posto) "mine"/"opp" hanno un solo posto → aggregati
+      // e nomi coincidono con la vecchia logica per-posto.
+      const all = playersOf(r.matchId);
+      const mine = all.filter((p) => (p.team ?? p.seat) === yourTeam);
+      const opp = all.filter((p) => (p.team ?? p.seat) !== yourTeam);
+      const w = r.winnerTeam ?? r.winnerSeat;
+      const result: "won" | "lost" = w !== null && w === yourTeam ? "won" : "lost";
       const ended = r.endedAt ? new Date(r.endedAt).getTime() : null;
       return {
         matchId: r.matchId,
         endedAt: ended,
         result,
-        opponentName: opp?.displayName ?? "Avversario",
-        opponentIsGuest: opp?.isGuest ?? false,
-        yourScore: scoreOf(r.matchId, yourSeat),
-        opponentScore: scoreOf(r.matchId, oppSeat),
+        opponentName: opp.map((p) => p.displayName).join(" e ") || "Avversario",
+        // Rappresentante della coppia avversaria (posto minore) per il flag ospite.
+        opponentIsGuest: opp[0]?.isGuest ?? false,
+        yourScore: mine.reduce((acc, p) => acc + scoreOf(r.matchId, p.seat), 0),
+        opponentScore: opp.reduce((acc, p) => acc + scoreOf(r.matchId, p.seat), 0),
+        // Conteggio smazzate = righe del PROPRIO posto (una per smazzata), mai la
+        // somma dei due posti della coppia.
         dealsCount: dealsOf(r.matchId, yourSeat),
       };
     });
@@ -244,7 +267,7 @@ export class DrizzleStatsStore implements StatsStore {
   async getMatchDetail(userId: string, matchId: string): Promise<MatchDetail | null> {
     // Autorizzazione per PARTECIPAZIONE: nessuna riga → null (l'HTTP mappa a 404).
     const [meRow] = await this.db
-      .select({ seat: schema.matchPlayers.seat })
+      .select({ seat: schema.matchPlayers.seat, team: schema.matchPlayers.team })
       .from(schema.matchPlayers)
       .where(and(eq(schema.matchPlayers.matchId, matchId), eq(schema.matchPlayers.userId, userId)))
       .limit(1);
@@ -254,6 +277,7 @@ export class DrizzleStatsStore implements StatsStore {
       .select({
         status: schema.matches.status,
         winnerSeat: schema.matches.winnerSeat,
+        winnerTeam: schema.matches.winnerTeam,
         endedAt: schema.matches.endedAt,
         targetScore: schema.matches.targetScore,
       })
@@ -263,19 +287,26 @@ export class DrizzleStatsStore implements StatsStore {
     if (!m) return null;
 
     const yourSeat = meRow.seat as Seat;
-    const oppSeat = (1 - yourSeat) as Seat;
+    const yourTeam = (meRow.team ?? meRow.seat) as TeamId;
 
-    // Posti (nome + flag ospite via join users).
-    const players = await this.db
-      .select({
-        seat: schema.matchPlayers.seat,
-        displayName: schema.matchPlayers.displayName,
-        isGuest: schema.users.isGuest,
-      })
-      .from(schema.matchPlayers)
-      .leftJoin(schema.users, eq(schema.users.id, schema.matchPlayers.userId))
-      .where(eq(schema.matchPlayers.matchId, matchId));
-    const opp = players.find((p) => p.seat === oppSeat);
+    // Posti (nome + flag ospite + SQUADRA via join users), ordinati per seat.
+    const players = (
+      await this.db
+        .select({
+          seat: schema.matchPlayers.seat,
+          team: schema.matchPlayers.team,
+          displayName: schema.matchPlayers.displayName,
+          isGuest: schema.users.isGuest,
+        })
+        .from(schema.matchPlayers)
+        .leftJoin(schema.users, eq(schema.users.id, schema.matchPlayers.userId))
+        .where(eq(schema.matchPlayers.matchId, matchId))
+    ).sort((a, b) => a.seat - b.seat);
+    // ITEM 2: coppia dell'utente vs coppia avversaria (in 1v1 un posto per lato).
+    const mine = players.filter((p) => (p.team ?? p.seat) === yourTeam);
+    const opp = players.filter((p) => (p.team ?? p.seat) !== yourTeam);
+    const mySeats = mine.map((p) => p.seat as Seat);
+    const oppSeats = opp.map((p) => p.seat as Seat);
 
     // Smazzate ordinate per numero.
     const handRows = await this.db
@@ -305,17 +336,24 @@ export class DrizzleStatsStore implements StatsStore {
       .innerJoin(schema.hands, eq(schema.hands.id, schema.handScores.handId))
       .where(eq(schema.hands.matchId, matchId));
 
-    const sideOf = (handId: string, seat: Seat, closerSeat: number | null): MatchDealSide => {
-      const s = scoreRows.find((r) => r.handId === handId && r.seat === seat);
+    // ITEM 2: lato di UNA smazzata AGGREGATO sui posti di una coppia. I fatti di
+    // coppia vivono sulla riga CANONICA (l'altra ha ptsMelds/ptsBonus/ptsPozzetto =
+    // 0) → la SOMMA non li duplica; le penalità di mano si sommano (carte di
+    // entrambi i compagni). In 1v1 `seats` ha un solo posto → identico a prima.
+    const sideOfTeam = (handId: string, seats: Seat[], closerSeat: number | null): MatchDealSide => {
+      const rows = scoreRows.filter((r) => r.handId === handId && seats.includes(r.seat as Seat));
+      const sum = (f: (r: (typeof rows)[number]) => number): number =>
+        rows.reduce((a, r) => a + num(f(r)), 0);
       return {
-        puntiSmazzata: s ? num(s.totalDelta) : 0,
-        puntiCarteInMano: s ? num(s.ptsPenaltyHand) : 0,
-        burrachiPuliti: s ? num(s.burrachiPuliti) : 0,
-        burrachiSporchi: s ? num(s.burrachiSporchi) : 0,
-        pozzettoPreso: s ? num(s.ptsPozzetto) === 0 : false,
-        pozzettoInDiretta: s?.pozzettoInDiretta ?? false,
-        haChiuso: closerSeat === seat,
-        malusPozzetto: s ? num(s.ptsPozzetto) === -100 : false,
+        puntiSmazzata: sum((r) => r.totalDelta),
+        puntiCarteInMano: sum((r) => r.ptsPenaltyHand),
+        burrachiPuliti: sum((r) => r.burrachiPuliti),
+        burrachiSporchi: sum((r) => r.burrachiSporchi),
+        // Il MALUS (-100) compare su UNA sola riga (canonica); "preso" = nessun malus.
+        pozzettoPreso: rows.length > 0 && rows.every((r) => num(r.ptsPozzetto) === 0),
+        pozzettoInDiretta: rows.some((r) => r.pozzettoInDiretta),
+        haChiuso: closerSeat !== null && seats.includes(closerSeat as Seat),
+        malusPozzetto: rows.some((r) => num(r.ptsPozzetto) === -100),
       };
     };
 
@@ -323,32 +361,30 @@ export class DrizzleStatsStore implements StatsStore {
       numeroSmazzata: h.handNumber,
       dealerSeat: h.dealerSeat as Seat,
       closerSeat: h.closerSeat === null ? null : (h.closerSeat as Seat),
-      you: sideOf(h.handId, yourSeat, h.closerSeat),
-      opponent: sideOf(h.handId, oppSeat, h.closerSeat),
+      you: sideOfTeam(h.handId, mySeats, h.closerSeat),
+      opponent: sideOfTeam(h.handId, oppSeats, h.closerSeat),
     }));
 
     const status = m.status as MatchStatus;
+    const w = m.winnerTeam ?? m.winnerSeat;
     const result: "won" | "lost" | null =
-      status !== "completed"
-        ? null
-        : m.winnerSeat !== null && m.winnerSeat === yourSeat
-          ? "won"
-          : "lost";
+      status !== "completed" ? null : w !== null && w === yourTeam ? "won" : "lost";
 
-    const you = num(scoreRows.filter((r) => r.seat === yourSeat).reduce((a, r) => a + num(r.totalDelta), 0));
-    const opponentScore = num(
-      scoreRows.filter((r) => r.seat === oppSeat).reduce((a, r) => a + num(r.totalDelta), 0),
-    );
+    const teamTotal = (seats: Seat[]): number =>
+      num(scoreRows.filter((r) => seats.includes(r.seat as Seat)).reduce((a, r) => a + num(r.totalDelta), 0));
 
     return {
       matchId,
       endedAt: m.endedAt ? new Date(m.endedAt).getTime() : null,
       status,
       result,
-      opponent: { name: opp?.displayName ?? "Avversario", isGuest: opp?.isGuest ?? false },
+      opponent: {
+        name: opp.map((p) => p.displayName).join(" e ") || "Avversario",
+        isGuest: opp[0]?.isGuest ?? false,
+      },
       targetScore: num(m.targetScore),
       yourSeat,
-      finalScore: { you, opponent: opponentScore },
+      finalScore: { you: teamTotal(mySeats), opponent: teamTotal(oppSeats) },
       deals,
     };
   }
