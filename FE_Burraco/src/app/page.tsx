@@ -559,6 +559,17 @@ export default function Page() {
           avversario → testo identico a prima). */}
       <TurnBanner isMyTurn={isMyTurn} phaseHint={phaseHint} opponentName={activeName} />
 
+      {/* Suggerimento "ruota il telefono": SOLO 2v2 e SOLO in portrait stretto
+          (la visibilità è decisa dal CSS via media query). In portrait le 4
+          postazioni non stanno affiancate (spec tavolo §5.2): il tavolo degrada
+          a vista compatta e il landscape è la via maestra. Nessuna logica. */}
+      {is2v2 && (
+        <p className="rotate-hint" role="note">
+          <span className="rotate-ic" aria-hidden="true">⟳</span>
+          Ruota il telefono in orizzontale per la vista completa del tavolo.
+        </p>
+      )}
+
       {/* ── Tavolo: griglia a postazioni (data-seats), isola centrale FISSA ──
           1v1 (data-seats="2"): avversario a Nord, tu a Sud, isola al centro.
           2v2 (data-seats="4"): compagno a Nord, avversari a Ovest/Est (giro orario),
@@ -603,11 +614,15 @@ export default function Page() {
             <div className="lbl">Monte scarti</div>
           </div>
 
-          <div className="pile">
-            <div className="slot facedown" aria-hidden="true" />
-            <div className="num">{opponentHandCount}</div>
-            <div className="lbl">Mano avversario</div>
-          </div>
+          {/* 1v1: mano dell'unico avversario. In 2v2 i conteggi per-posto sono già
+              sulle targhe attorno al tavolo → pila omessa per non fuorviare. */}
+          {!is2v2 && (
+            <div className="pile">
+              <div className="slot facedown" aria-hidden="true" />
+              <div className="num">{opponentHandCount}</div>
+              <div className="lbl">Mano avversario</div>
+            </div>
+          )}
 
           <div className="pile">
             <div className="pozzetti" aria-hidden="true">

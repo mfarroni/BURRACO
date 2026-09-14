@@ -1065,6 +1065,133 @@ button:disabled {
 }
 
 /* ===================================================================
+ * TAVOLO A 4 POSTAZIONI (2v2) — RIFINITURE FASE 4 (solo presentazione)
+ * Tutto è SCOPATO su [data-seats="4"]: il tavolo 1v1 (data-seats="2")
+ * resta invariato. I tre canali di distinzione squadra (posizione,
+ * colore, etichetta+crest) esistono già nel markup: qui si rinforzano
+ * leggibilità e compattezza delle targhe, gli stati (turno/offline) e
+ * si chiude la degradazione per il PORTRAIT stretto (spec tavolo §5.2).
+ * =================================================================== */
+
+/* Targhe compatte su UNA riga: con 4 giocatori e nomi lunghi, solo il
+   NOME (che NON è un canale di squadra) tronca con ellissi; crest,
+   etichetta e conteggio restano interi e leggibili. La targa non si
+   stira per tutta l'area: è capata a 320px e ALLINEATA all'asse della
+   sua squadra — Noi (Nord/Sud) centrata sull'asse verticale, Loro
+   (Ovest/Est) agli estremi orizzontali. Così la POSIZIONE (canale 1)
+   resta leggibile a colpo d'occhio. */
+.table-grid[data-seats="4"] .seat-plate {
+  flex-wrap: nowrap;
+  max-width: 320px;
+  min-width: 0;
+}
+.table-grid[data-seats="4"] .seat-north,
+.table-grid[data-seats="4"] .seat-south {
+  justify-self: center;
+}
+.table-grid[data-seats="4"] .seat-west {
+  justify-self: start;
+}
+.table-grid[data-seats="4"] .seat-east {
+  justify-self: end;
+}
+.table-grid[data-seats="4"] .seat-plate .seat-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.table-grid[data-seats="4"] .seat-plate .crest,
+.table-grid[data-seats="4"] .seat-plate .team-tag,
+.table-grid[data-seats="4"] .seat-plate .seat-hand,
+.table-grid[data-seats="4"] .seat-plate .turn-dot {
+  flex: 0 0 auto;
+}
+/* Offline come CHIP d'ambra: in coppie serve capire A COLPO D'OCCHIO
+   QUALE posto è caduto (compagno vs avversario cambia le conseguenze).
+   --warn-300 su --surface ≈ AAA. Solo 4 posti → l'1v1 resta com'era. */
+.table-grid[data-seats="4"] .seat-plate .seat-off {
+  flex: 0 0 auto;
+  padding: 1px var(--sp-2);
+  border: 1px solid var(--warn-500);
+  border-radius: var(--r-pill);
+  color: var(--warn-300);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Pannelli "I nostri/I loro giochi" tinti per squadra: rinforzo del
+   canale COLORE quando i giocatori sono 4. Tinta ~12% sopra la
+   superficie → non intacca il contrasto del testo. Solo 4 posti:
+   i melds dell'1v1 restano invariati. */
+.table-grid[data-seats="4"] .meld-group[data-team="us"] {
+  background: linear-gradient(180deg, rgba(200, 162, 74, 0.12), var(--surface));
+}
+.table-grid[data-seats="4"] .meld-group[data-team="them"] {
+  background: linear-gradient(180deg, rgba(111, 168, 199, 0.12), var(--surface));
+}
+
+/* ── PORTRAIT STRETTO (≤600px, orientamento verticale) ──────────────
+   Onestà (spec tavolo §5.2): le 4 postazioni NON stanno affiancate.
+   Degradazione dichiarata, senza scendere sotto la soglia di leggibilità:
+   · il COMPAGNO (Nord) resta a tutta larghezza, in evidenza;
+   · i due AVVERSARI si affiancano su una riga compatta (Ovest | Est);
+   · isola centrale e giochi vanno a tutta larghezza (scroll verticale
+     della pagina, mai orizzontale);
+   · la TUA MANO non si tocca (resta due file, gestita da .bottom-hand).
+   Per l'ispezione completa del tavolo si ruota (hint sotto). */
+@media (max-width: 600px) and (orientation: portrait) {
+  .table-grid[data-seats="4"] {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "north  north"
+      "west   east"
+      "center center"
+      "melds  melds"
+      "south  south";
+    gap: var(--sp-2);
+  }
+  .table-grid[data-seats="4"] .seat-north,
+  .table-grid[data-seats="4"] .seat-west,
+  .table-grid[data-seats="4"] .seat-east,
+  .table-grid[data-seats="4"] .seat-south {
+    width: 100%;
+    padding: var(--sp-1) var(--sp-2);
+    font-size: var(--fs-xs);
+    gap: var(--sp-1);
+  }
+}
+
+/* Suggerimento "ruota il telefono": SOLO 2v2 (gated da is2v2 nel markup)
+   e SOLO in portrait stretto. Elemento reale (role="note"): comparsa e
+   nascondimento puramente via media query, nessuna logica. */
+.rotate-hint {
+  display: none;
+}
+@media (max-width: 600px) and (orientation: portrait) {
+  .rotate-hint {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin: var(--sp-3) 0 0;
+    padding: var(--sp-2) var(--sp-3);
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--brass-500);
+    border-radius: var(--r-md);
+  }
+  .rotate-hint .rotate-ic {
+    flex: 0 0 auto;
+    font-size: 1.05rem;
+    line-height: 1;
+    color: var(--brass-400);
+  }
+}
+
+/* ===================================================================
  * BARRA AZIONI (sticky) — l'azione del momento risalta in oro.
  * =================================================================== */
 .action-bar {
@@ -3419,6 +3546,103 @@ button:disabled {
   display: flex;
   justify-content: center;
   margin-top: var(--sp-5);
+}
+
+/* ── Pannello POSTI in attesa (slot occupati/liberi) ──────────────────
+   In coppie i posti sono raggruppati per SQUADRA (0+2 / 1+3) con il
+   colore di squadra usato al tavolo (A=oro, B=acciaio). Occupato vs
+   libero è distinto da TESTO (nome vs "Libero") + FORMA del pallino
+   (pieno vs anello), mai dal solo colore. "(tu)" marca il proprio posto. */
+.waiting-seats {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-5) 0;
+}
+.waiting-seats-count {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.waiting-teams {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-3);
+  width: 100%;
+}
+.waiting-team {
+  flex: 1 1 160px;
+  max-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--border);
+  border-radius: var(--r-md);
+  text-align: left;
+}
+.waiting-team[data-team="0"] {
+  border-top-color: var(--brass-500);
+}
+.waiting-team[data-team="1"] {
+  border-top-color: var(--info-500);
+}
+.waiting-team-label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.waiting-team[data-team="0"] .waiting-team-label {
+  color: var(--brass-300);
+}
+.waiting-team[data-team="1"] .waiting-team-label {
+  color: var(--info-300);
+}
+.waiting-seat-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+}
+.waiting-seat {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 40px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text-strong);
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+/* Pallino di stato: PIENO (verde d'attesa pronta) = posto occupato,
+   ANELLO vuoto = posto libero. La forma distingue anche senza colore. */
+.waiting-seat::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--success-300);
+}
+.waiting-seat.empty {
+  color: var(--text-faint);
+  border-style: dashed;
+  font-style: italic;
+}
+.waiting-seat.empty::before {
+  background: transparent;
+  border: 1px solid var(--text-faint);
 }
 
 /* Pulsante di chiusura di un banner (riusa l'aspetto del toast-close, ma nel
