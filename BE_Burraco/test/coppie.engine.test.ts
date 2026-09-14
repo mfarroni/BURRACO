@@ -246,6 +246,34 @@ test("coppie: svuotare la mano senza pozzetto disponibile per la propria coppia 
   if (!r.ok) assert.equal(r.code, "CANNOT_CLOSE_NO_BURRACO");
 });
 
+test("coppie: presa IN DIFFERITA — scarto finale prende il pozzetto RISERVATO alla coppia (non è chiusura)", () => {
+  // Ramo `discardCard` willEmpty con la coppia SENZA pozzetto e un pozzetto ancora
+  // disponibile: si prende il pozzetto DI COPPIA in DIFFERITA (skill "POZZETTO" +
+  // "Pozzetto: uno per coppia") — la mano NON si chiude, il turno passa. In coppie
+  // era testata solo la presa IN DIRETTA (via meldNew); questo copre la DIFFERITA
+  // via scarto nel contesto 2v2. Nessun burraco richiesto: non è una chiusura.
+  const g = coppie(0);
+  g.currentSeat = 1; g.phase = "may_meld";
+  g.seats[0].pozzettoTaken = true;  // la squadra 0 ha già preso il PROPRIO pozzetto
+  g.seats[1].pozzettoTaken = false; // la squadra 1 non ne ha ancora preso alcuno
+  g.seats[3].pozzettoTaken = false;
+  g.pozzetti = [Array.from({ length: 11 }, () => card("Q", "clubs"))]; // resta il pozzetto della squadra 1
+  g.seats[1].hand = [card("K", "hearts")]; // ultima carta, non è una matta
+  g.melds = []; // nessun burraco: la DIFFERITA non lo richiede (non è chiusura)
+  const r = g.discardCard(1, g.seats[1].hand[0]!.id);
+  assert.equal(r.ok, true, "svuotando la mano prende il pozzetto di coppia in differita");
+  if (r.ok) {
+    assert.ok(r.effects.some((e) => e.kind === "pozzetto_taken"), "pozzetto_taken emesso");
+    assert.ok(!r.effects.some((e) => e.kind === "hand_ended"), "NON è una chiusura: la mano continua");
+    const tc = r.effects.find((e) => e.kind === "turn_changed");
+    if (tc && tc.kind === "turn_changed") assert.equal(tc.seat, 2, "il turno passa in senso orario a 2");
+  }
+  assert.equal(g.status, "playing", "la smazzata prosegue");
+  assert.equal(g.pozzettoTaken(1), true, "la squadra 1 ha ora il proprio pozzetto");
+  assert.equal(g.handOf(1).length, 11, "la mano è quella del pozzetto (11 carte)");
+  assert.equal(g.pozzetti.length, 0, "consumato l'ultimo pozzetto");
+});
+
 /* ─────────────────────────── PUNTEGGIO DI COPPIA (una volta sola) ─────────────────────────── */
 
 test("coppie/scoring: fatti di coppia UNA VOLTA SOLA + carte di ENTRAMBI i compagni sottratte", () => {
