@@ -61,6 +61,7 @@ const slotsOf = (room: Room): SlotView[] => (room as unknown as { players: SlotV
 const engineStarted = (room: Room): boolean =>
   (room as unknown as { engine: unknown }).engine !== null;
 const disposeOf = (room: Room): void => (room as unknown as { dispose(): void }).dispose();
+const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /** Config 2v2 (coppie a 4 posti), turn timeout lungo per non far scattare l'auto-play. */
 const coppie4 = (): GameConfig => ({
@@ -373,4 +374,66 @@ test("forfait 1v1 (non-regressione): stallo del posto 0 → vince la squadra 1 (
   const ge = a.find("game_ended")!;
   assert.equal(ge.winnerTeam, 1, "1v1: team = seat → vince il posto 1, valore identico a prima");
   assert.equal(ge.reason, "forfeit");
+});
+
+/* ─────── ABBANDONO DI COPPIA su DISCONNESSIONE oltre la grazia (ITEM 1) ────── */
+
+test("abbandono 2v2: disconnessione del posto 2 (squadra 0) oltre la grazia → forfait di COPPIA, vince la squadra 1", async () => {
+  process.env.RECONNECT_GRACE_MS = "40"; // grazia brevissima iniettata
+  const { room, a, b, c, d } = start2v2("ABDC1");
+  assert.equal(engineStarted(room), true, "partita 2v2 avviata a tavolo pieno");
+
+  // Il posto 2 (squadra 0) si disconnette e NON rientra entro la grazia. Il suo
+  // compagno (posto 0, squadra 0) resta connesso: la coppia perde comunque.
+  room.onDisconnect(c.as());
+  await delay(90); // > grazia
+
+  for (const [name, sock] of [["A", a], ["B", b], ["D", d]] as const) {
+    const ge = sock.find("game_ended");
+    assert.ok(ge, `game_ended ricevuto dal posto vivo ${name}`);
+    assert.equal(ge!.winnerTeam, 1, `vince la squadra AVVERSARIA (1), non il compagno — visto da ${name}`);
+    assert.equal(ge!.reason, "forfeit");
+    assert.ok(!sock.has("room_closed"), `nessun room_closed a ${name}: è un forfait, non un annullamento`);
+  }
+  assert.equal(room.isDisposed(), true, "room smaltita dopo il forfait di coppia");
+});
+
+test("abbandono 2v2 in ATTESA (partita non avviata): nessun forfait, il tavolo si annulla come oggi", async () => {
+  // In ATTESA (engine null) la grazia è la WAITING_GRACE_MS (non la RECONNECT).
+  process.env.WAITING_GRACE_MS = "40";
+  // Solo 2 dei 4 posti occupati: engine null (partita non avviata).
+  const room = new Room("ABDC2", coppie4());
+  const a = new FakeSocket();
+  const b = new FakeSocket();
+  room.join(a.as(), undefined, "A", "cA"); // seat 0
+  room.join(b.as(), undefined, "B", "cB"); // seat 1
+  assert.equal(engineStarted(room), false, "in attesa: nessun engine");
+
+  room.onDisconnect(a.as()); // seat 0 abbandona in attesa
+  await delay(90);
+
+  assert.ok(!b.has("game_ended"), "nessun forfait in attesa (partita non avviata)");
+  const rc = b.find("room_closed");
+  assert.ok(rc, "l'altro posto riceve room_closed");
+  assert.equal(rc!.reason, "abandoned", "annullamento per abbandono, come oggi");
+  assert.equal(room.isDisposed(), true, "tavolo smaltito");
+});
+
+test("abbandono 1v1 (non-regressione): disconnessione oltre la grazia → room_closed{abandoned}, MAI game_ended", async () => {
+  process.env.RECONNECT_GRACE_MS = "40";
+  const room = new Room("ABDC3", { ...defaultGameConfig(), turnTimeoutMs: 100_000 });
+  const a = new FakeSocket();
+  const b = new FakeSocket();
+  room.join(a.as(), undefined, "A", "cA");
+  room.join(b.as(), undefined, "B", "cB");
+  assert.equal(engineStarted(room), true, "1v1 avviata all'ingresso del secondo");
+
+  room.onDisconnect(a.as());
+  await delay(90);
+
+  const rc = b.find("room_closed");
+  assert.ok(rc, "l'avversario riceve room_closed");
+  assert.equal(rc!.reason, "abandoned", "1v1 invariato: annullamento senza vincitore");
+  assert.ok(!b.has("game_ended"), "1v1: nessun forfeit-win (comportamento invariato)");
+  assert.equal(room.isDisposed(), true, "room smaltita");
 });

@@ -767,20 +767,36 @@ export class Room {
     this.notifyOthers(slot.seat, { type: "player_disconnected", seat: slot.seat });
 
     // LIFECYCLE: alla SCADENZA della grazia (default 180s) il disconnesso non
-    // rientra più. Decisione di prodotto (sostituisce il forfeit-win di SEC-05):
-    // la partita è ANNULLATA per abbandono, senza vincitore.
+    // rientra più. L'esito dipende da MODALITÀ e STATO (vedi sotto).
     if (slot.graceTimer) clearTimeout(slot.graceTimer);
     slot.graceTimer = setTimeout(() => {
       slot.graceTimer = null;
       if (this.disposed) return;
       // Riconnesso nel frattempo? Nessuna chiusura.
       if (slot.status === "connected") return;
-      // Entrambi disconnessi → room abbandonata: GC silenzioso senza messaggi.
+      // Tutti disconnessi → room abbandonata: GC silenzioso senza messaggi.
       if (this.isEmpty()) {
         this.dispose();
         return;
       }
-      // Avversario ancora presente → partita ANNULLATA per abbandono (no winner).
+      // ITEM 1 — ABBANDONO DI COPPIA (2v2): a partita IN CORSO (`this.engine`
+      // presente), la disconnessione oltre la grazia fa perdere a FORFAIT la
+      // COPPIA dell'assente; vince la squadra AVVERSARIA. Passa per la stessa via
+      // del forfait da stallo (`forfeitStalledSeat`, P4): game_ended{reason:
+      // "forfeit"} ai posti vivi + completeMatch (status 'completed', conta nelle
+      // statistiche). Vale anche se il COMPAGNO dell'assente è ancora connesso: la
+      // coppia non può schierare entrambi i giocatori.
+      //
+      // In INDIVIDUALE (1v1) il comportamento è INVARIATO: partita ANNULLATA per
+      // abbandono, SENZA vincitore (room_closed{abandoned}). In ATTESA
+      // (`engine === null`, tavolo non ancora avviato) nessun forfait: si annulla
+      // come oggi. Il ramo forfait è quindi condizionato a coppie + partita avviata.
+      if (this.engine && this.config.modalita === "coppie") {
+        this.forfeitStalledSeat(slot.seat);
+        return;
+      }
+      // Avversario ancora presente (1v1 in corso, o tavolo in attesa) → partita
+      // ANNULLATA per abbandono (no winner). Comportamento 1v1 invariato.
       this.closeRoom("abandoned");
     }, this.graceMs());
     slot.graceTimer.unref?.();
@@ -993,10 +1009,14 @@ export class Room {
   }
 
   /**
-   * NEW-3 / FORFAIT DI COPPIA (P4): chiusura deterministica di un turno in stallo
-   * irrisolvibile. A perdere è la SQUADRA del posto in stallo, non un singolo posto:
-   * la vincitrice è la squadra AVVERSARIA (mai il compagno). Riusa il canale
-   * `game_ended` (reason "forfeit"). Poi GC della room.
+   * NEW-3 / FORFAIT DI COPPIA (P4): chiusura deterministica per FORFAIT del posto
+   * indicato. Due chiamanti, stessa semantica:
+   *  - turno in STALLO irrisolvibile (auto-play senza mossa legale);
+   *  - ABBANDONO in COPPIE (ITEM 1): disconnessione oltre la grazia a partita in
+   *    corso (percorso `onDisconnect`).
+   * A perdere è la SQUADRA del posto, non un singolo posto: la vincitrice è la
+   * squadra AVVERSARIA (mai il compagno). Riusa il canale `game_ended` (reason
+   * "forfeit") + `completeMatch`. Poi GC della room.
    *
    * In 1v1 (team = seat, due squadre) la squadra avversaria è `1 - stalledSeat`:
    * vincitore e totali coincidono ESATTAMENTE col comportamento precedente. In 2v2
