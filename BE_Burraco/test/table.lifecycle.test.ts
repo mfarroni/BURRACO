@@ -168,7 +168,7 @@ test("(3) rientro ENTRO la grazia via token → resumed e stato ripristinato, ne
   assert.equal(a2.roomJoined()?.resumed, true, "rientro per token = resumed");
   assert.ok(a2.has("state"), "stato corrente ripristinato");
   assert.ok(!a2.has("room_closed"), "nessuna chiusura entro la grazia");
-  assert.ok(b.has("opponent_reconnected"), "l'avversario è notificato del rientro");
+  assert.ok(b.has("player_reconnected"), "gli altri posti sono notificati del rientro");
   disposeOf(room);
 });
 
@@ -398,6 +398,11 @@ test("(10) anti-leak invariato: lo stato di A non contiene mai le carte di B", (
   for (const c of sb.yourHand) {
     assert.ok(!jsonA.includes(c.id), `leak carta di B nello stato di A: ${c.id}`);
   }
-  assert.equal(typeof sa.opponentHandCount, "number", "solo il conteggio della mano avversaria");
+  // C3: da opponentHandCount al conteggio del posto avversario in seats[] (mai le carte).
+  assert.equal(
+    typeof sa.seats.find((x) => x.seat !== sa.yourSeat)!.handCount,
+    "number",
+    "solo il conteggio della mano avversaria",
+  );
   disposeOf(room);
 });

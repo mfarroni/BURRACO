@@ -332,14 +332,16 @@ export function GameEndedOverlay({
   config: GameConfig | null;
 }) {
   if (!info) return null;
-  const won = info.winnerSeat === yourSeat;
+  // C8: `winnerTeam` è la SQUADRA vincitrice. In 1v1 team = seat, quindi il confronto
+  // col proprio posto e la resa del nome restano corretti (seatName mappa team→posto).
+  const won = info.winnerTeam === yourSeat;
   return (
     <div className="overlay">
       <div className="overlay-card">
         <h2>{won ? "Hai vinto la partita" : "Partita conclusa"}</h2>
         <p className="verdict">
           {won ? "♛ " : ""}
-          Vincitore: <strong>{seatName(info.winnerSeat, players, yourSeat)}</strong>
+          Vincitore: <strong>{seatName(info.winnerTeam, players, yourSeat)}</strong>
         </p>
         <p className="cumulative">
           Punteggio finale (obiettivo {config?.punteggioObiettivo ?? "—"}) — {seatName(0, players, yourSeat)}:{" "}

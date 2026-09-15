@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788257979000,
+      "tag": "0000_hesitant_penance",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788871482000,
+      "tag": "0001_lobby_session_hygiene",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788871483000,
+      "tag": "0002_history_stats",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789060661000,
+      "tag": "0003_teams_2v2",
+      "breakpoints": true
+    }
+  ]
+}

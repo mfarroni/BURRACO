@@ -6,6 +6,7 @@ import type {
   MatchSummary,
   Seat,
   StatsPeriod,
+  TeamId,
   UserStats,
 } from "../contract/types.js";
 import type { Pagination, StatsStore } from "./types.js";
@@ -22,7 +23,10 @@ import { buildAnalysis, emptyAnalysis, periodStartMs, type RawAggregate } from "
  * Le aggregazioni riproducono FEDELMENTE la semantica delle query Drizzle (le due
  * implementazioni condividono `analysis.ts`):
  *  - partite conteggiate = SOLO quelle COMPLETATE (`status='completed'`);
- *  - vinta = il posto dell'utente == `winnerSeat`;
+ *  - vinta = la SQUADRA dell'utente == `winnerTeam` (Macro-ciclo 3 / ITEM 2: prima
+ *    era `winnerSeat === seat`; in 1v1 team = seat → valore identico);
+ *  - `you`/`opponent` sono AGGREGATI DI COPPIA (somma dei posti della squadra); in
+ *    1v1 la squadra ha un solo posto → identico a prima;
  *  - `dealsCount`/analisi si contano dalle smazzate del posto dell'utente.
  */
 
@@ -30,6 +34,12 @@ interface MatchRec {
   id: string;
   status: MatchStatus;
   winnerSeat: Seat | null;
+  /**
+   * Macro-ciclo 3 / ITEM 2: SQUADRA vincitrice (`matches.winner_team`). Nullable:
+   * le righe pre-migrazione non la hanno → si legge `winnerTeam ?? winnerSeat`
+   * (in 1v1 team = seat → identico). Popolata da `putMatch`.
+   */
+  winnerTeam: TeamId | null;
   targetScore: number;
   createdAt: Date;
   /** matches.ended_at (fine partita). */
@@ -38,10 +48,20 @@ interface MatchRec {
 interface PlayerRec {
   matchId: string;
   seat: Seat;
+  /**
+   * Macro-ciclo 3 / ITEM 2: SQUADRA del posto (`match_players.team`). Nullable: le
+   * righe pre-migrazione non la hanno → si legge `team ?? seat` (in 1v1 identico).
+   */
+  team: TeamId | null;
   displayName: string;
   userId: string | null;
   isGuest: boolean;
 }
+
+/** Squadra del posto con fallback per le righe pre-migrazione (in 1v1 team = seat). */
+const teamOf = (p: PlayerRec): TeamId => p.team ?? p.seat;
+/** Squadra vincitrice con fallback al posto vincitore (in 1v1 identico). */
+const winnerTeamOf = (m: MatchRec): TeamId | null => m.winnerTeam ?? m.winnerSeat;
 interface HandRec {
   handId: string;
   matchId: string;
@@ -78,6 +98,8 @@ export class MemoryStatsStore implements StatsStore {
     id: string;
     status: MatchStatus;
     winnerSeat?: Seat | null;
+    /** Macro-ciclo 3 / ITEM 2: SQUADRA vincitrice (default = winnerSeat, in 1v1 identico). */
+    winnerTeam?: TeamId | null;
     targetScore?: number;
     createdAt?: Date;
     endedAt?: Date | null;
@@ -86,6 +108,9 @@ export class MemoryStatsStore implements StatsStore {
       id: rec.id,
       status: rec.status,
       winnerSeat: rec.winnerSeat ?? null,
+      // Se il chiamante non fornisce winnerTeam (seed 1v1 legacy), resta null e la
+      // lettura ripiega su winnerSeat (backfill logico team = seat).
+      winnerTeam: rec.winnerTeam ?? null,
       targetScore: rec.targetScore ?? 2005,
       createdAt: rec.createdAt ?? new Date(),
       endedAt: rec.endedAt ?? null,
@@ -96,11 +121,20 @@ export class MemoryStatsStore implements StatsStore {
   putPlayer(rec: {
     matchId: string;
     seat: Seat;
+    /** Macro-ciclo 3 / ITEM 2: SQUADRA del posto (default = seat, in 1v1 identico). */
+    team?: TeamId | null;
     displayName: string;
     userId: string | null;
     isGuest?: boolean;
   }): void {
-    this.players.push({ ...rec, isGuest: rec.isGuest ?? false });
+    this.players.push({
+      matchId: rec.matchId,
+      seat: rec.seat,
+      team: rec.team ?? null,
+      displayName: rec.displayName,
+      userId: rec.userId,
+      isGuest: rec.isGuest ?? false,
+    });
   }
 
   /**
@@ -224,7 +258,10 @@ export class MemoryStatsStore implements StatsStore {
     const matchesPlayed = completed.length;
     let matchesWon = 0;
     for (const { player, match } of completed) {
-      if (match.winnerSeat !== null && match.winnerSeat === player.seat) matchesWon += 1;
+      // ITEM 2: vinta = SQUADRA dell'utente == squadra vincitrice. In 1v1 (team =
+      // seat, winnerTeam ?? winnerSeat) coincide col vecchio `winnerSeat === seat`.
+      const w = winnerTeamOf(match);
+      if (w !== null && w === teamOf(player)) matchesWon += 1;
     }
     const matchesLost = matchesPlayed - matchesWon;
     const winRate = matchesPlayed === 0 ? 0 : matchesWon / matchesPlayed;
@@ -327,19 +364,24 @@ export class MemoryStatsStore implements StatsStore {
 
     return pageItems.map(({ player, match }) => {
       const yourSeat = player.seat;
-      const oppSeat = (1 - yourSeat) as Seat;
-      const opp = this.players.find((p) => p.matchId === match.id && p.seat === oppSeat);
-      const result: "won" | "lost" =
-        match.winnerSeat !== null && match.winnerSeat === yourSeat ? "won" : "lost";
+      const yourTeam = teamOf(player);
+      // ITEM 2: coppia = tutti i posti della squadra; avversari = i posti dell'altra
+      // squadra. In 1v1 (una squadra = un posto) "mine" ha 1 posto e "opp" 1 posto:
+      // aggregati e nomi coincidono con la vecchia logica per-posto.
+      const { mine, opp } = this.splitByTeam(match.id, yourTeam);
+      const w = winnerTeamOf(match);
+      const result: "won" | "lost" = w !== null && w === yourTeam ? "won" : "lost";
       return {
         matchId: match.id,
         endedAt: match.endedAt ? match.endedAt.getTime() : null,
         result,
-        opponentName: opp?.displayName ?? "Avversario",
-        opponentIsGuest: opp?.isGuest ?? false,
-        yourScore: this.sumScore(match.id, yourSeat),
-        opponentScore: this.sumScore(match.id, oppSeat),
-        // Conteggio smazzate = punteggi del posto dell'utente (= numero di smazzate).
+        opponentName: this.teamLabel(opp),
+        // Rappresentante della coppia avversaria (posto minore) per il flag ospite.
+        opponentIsGuest: opp[0]?.isGuest ?? false,
+        yourScore: mine.reduce((acc, p) => acc + this.sumScore(match.id, p.seat), 0),
+        opponentScore: opp.reduce((acc, p) => acc + this.sumScore(match.id, p.seat), 0),
+        // Conteggio smazzate = righe del PROPRIO posto (una per smazzata): mai la
+        // somma dei due posti della coppia (raddoppierebbe le smazzate).
         dealsCount: this.handScores.filter((hs) => hs.matchId === match.id && hs.seat === yourSeat)
           .length,
       };
@@ -354,43 +396,40 @@ export class MemoryStatsStore implements StatsStore {
     if (!match) return null;
 
     const yourSeat = me.seat;
-    const oppSeat = (1 - yourSeat) as Seat;
-    const opp = this.players.find((p) => p.matchId === matchId && p.seat === oppSeat);
+    const yourTeam = teamOf(me);
+    // ITEM 2: lati you/opponent AGGREGATI PER COPPIA. In 1v1 ogni squadra ha un solo
+    // posto → aggregati/nomi identici a prima.
+    const { mine, opp } = this.splitByTeam(matchId, yourTeam);
 
+    const w = winnerTeamOf(match);
     const result: "won" | "lost" | null =
-      match.status !== "completed"
-        ? null
-        : match.winnerSeat !== null && match.winnerSeat === yourSeat
-          ? "won"
-          : "lost";
+      match.status !== "completed" ? null : w !== null && w === yourTeam ? "won" : "lost";
 
     const handsOfMatch = this.hands
       .filter((h) => h.matchId === matchId)
       .sort((a, b) => a.handNumber - b.handNumber);
 
-    const deals: MatchDeal[] = handsOfMatch.map((h) => {
-      const you = this.sideOf(h, yourSeat);
-      const opponent = this.sideOf(h, oppSeat);
-      return {
-        numeroSmazzata: h.handNumber,
-        dealerSeat: h.dealerSeat,
-        closerSeat: h.closerSeat,
-        you,
-        opponent,
-      };
-    });
+    const mySeats = mine.map((p) => p.seat);
+    const oppSeats = opp.map((p) => p.seat);
+    const deals: MatchDeal[] = handsOfMatch.map((h) => ({
+      numeroSmazzata: h.handNumber,
+      dealerSeat: h.dealerSeat,
+      closerSeat: h.closerSeat,
+      you: this.sideOfTeam(h, mySeats),
+      opponent: this.sideOfTeam(h, oppSeats),
+    }));
 
     return {
       matchId: match.id,
       endedAt: match.endedAt ? match.endedAt.getTime() : null,
       status: match.status,
       result,
-      opponent: { name: opp?.displayName ?? "Avversario", isGuest: opp?.isGuest ?? false },
+      opponent: { name: this.teamLabel(opp), isGuest: opp[0]?.isGuest ?? false },
       targetScore: match.targetScore,
       yourSeat,
       finalScore: {
-        you: this.sumScore(matchId, yourSeat),
-        opponent: this.sumScore(matchId, oppSeat),
+        you: mySeats.reduce((acc, s) => acc + this.sumScore(matchId, s), 0),
+        opponent: oppSeats.reduce((acc, s) => acc + this.sumScore(matchId, s), 0),
       },
       deals,
     };
@@ -410,18 +449,48 @@ export class MemoryStatsStore implements StatsStore {
     return total;
   }
 
-  /** Costruisce il lato (you/opponent) di una smazzata dal suo hand_score, con default a zero. */
-  private sideOf(hand: HandRec, seat: Seat): MatchDealSide {
-    const hs = this.handScores.find((s) => s.handId === hand.handId && s.seat === seat);
+  /**
+   * ITEM 2: divide i posti di una partita in "mine" (squadra dell'utente) e "opp"
+   * (squadra avversaria), ciascuno ordinato per posto crescente. In 1v1 ogni gruppo
+   * ha un solo posto → equivale alla vecchia coppia (yourSeat, 1 - yourSeat).
+   */
+  private splitByTeam(matchId: string, yourTeam: TeamId): { mine: PlayerRec[]; opp: PlayerRec[] } {
+    const all = this.players
+      .filter((p) => p.matchId === matchId)
+      .sort((a, b) => a.seat - b.seat);
     return {
-      puntiSmazzata: hs?.totalDelta ?? 0,
-      puntiCarteInMano: hs?.ptsPenaltyHand ?? 0,
-      burrachiPuliti: hs?.burrachiPuliti ?? 0,
-      burrachiSporchi: hs?.burrachiSporchi ?? 0,
-      pozzettoPreso: hs ? hs.ptsPozzetto === 0 : false,
-      pozzettoInDiretta: hs?.pozzettoInDiretta ?? false,
-      haChiuso: hand.closerSeat === seat,
-      malusPozzetto: hs ? hs.ptsPozzetto === -100 : false,
+      mine: all.filter((p) => teamOf(p) === yourTeam),
+      opp: all.filter((p) => teamOf(p) !== yourTeam),
+    };
+  }
+
+  /** Etichetta della coppia (i nomi uniti da " e "); in 1v1 è il solo nome avversario. */
+  private teamLabel(players: PlayerRec[]): string {
+    return players.map((p) => p.displayName).join(" e ") || "Avversario";
+  }
+
+  /**
+   * ITEM 2: costruisce il lato di UNA smazzata AGGREGANDO i posti indicati (la coppia).
+   * I fatti di coppia vivono sulla riga CANONICA (l'altra ha ptsMelds/ptsBonus/
+   * ptsPozzetto = 0), quindi la SOMMA non li duplica; le penalità di mano si sommano
+   * (carte di ENTRAMBI i compagni). In 1v1 `seats` ha un solo posto → identico a prima.
+   */
+  private sideOfTeam(hand: HandRec, seats: Seat[]): MatchDealSide {
+    const rows = this.handScores.filter(
+      (s) => s.handId === hand.handId && seats.includes(s.seat),
+    );
+    const sum = (f: (r: HandScoreRec) => number): number => rows.reduce((a, r) => a + f(r), 0);
+    return {
+      puntiSmazzata: sum((r) => r.totalDelta),
+      puntiCarteInMano: sum((r) => r.ptsPenaltyHand),
+      burrachiPuliti: sum((r) => r.burrachiPuliti),
+      burrachiSporchi: sum((r) => r.burrachiSporchi),
+      // Il MALUS (-100) del pozzetto compare su UNA sola riga della coppia (canonica);
+      // "preso" = nessuna riga in malus. In 1v1 (1 riga) coincide con `ptsPozzetto === 0`.
+      pozzettoPreso: rows.length > 0 && rows.every((r) => r.ptsPozzetto === 0),
+      pozzettoInDiretta: rows.some((r) => r.pozzettoInDiretta),
+      haChiuso: hand.closerSeat !== null && seats.includes(hand.closerSeat),
+      malusPozzetto: rows.some((r) => r.ptsPozzetto === -100),
     };
   }
 }

@@ -4,4 +4,5 @@ dist/
 .env.*
 !.env.example
 *.log
-drizzle/meta/
+# NB: drizzle/meta/ (journal + snapshot) DEVE essere versionato: senza il journal
+# `npm run db:migrate` fallisce con "Can't find meta/_journal.json".

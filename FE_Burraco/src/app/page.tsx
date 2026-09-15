@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Card } from "@/lib/contract";
-import { useGameSocket } from "@/lib/useGameSocket";
+import type { Card, SeatPublic, TeamId } from "@/lib/contract";
+import { useGameSocket, type TableMode } from "@/lib/useGameSocket";
 import { useAuth } from "@/lib/useAuth";
 import { useLobbyList, useLeaveOnPageHide } from "@/lib/lobby";
 import { AuthPanel, type AuthMode } from "@/components/AuthPanel";
@@ -52,6 +52,9 @@ export default function Page() {
   const [showProfile, setShowProfile] = useState(false);
   // Modale "Apri un tavolo" (door a). Aperta dalla lobby; chiusa a join riuscito.
   const [showOpenModal, setShowOpenModal] = useState(false);
+  // MODALITÀ scelta in lobby (1v1/2v2): sorgente unica per "Gioca subito",
+  // "Apri un tavolo" e per l'etichetta informativa nella modale. Default 1v1.
+  const [tableMode, setTableMode] = useState<TableMode>({ numeroGiocatori: 2, modalita: "individuale" });
   // Ingresso diretto al tavolo per l'ospite con codice: la vetrina/AuthPanel
   // deposita qui il codice; l'effetto sotto lo consuma appena l'auth è pronta.
   const [pendingRoom, setPendingRoom] = useState<string | null>(null);
@@ -59,6 +62,12 @@ export default function Page() {
   // Stato di SELEZIONE locale (nessuna regola: solo UI).
   const [selectedCards, setSelectedCards] = useState<string[]>([]);
   const [selectedMeldId, setSelectedMeldId] = useState<string | null>(null);
+  // Ultimo tentativo di sostituzione della matta (meld + carta), memorizzato per
+  // poter RIPETERE la mossa con la scelta cima/fondo quando il server risponde
+  // WILD_EDGE_REQUIRED. Nessuna logica di regole: si conserva solo l'intenzione.
+  const [wildAttempt, setWildAttempt] = useState<{ meldId: string; cardId: string } | null>(
+    null,
+  );
   // Conferma modale dell'annullamento partita (§5.1) — stato UI locale.
   const [confirmingAbort, setConfirmingAbort] = useState(false);
 
@@ -241,9 +250,11 @@ export default function Page() {
           connecting={connecting}
           sitRejected={g.sitRejected}
           onDismissSitRejected={g.dismissSitRejected}
+          mode={tableMode}
+          onChangeMode={setTableMode}
           onQuickMatch={() => {
             g.dismissJoinRejected();
-            g.quickMatch(name);
+            g.quickMatch(name, tableMode);
           }}
           onOpenTable={() => {
             g.dismissJoinRejected();
@@ -297,10 +308,11 @@ export default function Page() {
 
         {showOpenModal && (
           <OpenTableModal
+            mode={tableMode}
             openRejected={g.openRejected}
             errorMessage={g.errorMessage}
             onDismissRejected={g.dismissOpenRejected}
-            onConfirm={(code, isPrivate) => g.openTable(code, isPrivate, name)}
+            onConfirm={(code, isPrivate) => g.openTable(code, isPrivate, name, tableMode)}
             onCancel={() => {
               setShowOpenModal(false);
               g.abortConnection();
@@ -330,6 +342,10 @@ export default function Page() {
         resumed={g.resumed}
         merged={g.merged}
         onCancel={g.leaveToLobby}
+        seatsTotal={g.config?.numeroGiocatori ?? 2}
+        modalita={g.config?.modalita}
+        players={g.players}
+        yourSeat={g.yourSeat}
       />
     );
   }
@@ -337,11 +353,81 @@ export default function Page() {
   /* ── Partita ───────────────────────────────────────────────────────── */
   const s = g.state;
   const you = g.yourSeat ?? 0;
-  const oppSeat = (1 - you) as 0 | 1;
+  // Numero di postazioni del tavolo: 2 (1v1) o 4 (coppie). Guida `data-seats` e il
+  // ramo delle targhe. In 1v1 `is2v2` è false → resa identica a prima.
+  const seatsTotal = g.config?.numeroGiocatori ?? 2;
+  const is2v2 = seatsTotal === 4;
+
+  // C3/C4: lo stato porta `seats[]` (conteggio per posto) e `scores[]` PER SQUADRA.
+  const mySeatView = s.seats.find((x) => x.seat === you);
+  const youTeam = mySeatView?.team ?? you;
+  // Squadra avversaria: l'ALTRA fra le (esattamente due) squadre al tavolo.
+  const otherTeam =
+    s.seats.map((x) => x.team).find((t) => t !== youTeam) ?? (youTeam === 0 ? 1 : 0);
+
   const isMyTurn = s.whoseTurn === g.yourSeat;
+  // Nome del giocatore ATTIVO (whoseTurn): in 1v1, fuori dal tuo turno, è l'avversario.
+  const activePlayer = g.players.find((p) => p.seat === s.whoseTurn);
+  const activeName = activePlayer?.displayName ?? "Avversario";
+
+  // Riferimenti all'UNICO avversario 1v1 (usati SOLO nel ramo a 2 posti, invariato).
+  const oppSeatView = s.seats.find((x) => x.seat !== you);
+  const opponentHandCount = oppSeatView?.handCount ?? 0;
   const opponent = g.players.find((p) => p.seat !== g.yourSeat);
   const opponentName = opponent?.displayName ?? "Avversario";
   const opponentConnected = opponent?.connectionStatus !== "disconnected";
+
+  // Posti "altri" per le targhe a 4 postazioni. Il COMPAGNO è l'altro posto della
+  // TUA squadra (server-driven via `team`, mai dedotto dal posto, P4); gli avversari
+  // sono i due posti dell'altra squadra, disposti a Ovest/Est per offset orario.
+  const otherSeatViews = s.seats.filter((x) => x.seat !== you);
+  const partnerView = is2v2 ? otherSeatViews.find((x) => x.team === youTeam) : undefined;
+  const relOffset = (seat: number) => (seat - you + seatsTotal) % seatsTotal;
+  const opponentViews = is2v2
+    ? otherSeatViews.filter((x) => x.team !== youTeam).sort((a, b) => relOffset(a.seat) - relOffset(b.seat))
+    : [];
+  const westView = opponentViews[0]; // offset 1 (giro orario)
+  const eastView = opponentViews[1]; // offset 3
+
+  // Punteggi per SQUADRA. 1v1 conserva "Tu / <avversario>"; 2v2 usa "Noi / Loro".
+  const youScoreLabel = is2v2 ? "Noi" : "Tu";
+  const oppScoreLabel = is2v2 ? "Loro" : opponentName;
+  const youScore = s.scores[youTeam] ?? 0;
+  const oppScore = s.scores[otherTeam] ?? 0;
+
+  // 2v2: qualsiasi ALTRO posto (compagno o avversario) può essere offline.
+  const disconnectedOthers = is2v2
+    ? g.players.filter((p) => p.seat !== you && p.connectionStatus === "disconnected")
+    : [];
+
+  // Distinzione di squadra per i Melds (P4): server-driven via `ownerTeam`, mai per
+  // posto. In 1v1 `youTeam === yourSeat`, quindi il raggruppamento "Noi/Loro" è identico.
+  const teamOf = (team: TeamId): "us" | "them" => (team === youTeam ? "us" : "them");
+
+  // Targa di un posto "altro" (compagno/avversario) a 4 postazioni.
+  const renderOtherPlate = (
+    view: SeatPublic | undefined,
+    area: string,
+    teamKind: "us" | "them",
+    crest: string,
+    label: string,
+  ) => {
+    if (!view) return null;
+    const active = s.whoseTurn === view.seat;
+    const connected = view.connectionStatus !== "disconnected";
+    const name = g.players.find((p) => p.seat === view.seat)?.displayName ?? `Giocatore ${view.seat + 1}`;
+    return (
+      <div className={`seat-plate ${area}`} data-team={teamKind} data-active={active ? "true" : "false"}>
+        <span className="crest" aria-hidden="true">{crest}</span>
+        <span className="seat-name">{name}</span>
+        <span className="team-tag">{label}</span>
+        <span className="seat-hand">{view.handCount} in mano</span>
+        {active && <span className="turn-dot" aria-hidden="true" />}
+        {!connected && <span className="seat-off">offline</span>}
+      </div>
+    );
+  };
+
   const phaseHint =
     s.phase === "must_draw" ? "Pesca dal mazzo o dallo scarto." : "Cala i tuoi giochi, poi scarta per concludere.";
 
@@ -389,9 +475,9 @@ export default function Page() {
         </div>
       )}
 
-      {/* Avversario offline: rientro in corso entro la finestra di grazia; nel
+      {/* Avversario offline (1v1): rientro in corso entro la finestra di grazia; nel
           frattempo è possibile terminare il tavolo (annulla la partita). */}
-      {!opponentConnected && (
+      {!is2v2 && !opponentConnected && (
         <div className="banner" data-tone="warn" role="status" aria-live="polite">
           <span className="spinner" aria-hidden="true" />
           <span className="banner-body">
@@ -405,15 +491,37 @@ export default function Page() {
         </div>
       )}
 
+      {/* Posto offline (2v2): può essere compagno O avversario. Banner informativo;
+          il server gestisce grazia/forfait. Per terminare si usa "Annulla partita"
+          (sempre disponibile in alto). Resa funzionale: la rifinitura è di Fase 4. */}
+      {is2v2 && disconnectedOthers.length > 0 && (
+        <div className="banner" data-tone="warn" role="status" aria-live="polite">
+          <span className="spinner" aria-hidden="true" />
+          <span className="banner-body">
+            <span className="banner-title">
+              {disconnectedOthers.map((p) => p.displayName).join(", ")}
+              {disconnectedOthers.length === 1 ? " ha perso la connessione" : " hanno perso la connessione"}
+            </span>
+            <span className="banner-sub">
+              Rientro in corso: qualche minuto per riconnettersi e riprendere la partita.
+            </span>
+          </span>
+        </div>
+      )}
+
       {/* ── Header / Scoreboard ───────────────────────────────────────── */}
       <div className="topbar">
         <div className="status-line">
           <span className="badge" data-turn={isMyTurn ? "mine" : "theirs"}>
             <span className="dot" aria-hidden="true" />
-            {isMyTurn ? "Tocca a te" : `Turno di ${opponentName}`}
+            {isMyTurn ? "Tocca a te" : `Turno di ${activeName}`}
           </span>
           {isMyTurn && turnEndsAt !== null && <Countdown turnEndsAt={turnEndsAt} />}
-          <OpponentStatus name={opponentName} handCount={s.opponentHandCount} connected={opponentConnected} />
+          {/* 1v1: stato dell'unico avversario nell'header. A 4 postazioni l'informazione
+              per-giocatore vive sulle targhe attorno al tavolo (nome/conteggio/turno/offline). */}
+          {!is2v2 && (
+            <OpponentStatus name={opponentName} handCount={opponentHandCount} connected={opponentConnected} />
+          )}
           {/* Annulla partita (§5.1): azione discreta nell'area comandi in alto, MAI
               accanto a presa/scarto (che vivono nella barra in basso). Sempre
               disponibile durante la partita. Apre una conferma modale. */}
@@ -429,13 +537,13 @@ export default function Page() {
         </div>
         <div className="scoreboard">
           <div className="chip you">
-            <span className="lbl">Tu</span>
-            <span className="val">{s.scores[you]}</span>
+            <span className="lbl">{youScoreLabel}</span>
+            <span className="val">{youScore}</span>
           </div>
           <span className="vs" aria-hidden="true">/</span>
           <div className="chip">
-            <span className="lbl">{opponentName}</span>
-            <span className="val">{s.scores[oppSeat]}</span>
+            <span className="lbl">{oppScoreLabel}</span>
+            <span className="val">{oppScore}</span>
           </div>
           <div className="chip">
             <span className="lbl">Obiettivo</span>
@@ -447,26 +555,46 @@ export default function Page() {
       {/* Riconnessione propria + "stato ripristinato". */}
       <ConnectionBanner connPhase={g.connPhase} resumed={g.resumed} />
 
-      {/* Turno + fase, in evidenza. */}
-      <TurnBanner isMyTurn={isMyTurn} phaseHint={phaseHint} opponentName={opponentName} />
+      {/* Turno + fase, in evidenza. `activeName` è il giocatore di mano (in 1v1 =
+          avversario → testo identico a prima). */}
+      <TurnBanner isMyTurn={isMyTurn} phaseHint={phaseHint} opponentName={activeName} />
+
+      {/* Suggerimento "ruota il telefono": SOLO 2v2 e SOLO in portrait stretto
+          (la visibilità è decisa dal CSS via media query). In portrait le 4
+          postazioni non stanno affiancate (spec tavolo §5.2): il tavolo degrada
+          a vista compatta e il landscape è la via maestra. Nessuna logica. */}
+      {is2v2 && (
+        <p className="rotate-hint" role="note">
+          <span className="rotate-ic" aria-hidden="true">⟳</span>
+          Ruota il telefono in orizzontale per la vista completa del tavolo.
+        </p>
+      )}
 
       {/* ── Tavolo: griglia a postazioni (data-seats), isola centrale FISSA ──
-          v1 = 1v1 (data-seats="2"): avversario a Nord, tu a Sud, isola al centro.
-          La struttura è predisposta a 4 postazioni (solo layout): il CSS di
-          data-seats="4" esiste già e le targhe/aree si generalizzano owner→team
-          senza riscrittura. NESSUNA regola 2v2 è implementata qui. */}
-      <div className="table-grid" data-seats="2">
-        {/* Postazione avversario (Nord) — squadra "Loro" (acciaio/blu ● ). */}
-        <div className="seat-plate seat-north" data-team="them" data-active={!isMyTurn ? "true" : "false"}>
-          <span className="crest" aria-hidden="true">●</span>
-          <span className="seat-name">{opponentName}</span>
-          <span className="team-tag">Loro</span>
-          <span className="seat-hand">{s.opponentHandCount} in mano</span>
-          {!isMyTurn && <span className="turn-dot" aria-hidden="true" />}
-          {!opponentConnected && <span className="seat-off">offline</span>}
-        </div>
+          1v1 (data-seats="2"): avversario a Nord, tu a Sud, isola al centro.
+          2v2 (data-seats="4"): compagno a Nord, avversari a Ovest/Est (giro orario),
+          tu a Sud; il CSS di data-seats="4" esiste già (aree north/west/east/south).
+          Il client NON calcola regole: legge `state.seats[]` e la squadra dal server. */}
+      <div className="table-grid" data-seats={String(seatsTotal)}>
+        {/* Postazione a Nord. 1v1: l'avversario ("Loro"). 2v2: il compagno ("Noi"). */}
+        {!is2v2 ? (
+          <div className="seat-plate seat-north" data-team="them" data-active={!isMyTurn ? "true" : "false"}>
+            <span className="crest" aria-hidden="true">●</span>
+            <span className="seat-name">{opponentName}</span>
+            <span className="team-tag">Loro</span>
+            <span className="seat-hand">{opponentHandCount} in mano</span>
+            {!isMyTurn && <span className="turn-dot" aria-hidden="true" />}
+            {!opponentConnected && <span className="seat-off">offline</span>}
+          </div>
+        ) : (
+          renderOtherPlate(partnerView, "seat-north", "us", "◆", "Noi · compagno")
+        )}
 
-        {/* Isola centrale FISSA: mazzo, monte scarti, mano avversario, pozzetti. */}
+        {/* 2v2: avversari a Ovest ed Est (squadra "Loro"), in senso di giro orario. */}
+        {is2v2 && renderOtherPlate(westView, "seat-west", "them", "●", "Loro")}
+        {is2v2 && renderOtherPlate(eastView, "seat-east", "them", "●", "Loro")}
+
+        {/* Isola centrale FISSA: mazzo, monte scarti, (mano avversario 1v1), pozzetti. */}
         <div className="board-center">
           <div className="pile" data-actionable={isMyTurn && s.phase === "must_draw" ? "true" : "false"}>
             <div className="slot deck" aria-hidden="true">♣</div>
@@ -486,11 +614,15 @@ export default function Page() {
             <div className="lbl">Monte scarti</div>
           </div>
 
-          <div className="pile">
-            <div className="slot facedown" aria-hidden="true" />
-            <div className="num">{s.opponentHandCount}</div>
-            <div className="lbl">Mano avversario</div>
-          </div>
+          {/* 1v1: mano dell'unico avversario. In 2v2 i conteggi per-posto sono già
+              sulle targhe attorno al tavolo → pila omessa per non fuorviare. */}
+          {!is2v2 && (
+            <div className="pile">
+              <div className="slot facedown" aria-hidden="true" />
+              <div className="num">{opponentHandCount}</div>
+              <div className="lbl">Mano avversario</div>
+            </div>
+          )}
 
           <div className="pile">
             <div className="pozzetti" aria-hidden="true">
@@ -512,6 +644,7 @@ export default function Page() {
         <Melds
           melds={s.tableMelds}
           yourSeat={g.yourSeat}
+          teamOf={teamOf}
           selectedMeldId={selectedMeldId}
           onSelectMeld={toggleMeld}
           isMyTurn={isMyTurn}
@@ -540,6 +673,33 @@ export default function Page() {
         onClearSelection={clearSelection}
       />
 
+      {/* Scelta CIMA/FONDO per la sostituzione della matta in una sequenza:
+          compare SOLO quando il server segnala che entrambe le estremità sono
+          legali (WILD_EDGE_REQUIRED). Il client non deduce nulla dalle regole:
+          si limita a offrire i due controlli e a ripetere la mossa con `edge`.
+          (Controllo minimo/funzionale: la rifinitura è rinviata alla Fase 4.) */}
+      {g.rejection?.code === "WILD_EDGE_REQUIRED" && wildAttempt && (
+        <div className="wild-edge-choice" role="group" aria-label="Sposta la matta">
+          <span>Dove sposto la matta?</span>
+          <button
+            type="button"
+            onClick={() =>
+              g.wildSubstitute(wildAttempt.meldId, wildAttempt.cardId, "top")
+            }
+          >
+            Cima
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              g.wildSubstitute(wildAttempt.meldId, wildAttempt.cardId, "bottom")
+            }
+          >
+            Fondo
+          </button>
+        </div>
+      )}
+
       <ActionBar
         state={s}
         yourSeat={g.yourSeat}
@@ -550,9 +710,14 @@ export default function Page() {
         onDrawDiscard={g.drawDiscard}
         onMeldNew={() => g.meldNew(selectedCards)}
         onMeldExtend={() => selectedMeldId && g.meldExtend(selectedMeldId, selectedCards)}
-        onPinellaSubstitute={() =>
-          selectedMeldId && selectedCards[0] && g.pinellaSubstitute(selectedMeldId, selectedCards[0])
-        }
+        onWildSubstitute={() => {
+          if (selectedMeldId && selectedCards[0]) {
+            // Memorizza il tentativo così da poterlo ripetere con edge se il
+            // server chiede la scelta cima/fondo (WILD_EDGE_REQUIRED).
+            setWildAttempt({ meldId: selectedMeldId, cardId: selectedCards[0] });
+            g.wildSubstitute(selectedMeldId, selectedCards[0]);
+          }
+        }}
         onDiscard={() => selectedCards[0] && g.discard(selectedCards[0])}
         onUndo={g.undoLast}
       />

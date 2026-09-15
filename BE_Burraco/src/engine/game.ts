@@ -5,10 +5,12 @@ import type {
   Meld,
   Phase,
   Seat,
+  TeamId,
 } from "../contract/types.js";
-import { createDeck, shuffle } from "./cards.js";
-import { interpretMeld, type MeldInterpretation } from "./meld.js";
+import { createDeck, orderToRank, rankOrder, shuffle } from "./cards.js";
+import { interpretMeld, type MeldInterpretation, type WildInfo } from "./meld.js";
 import { scoreHand, type SeatEndState } from "./scoring.js";
+import { canonicalSeatForTeam, teamOfSeat, teamScores } from "./teams.js";
 
 /**
  * Motore di gioco autoritativo del Burraco 2p (SERVER-ONLY, decisione #3).
@@ -31,7 +33,9 @@ export interface RejectResult {
     | "MUST_KEEP_CARD_TO_DISCARD"
     | "CANNOT_CLOSE_NO_BURRACO"
     | "ILLEGAL_LAST_DISCARD"
-    | "NO_PINELLA_TO_SUBSTITUTE"
+    | "NO_WILD_TO_SUBSTITUTE"
+    | "WILD_NO_LEGAL_POSITION"
+    | "WILD_EDGE_REQUIRED"
     | "NOTHING_TO_UNDO"
     | "GAME_NOT_ACTIVE";
   reason: string;
@@ -40,8 +44,14 @@ export interface RejectResult {
 /** Effetti collaterali che il Room traduce in eventi WS + persistenza. */
 export type GameEffect =
   | { kind: "turn_changed"; seat: Seat; phase: Phase }
-  | { kind: "hand_ended"; closerSeat: Seat | null; scores: HandScoreDetail[]; cumulative: [number, number] }
-  | { kind: "game_ended"; winnerSeat: Seat | null; finalScores: [number, number] }
+  // `cumulative`/`finalScores` sono i cumulati PER-POSTO (tutti gli N posti): il Room
+  // li proietta per SQUADRA per il contratto (C6/C8). Array (non più tupla a 2) per
+  // reggere i tavoli a 4 posti; in 1v1 restano lunghi 2, invariati.
+  | { kind: "hand_ended"; closerSeat: Seat | null; scores: HandScoreDetail[]; cumulative: number[] }
+  // Fine partita di SQUADRA (P4). `winnerTeam` è la squadra vincitrice (fonte per il
+  // contratto `game_ended.winnerTeam`). `winnerSeat` resta come AUDIT (posto canonico
+  // della squadra vincitrice; in 1v1 coincide col posto vincitore) per la persistenza.
+  | { kind: "game_ended"; winnerTeam: TeamId | null; winnerSeat: Seat | null; finalScores: number[] }
   // Effetti CELEBRATIVI presentazionali (il Room li broadcasta, non persistono).
   | { kind: "pozzetto_taken"; seat: Seat }
   | { kind: "burraco_made"; seat: Seat; meldId: string; clean: boolean };
@@ -68,7 +78,7 @@ interface SeatState {
 /**
  * Snapshot dello stato REVOCABILE di una singola calata nel turno del giocatore
  * attivo. Serve al giornale di undo (`undoStack`): prima di committare una delle
- * tre azioni annullabili (meldNew/meldExtend/pinellaSubstitute) si impila lo
+ * tre azioni annullabili (meldNew/meldExtend/wildSubstitute) si impila lo
  * stato pre-mutazione, così `undoLast` può ripristinarlo esattamente.
  *
  * Le `Card` sono valori immutabili: una copia superficiale degli array basta.
@@ -103,10 +113,9 @@ export class GameEngine {
   discard: Card[] = [];
   pozzetti: Card[][] = [];
   melds: Meld[] = [];
-  seats: [SeatState, SeatState] = [
-    { hand: [], pozzettoTaken: false, pozzettoInDiretta: false },
-    { hand: [], pozzettoTaken: false, pozzettoInDiretta: false },
-  ];
+  // N posti: array (non più tupla a 2). Popolato da startHand con `numeroGiocatori`
+  // mani. In 1v1 resta lungo 2, quindi nulla di osservabile cambia.
+  seats: SeatState[] = [];
 
   dealerSeat: Seat = 0;
   currentSeat: Seat = 1;
@@ -119,10 +128,15 @@ export class GameEngine {
    */
   turnEndsAt: number | null = null;
   handNumber = 0;
-  cumulative: [number, number] = [0, 0];
+  // Cumulati di partita per posto (N posti). Inizializzato nel costruttore a n zeri
+  // e NON azzerato fra le mani. In 1v1 è lungo 2: `scores` redatto resta invariato.
+  cumulative: number[] = [];
   status: "playing" | "hand_ended" | "game_ended" = "playing";
   lastHandScores: HandScoreDetail[] = [];
+  // Esito di partita. `winnerTeam` è la SQUADRA vincitrice (autoritativa, P4);
+  // `winnerSeat` è il posto canonico della squadra (audit; in 1v1 coincide col posto).
   winnerSeat: Seat | null = null;
+  winnerTeam: TeamId | null = null;
 
   /**
    * GIORNALE DI UNDO del turno corrente (in RAM). Pila di snapshot pre-mutazione
@@ -136,6 +150,8 @@ export class GameEngine {
   constructor(config: GameConfig, firstDealer: Seat) {
     this.config = config;
     this.dealerSeat = firstDealer;
+    // Un cumulato per posto, persistente per l'intera partita (mai azzerato fra le mani).
+    this.cumulative = new Array<number>(config.numeroGiocatori).fill(0);
     this.startHand(firstDealer);
   }
 
@@ -143,16 +159,21 @@ export class GameEngine {
 
   private startHand(dealer: Seat): void {
     const deck = shuffle(createDeck());
-    const take = (n: number): Card[] => deck.splice(0, n);
+    const take = (k: number): Card[] => deck.splice(0, k);
 
-    this.seats[0] = { hand: take(11), pozzettoTaken: false, pozzettoInDiretta: false }; // A1: 11 carte
-    this.seats[1] = { hand: take(11), pozzettoTaken: false, pozzettoInDiretta: false };
-    this.pozzetti = [take(11), take(11)]; // A2: due pozzetti da 11
-    this.drawPile = deck; // 64 carte residue
+    const seatCount = this.config.numeroGiocatori; // n posti (1v1: 2)
+    // A1: n mani da 11 carte, distribuite in ordine di posto (0..n-1).
+    this.seats = Array.from({ length: seatCount }, () => ({
+      hand: take(11),
+      pozzettoTaken: false,
+      pozzettoInDiretta: false,
+    }));
+    this.pozzetti = [take(11), take(11)]; // A2: due pozzetti da 11 (uno per squadra)
+    this.drawPile = deck; // carte residue
     this.discard = []; // A3-ter: monte scarti vuoto all'inizio
     this.melds = [];
     this.dealerSeat = dealer;
-    this.currentSeat = (1 - dealer) as Seat; // A6: inizia il non-mazziere
+    this.currentSeat = (dealer + 1) % seatCount; // A6: apre il posto dopo il mazziere
     this.phase = "must_draw";
     this.status = "playing";
     this.handNumber += 1;
@@ -184,7 +205,7 @@ export class GameEngine {
         if (this.discard.length === 0) return this.endHand(null);
         return reject("DECK_EMPTY", "Il mazzo di pesca è esaurito: pesca dal monte scarti.");
       }
-      this.seats[seat].hand.push(this.drawPile.shift()!);
+      this.seatOf(seat).hand.push(this.drawPile.shift()!);
     } else {
       if (this.discard.length === 0) {
         // Se anche il mazzo è vuoto -> entrambe le fonti esaurite: fine smazzata.
@@ -192,7 +213,7 @@ export class GameEngine {
         return reject("EMPTY_DISCARD", "Il monte scarti è vuoto.");
       }
       // A3: si prende l'INTERO monte scarti (inclusa la carta in cima).
-      this.seats[seat].hand.push(...this.discard);
+      this.seatOf(seat).hand.push(...this.discard);
       this.discard = [];
     }
 
@@ -213,8 +234,10 @@ export class GameEngine {
     // house-rule OPZIONALE, attiva solo se `limiteCalatePrimaDelPozzetto` è un
     // numero finito > 0. Con `null` (default) non si rifiuta mai per questo motivo.
     const cap = this.config.limiteCalatePrimaDelPozzetto;
-    if (cap !== null && Number.isFinite(cap) && cap > 0 && !this.seats[seat].pozzettoTaken) {
-      const own = this.melds.filter((m) => m.ownerSeat === seat).length;
+    if (cap !== null && Number.isFinite(cap) && cap > 0 && !this.seatOf(seat).pozzettoTaken) {
+      // P4: il limite pre-pozzetto conta i giochi della SQUADRA, non del posto.
+      const team = teamOfSeat(seat, this.config);
+      const own = this.melds.filter((m) => this.teamOfMeld(m) === team).length;
       if (own >= cap)
         return reject(
           "MELD_LIMIT_REACHED",
@@ -228,7 +251,7 @@ export class GameEngine {
     const interp = interpretMeld(picked);
     if (!interp) return reject("INVALID_MELD", "Le carte non formano un gioco valido.");
 
-    const handAfter = this.seats[seat].hand.length - picked.length;
+    const handAfter = this.seatOf(seat).hand.length - picked.length;
     const guardEmpty = this.guardHandNotEmptied(seat, handAfter);
     if (guardEmpty) return guardEmpty;
 
@@ -252,8 +275,10 @@ export class GameEngine {
 
     const meld = this.melds.find((m) => m.id === meldId);
     if (!meld) return reject("MELD_NOT_FOUND", "Gioco inesistente.");
-    if (meld.ownerSeat !== seat)
-      return reject("NOT_MELD_OWNER", "Puoi ampliare solo i tuoi giochi.");
+    // P4: si può ampliare qualunque gioco della PROPRIA squadra (in coppie anche
+    // quelli del compagno). In 1v1 team===seat → invariato.
+    if (this.teamOfMeld(meld) !== teamOfSeat(seat, this.config))
+      return reject("NOT_MELD_OWNER", "Puoi ampliare solo i giochi della tua squadra.");
 
     const picked = this.pickFromHand(seat, cardIds);
     if (!picked) return reject("CARD_NOT_IN_HAND", "Carte non presenti in mano o duplicate.");
@@ -261,7 +286,7 @@ export class GameEngine {
     const interp = interpretMeld([...meld.cards, ...picked]);
     if (!interp) return reject("INVALID_MELD", "L'ampliamento non forma un gioco valido.");
 
-    const handAfter = this.seats[seat].hand.length - picked.length;
+    const handAfter = this.seatOf(seat).hand.length - picked.length;
     const guardEmpty = this.guardHandNotEmptied(seat, handAfter);
     if (guardEmpty) return guardEmpty;
 
@@ -280,56 +305,179 @@ export class GameEngine {
     return { ok: true, effects };
   }
 
-  pinellaSubstitute(seat: Seat, meldId: string, cardInHand: string): MoveResult {
+  /**
+   * SOSTITUZIONE DELLA MATTA (skill "SOSTITUZIONE DELLA MATTA").
+   *
+   * Il giocatore fornisce la carta naturale di cui la matta calata fa le veci. La
+   * matta può essere QUALSIASI matta presente nel gioco — jolly O pinella (al più
+   * una per gioco, skill). La naturale prende il posto della matta; la matta NON
+   * torna MAI in mano:
+   *  - SEQUENZA: la matta si sposta a cima ("top") o fondo ("bottom"), estendendo
+   *    la scala di una posizione. `edge` è la scelta del giocatore ed è necessaria
+   *    solo quando ENTRAMBE le estremità sono legali; se una sola è legale si usa
+   *    quella; se nessuna lo è → rifiuto.
+   *  - GRUPPO: la matta resta dentro come carta in più (tris→poker); `edge` ignorato.
+   *
+   * Il gioco cresce di una carta: può scattare un burraco (6→7). Resta SPORCO
+   * (la matta è ancora dentro), con UNA SOLA eccezione riservata alla PINELLA: se
+   * la pinella (un 2) finisce in posizione 2 del proprio seme torna naturale e il
+   * gioco diventa pulito. Un JOLLY non è mai una carta naturale: lascia SEMPRE il
+   * gioco sporco.
+   */
+  wildSubstitute(
+    seat: Seat,
+    meldId: string,
+    cardInHand: string,
+    edge?: "top" | "bottom",
+  ): MoveResult {
     const g = this.guardTurn(seat, "may_meld");
     if (g) return g;
 
     const meld = this.melds.find((m) => m.id === meldId);
     if (!meld) return reject("MELD_NOT_FOUND", "Gioco inesistente.");
-    if (meld.ownerSeat !== seat)
-      return reject("NOT_MELD_OWNER", "Puoi agire solo sui tuoi giochi.");
+    // P4: sostituzione della matta consentita sui giochi della PROPRIA squadra
+    // (in coppie anche quelli del compagno). In 1v1 team===seat → invariato.
+    if (this.teamOfMeld(meld) !== teamOfSeat(seat, this.config))
+      return reject("NOT_MELD_OWNER", "Puoi agire solo sui giochi della tua squadra.");
 
-    const card = this.seats[seat].hand.find((c) => c.id === cardInHand);
+    const card = this.seatOf(seat).hand.find((c) => c.id === cardInHand);
     if (!card) return reject("CARD_NOT_IN_HAND", "Carta non presente in mano.");
 
     const before = interpretMeld(meld.cards);
     if (!before) return reject("INVALID_MELD", "Stato del gioco incoerente.");
 
-    // Individua le pinelle (2 usati come matta) presenti nel gioco.
-    const pinelle = before.wilds.filter((w) => w.isPinella);
-    if (pinelle.length === 0)
-      return reject("NO_PINELLA_TO_SUBSTITUTE", "Nel gioco non c'è una pinella da sostituire.");
+    // Qualsiasi matta è sostituibile (jolly o pinella): il gioco ne contiene al più
+    // una. `before.wilds` esclude già i 2 al posto naturale (non sono matte).
+    const wild = before.wilds[0];
+    if (!wild)
+      return reject("NO_WILD_TO_SUBSTITUTE", "Nel gioco non c'è una matta da sostituire.");
+    const wildCard = meld.cards.find((c) => c.id === wild.cardId)!;
 
-    // Prova a sostituire: rimuovi la pinella, inserisci la carta naturale,
-    // rivalida. Deve restare valido e ridurre di uno le matte (recupero reale).
-    for (const p of pinelle) {
-      const rebuilt = meld.cards.filter((c) => c.id !== p.cardId).concat(card);
-      const after = interpretMeld(rebuilt);
-      if (after && after.wildCount === before.wildCount - 1) {
-        // Commit: la carta esce dalla mano, la pinella rientra in mano.
-        // La mano non si svuota (scambio 1:1) → nessun confine col pozzetto qui.
-        const pinellaCard = meld.cards.find((c) => c.id === p.cardId)!;
-        this.pushUndoSnapshot(seat);
-        this.removeFromHand(seat, [card.id]);
-        this.seats[seat].hand.push(pinellaCard);
-        this.replaceMeld(meld.id, this.buildMeld(after, seat, meld.id));
-        return { ok: true, effects: [] };
+    // La carta in mano deve essere ESATTAMENTE la naturale rappresentata dalla
+    // matta: lo si verifica rimpiazzando la matta con la naturale e controllando
+    // che il gioco resti valido, dello stesso tipo, con una matta in meno.
+    const naturalSet = meld.cards.filter((c) => c.id !== wildCard.id).concat(card);
+    const substituted = interpretMeld(naturalSet);
+    if (
+      !substituted ||
+      substituted.type !== before.type ||
+      substituted.wildCount !== before.wildCount - 1
+    )
+      return reject(
+        "NO_WILD_TO_SUBSTITUTE",
+        "La carta indicata non corrisponde alla matta calata.",
+      );
+
+    // Costruisce l'interpretazione RISULTANTE: la naturale entra, la matta RESTA
+    // nel gioco (mai in mano) e il numero di carte cresce di uno.
+    let resultInterp: MeldInterpretation;
+
+    if (before.type === "group") {
+      // GRUPPO: la matta resta dentro come carta in più; nessuna cima/fondo.
+      const grown = interpretMeld(meld.cards.concat(card));
+      if (!grown || grown.type !== "group")
+        return reject("INVALID_MELD", "La sostituzione non forma un gruppo valido.");
+      resultInterp = grown;
+    } else {
+      // SEQUENZA: la matta si sposta a cima/fondo estendendo la run di una
+      // posizione. La finestra [lo, hi] è quella occupata dai naturali dopo la
+      // sostituzione (run consecutiva di lunghezza N).
+      const run = substituted.orderedCards; // naturali consecutivi, ascendenti
+      const seqSuit = run[0]!.suit!;
+      const lo = run[0]!.rank === "A" ? 1 : rankOrder(run[0]!.rank);
+      const hi = lo + run.length - 1;
+      const topLegal = hi + 1 <= 14; // oltre l'Asso alto non si estende
+      const bottomLegal = lo - 1 >= 1; // sotto l'Asso basso non si estende
+
+      if (!topLegal && !bottomLegal)
+        return reject(
+          "WILD_NO_LEGAL_POSITION",
+          "La matta non ha una posizione legale in questa sequenza.",
+        );
+
+      let chosen: "top" | "bottom";
+      if (edge) {
+        // Il giocatore ha indicato l'estremità: se non è legale, si rifiuta (non
+        // si sceglie l'altra al suo posto — si rispetta l'intenzione esplicita).
+        if (edge === "top" && !topLegal)
+          return reject(
+            "WILD_NO_LEGAL_POSITION",
+            "La cima non è una posizione legale per la matta.",
+          );
+        if (edge === "bottom" && !bottomLegal)
+          return reject(
+            "WILD_NO_LEGAL_POSITION",
+            "Il fondo non è una posizione legale per la matta.",
+          );
+        chosen = edge;
+      } else if (topLegal && bottomLegal) {
+        // Ambiguità: il client deve scegliere cima o fondo e ripetere la mossa.
+        return reject(
+          "WILD_EDGE_REQUIRED",
+          "Scegli se spostare la matta in cima o in fondo alla sequenza.",
+        );
+      } else {
+        chosen = topLegal ? "top" : "bottom";
       }
+
+      const edgePos = chosen === "top" ? hi + 1 : lo - 1;
+      const orderedCards =
+        chosen === "top" ? [...run, wildCard] : [wildCard, ...run];
+
+      // Caso-limite RISERVATO ALLA PINELLA: una pinella (un 2) che finisce in
+      // posizione 2 del PROPRIO seme torna NATURALE (non è più matta) → il gioco
+      // diventa pulito. Un JOLLY non è mai naturale: `wild.isPinella` è false e il
+      // gioco resta sempre sporco.
+      const isNaturalTwo = wild.isPinella && edgePos === 2 && wildCard.suit === seqSuit;
+      const wilds: WildInfo[] = isNaturalTwo
+        ? []
+        : [
+            {
+              cardId: wildCard.id,
+              represents: { rank: orderToRank(edgePos), suit: seqSuit },
+              isPinella: wild.isPinella,
+            },
+          ];
+
+      resultInterp = {
+        type: "sequence",
+        orderedCards,
+        wilds,
+        wildCount: wilds.length,
+        clean: wilds.length === 0,
+        isBurraco: orderedCards.length >= 7,
+      };
     }
-    return reject(
-      "NO_PINELLA_TO_SUBSTITUTE",
-      "La carta indicata non corrisponde a nessuna pinella calata.",
-    );
+
+    // La naturale esce dalla mano (la matta resta sul tavolo): la mano può
+    // svuotarsi → stessa guardia/gestione pozzetto di meld_extend.
+    const handAfter = this.seatOf(seat).hand.length - 1;
+    const guardEmpty = this.guardHandNotEmptied(seat, handAfter);
+    if (guardEmpty) return guardEmpty;
+
+    // Commit (da qui in poi nessun rifiuto): impila lo snapshot annullabile.
+    const wasBurraco = meld.isBurraco;
+    this.pushUndoSnapshot(seat);
+    this.removeFromHand(seat, [card.id]);
+    const rebuilt = this.buildMeld(resultInterp, seat, meld.id);
+    this.replaceMeld(meld.id, rebuilt);
+
+    const effects: GameEffect[] = [];
+    // Burraco realizzato SOLO alla transizione < 7 → >= 7 carte (6→7 tipica).
+    if (!wasBurraco && rebuilt.isBurraco)
+      effects.push({ kind: "burraco_made", seat, meldId: rebuilt.id, clean: rebuilt.clean });
+    effects.push(...this.afterMeldMutation(seat, handAfter));
+    return { ok: true, effects };
   }
 
   discardCard(seat: Seat, cardId: string): MoveResult {
     const g = this.guardTurn(seat, "may_meld");
     if (g) return g;
 
-    const card = this.seats[seat].hand.find((c) => c.id === cardId);
+    const card = this.seatOf(seat).hand.find((c) => c.id === cardId);
     if (!card) return reject("CARD_NOT_IN_HAND", "Carta non presente in mano.");
 
-    const willEmpty = this.seats[seat].hand.length === 1;
+    const willEmpty = this.seatOf(seat).hand.length === 1;
 
     // Ultimo scarto non può essere una matta (jolly o pinella).
     if (willEmpty && card.isWild)
@@ -339,16 +487,17 @@ export class GameEngine {
       );
 
     if (willEmpty) {
-      const s = this.seats[seat];
-      if (!s.pozzettoTaken && this.pozzetti.length > 0) {
-        // Pozzetto DIFFERITA: prende il pozzetto ma lo gioca dal turno successivo.
+      const team = teamOfSeat(seat, this.config);
+      if (!this.teamHasPozzetto(team) && this.pozzetti.length > 0) {
+        // Pozzetto DIFFERITA: prende il pozzetto DELLA COPPIA (uno per coppia,
+        // riservato) ma lo gioca dal turno successivo.
         this.removeFromHand(seat, [cardId]);
         this.discard.push(card);
         this.takePozzetto(seat);
         const turn = this.endTurn();
         return { ok: true, effects: [{ kind: "pozzetto_taken", seat }, ...turn.effects] };
       }
-      // Deve chiudere: serve almeno un burraco (variante italiana: qualsiasi).
+      // Deve chiudere: serve almeno un burraco DI COPPIA (variante italiana: qualsiasi).
       if (!this.canClose(seat))
         return reject(
           "CANNOT_CLOSE_NO_BURRACO",
@@ -368,7 +517,7 @@ export class GameEngine {
 
   /**
    * ANNULLA l'ultima calata annullabile del PROPRIO turno (meldNew/meldExtend/
-   * pinellaSubstitute). Server-autoritativo: protetto dal guard di turno/fase
+   * wildSubstitute). Server-autoritativo: protetto dal guard di turno/fase
    * (solo proprio turno, solo may_meld, solo partita in corso) → l'avversario non
    * annulla mai mosse altrui e, dopo lo scarto (fase non più may_meld), l'undo è
    * impossibile. Se il giornale è vuoto → NOTHING_TO_UNDO. Altrimenti fa POP e
@@ -402,15 +551,39 @@ export class GameEngine {
   /* ─────────────────────────── helper interni ─────────────────────────── */
 
   /**
+   * Accesso GUARDATO al posto. Con `Seat` numerico, indicizzare `seats` restituisce
+   * `SeatState | undefined` (noUncheckedIndexedAccess): il seat è già validato dai
+   * guard di turno a monte, quindi il throw copre solo un indice fuori range (bug
+   * interno), mai un input del client. Comportamento invariato rispetto all'accesso
+   * diretto per i seat legittimi 0/1.
+   */
+  private seatOf(seat: Seat): SeatState {
+    const s = this.seats[seat];
+    if (!s) throw new Error(`Seat ${seat} inesistente`);
+    return s;
+  }
+
+  /**
+   * SQUADRA proprietaria di un gioco (P4). `ownerTeam` è la fonte autoritativa:
+   * `buildMeld` la popola sempre, quindi in gioco reale ogni proprietà è di squadra.
+   * Il fallback `teamOfSeat(m.ownerSeat, config)` copre SOLO i meld costruiti FUORI
+   * dal motore (fixture di test precedenti al campo): non scatta mai in partita e,
+   * anche scattando, restituisce la squadra CORRETTA (mai un confronto per posto).
+   */
+  private teamOfMeld(m: Meld): TeamId {
+    return m.ownerTeam ?? teamOfSeat(m.ownerSeat, this.config);
+  }
+
+  /**
    * Impila lo stato REVOCABILE del turno del seat attivo PRIMA di committare una
    * calata annullabile. Copie superficiali sufficienti (Card immutabili; la
    * shallow-copy di `melds` preserva i riferimenti agli oggetti Meld precedenti).
    */
   private pushUndoSnapshot(seat: Seat): void {
     this.undoStack.push({
-      hand: this.seats[seat].hand.slice(),
-      pozzettoTaken: this.seats[seat].pozzettoTaken,
-      pozzettoInDiretta: this.seats[seat].pozzettoInDiretta,
+      hand: this.seatOf(seat).hand.slice(),
+      pozzettoTaken: this.seatOf(seat).pozzettoTaken,
+      pozzettoInDiretta: this.seatOf(seat).pozzettoInDiretta,
       melds: this.melds.slice(),
       pozzetti: this.pozzetti.map((p) => p.slice()),
       phase: this.phase,
@@ -441,14 +614,28 @@ export class GameEngine {
   }
 
   /**
-   * Vieta di svuotare la mano con una calata quando il pozzetto è già preso
-   * (bisogna tenere una carta per lo scarto/chiusura). Se il pozzetto NON è
-   * ancora preso, svuotare è lecito: scatterà la presa "in diretta".
+   * Una SQUADRA ha preso il proprio pozzetto se ALMENO uno dei suoi posti l'ha
+   * preso (skill "Pozzetto: uno per coppia"): un solo pozzetto per coppia, riservato.
+   * In individuale (team = seat) equivale al flag per-posto: comportamento 1v1 invariato.
+   */
+  private teamHasPozzetto(team: TeamId): boolean {
+    return this.seats.some(
+      (s, i) => s.pozzettoTaken && teamOfSeat(i as Seat, this.config) === team,
+    );
+  }
+
+  /**
+   * Vieta di svuotare la mano con una calata quando la COPPIA ha già preso il
+   * pozzetto (bisogna tenere una carta per lo scarto/chiusura). Se la coppia NON
+   * ha ancora il proprio pozzetto ed è disponibile, svuotare è lecito: scatterà la
+   * presa "in diretta". Il controllo è per SQUADRA (P4): in 2v2 il pozzetto è uno
+   * per coppia, quindi un compagno non ne prende un secondo per la propria coppia.
    */
   private guardHandNotEmptied(seat: Seat, handAfter: number): RejectResult | null {
-    // Se il pozzetto è già preso (o non ce ne sono da prendere) non si può
-    // svuotare la mano con una calata: serve una carta per lo scarto/chiusura.
-    if (handAfter === 0 && (this.seats[seat].pozzettoTaken || this.pozzetti.length === 0))
+    // Se la coppia ha già preso il pozzetto (o non ce ne sono da prendere) non si
+    // può svuotare la mano con una calata: serve una carta per lo scarto/chiusura.
+    const team = teamOfSeat(seat, this.config);
+    if (handAfter === 0 && (this.teamHasPozzetto(team) || this.pozzetti.length === 0))
       return reject(
         "MUST_KEEP_CARD_TO_DISCARD",
         "Devi tenere almeno una carta per lo scarto finale.",
@@ -459,13 +646,16 @@ export class GameEngine {
   /**
    * Gestione post-calata: eventuale presa pozzetto "in diretta".
    * Ritorna gli effetti celebrativi generati (pozzetto_taken) da concatenare.
+   * La presa è per COPPIA (P4): consentita solo se la squadra non ha già il proprio
+   * pozzetto e ne resta almeno uno disponibile (mai due alla stessa coppia).
    */
   private afterMeldMutation(seat: Seat, handAfter: number): GameEffect[] {
-    if (handAfter === 0 && !this.seats[seat].pozzettoTaken && this.pozzetti.length > 0) {
+    const team = teamOfSeat(seat, this.config);
+    if (handAfter === 0 && !this.teamHasPozzetto(team) && this.pozzetti.length > 0) {
       // Pozzetto IN DIRETTA: prende subito il pozzetto e continua lo stesso turno.
       this.takePozzetto(seat);
       // Marca la MODALITÀ di presa (in diretta): svuotata la mano PRIMA dello scarto.
-      this.seats[seat].pozzettoInDiretta = true;
+      this.seatOf(seat).pozzettoInDiretta = true;
       // CONFINE COL POZZETTO: l'undo NON attraversa la presa. La calata che ha
       // preso il pozzetto e tutte le calate precedenti del turno diventano NON
       // annullabili; le mosse successive ricostruiscono un nuovo giornale dallo
@@ -478,21 +668,30 @@ export class GameEngine {
 
   private takePozzetto(seat: Seat): void {
     const pozzetto = this.pozzetti.shift();
-    if (pozzetto) this.seats[seat].hand.push(...pozzetto);
-    this.seats[seat].pozzettoTaken = true;
+    if (pozzetto) this.seatOf(seat).hand.push(...pozzetto);
+    this.seatOf(seat).pozzettoTaken = true;
   }
 
   private canClose(seat: Seat): boolean {
+    // Chiusura di coppia (skill "CHIUSURA" + "MODALITA' A COPPIE"): servono
+    //  (1) il pozzetto DELLA COPPIA preso (da uno qualsiasi dei due membri) e
+    //  (2) un burraco DELLA SQUADRA (in coppie basta il burraco del compagno).
+    // Entrambi i controlli sono per SQUADRA (P4). In 1v1 team===seat e, arrivati a
+    // questo punto del flusso, il posto ha già preso il proprio pozzetto: condizione
+    // invariata.
+    const team = teamOfSeat(seat, this.config);
+    if (!this.teamHasPozzetto(team)) return false;
     return this.melds.some(
       (m) =>
-        m.ownerSeat === seat &&
+        this.teamOfMeld(m) === team &&
         m.isBurraco &&
         (this.config.varianteChiusura === "italiana" || m.clean),
     );
   }
 
   private endTurn(): OkResult {
-    this.currentSeat = (1 - this.currentSeat) as Seat;
+    // Rotazione oraria del turno su n posti. In 1v1 (currentSeat+1)%2 === 1-currentSeat.
+    this.currentSeat = (this.currentSeat + 1) % this.config.numeroGiocatori;
     this.phase = "must_draw";
     this.undoStack = []; // fine turno: nulla è più annullabile
     this.startTurnClock(); // nuova deadline per il giocatore entrante
@@ -512,37 +711,59 @@ export class GameEngine {
       pozzettoTaken: s.pozzettoTaken,
       pozzettoInDiretta: s.pozzettoInDiretta,
     }));
-    const scores = scoreHand(seatStates, this.melds, closerSeat);
+    const scores = scoreHand(seatStates, this.melds, closerSeat, this.config);
     this.lastHandScores = scores;
     this.turnEndsAt = null; // mano conclusa: nessun turno attivo
     this.undoStack = []; // mano conclusa: nulla è più annullabile
 
-    for (const sc of scores) this.cumulative[sc.seat] += sc.totalDelta;
+    for (const sc of scores)
+      this.cumulative[sc.seat] = (this.cumulative[sc.seat] ?? 0) + sc.totalDelta;
 
+    // Cumulati PER-POSTO (tutti gli N posti): il Room li proietta per SQUADRA per il
+    // contratto. In 1v1 è [cum0, cum1]. La VITTORIA è invece decisa sui cumulati di
+    // SQUADRA (P4), somma dei posti della coppia.
+    const perSeatCumulative = this.cumulative.slice();
     const effects: GameEffect[] = [
-      { kind: "hand_ended", closerSeat, scores, cumulative: [...this.cumulative] as [number, number] },
+      { kind: "hand_ended", closerSeat, scores, cumulative: perSeatCumulative },
     ];
 
-    // Fine partita al raggiungimento dell'obiettivo.
-    const [a, b] = this.cumulative;
-    const reached = a >= this.config.punteggioObiettivo || b >= this.config.punteggioObiettivo;
-    let winner: Seat | null = null;
+    // Fine partita al raggiungimento dell'obiettivo, confrontando i cumulati di
+    // SQUADRA. In 1v1 (team = seat) coincide col confronto per-posto: invariato.
+    const teamCumulative = teamScores(this.cumulative, this.config);
+    const target = this.config.punteggioObiettivo;
+    const reached = teamCumulative.some((c) => c >= target);
+    let winnerTeam: TeamId | null = null;
     if (reached) {
-      if (a !== b) {
-        // Vince chi ha il cumulato più alto.
-        winner = a > b ? 0 : 1;
+      const max = Math.max(...teamCumulative);
+      const leaders: TeamId[] = [];
+      teamCumulative.forEach((c, t) => {
+        if (c === max) leaders.push(t);
+      });
+      if (leaders.length === 1) {
+        // Una sola squadra in testa: vince lei.
+        winnerTeam = leaders[0]!;
       } else if (closerSeat !== null) {
-        // Q4: parità esatta all'obiettivo -> vince chi ha CHIUSO la smazzata.
-        winner = closerSeat;
+        // Q4: parità in testa all'obiettivo -> vince la SQUADRA che ha CHIUSO.
+        const closerTeam = teamOfSeat(closerSeat, this.config);
+        if (leaders.includes(closerTeam)) winnerTeam = closerTeam;
       }
-      // Parità esatta SENZA closer (smazzata finita per esaurimento): nessun
-      // vincitore -> si gioca un'altra smazzata (winner resta null).
+      // Parità in testa SENZA closer fra i leader (es. smazzata finita per
+      // esaurimento): nessun vincitore -> si gioca un'altra smazzata (winner null).
     }
 
-    if (reached && winner !== null) {
+    if (reached && winnerTeam !== null) {
       this.status = "game_ended";
-      this.winnerSeat = winner;
-      effects.push({ kind: "game_ended", winnerSeat: winner, finalScores: [a, b] });
+      this.winnerTeam = winnerTeam;
+      // Posto canonico della squadra vincitrice, per l'audit. In 1v1 coincide col
+      // posto vincitore → `winnerSeat` conserva il valore del comportamento 1v1.
+      const winnerSeat = canonicalSeatForTeam(winnerTeam, this.config);
+      this.winnerSeat = winnerSeat;
+      effects.push({
+        kind: "game_ended",
+        winnerTeam,
+        winnerSeat,
+        finalScores: perSeatCumulative,
+      });
     } else {
       // Nuova smazzata: il mazziere alterna (A6).
       this.status = "hand_ended";
@@ -553,13 +774,14 @@ export class GameEngine {
   /** Avvia la smazzata successiva (chiamato dal Room dopo un hand_ended). */
   startNextHand(): void {
     if (this.status !== "hand_ended") return;
-    this.startHand((1 - this.dealerSeat) as Seat);
+    // Il mazziere ruota in senso orario. In 1v1 (dealer+1)%2 === 1-dealer.
+    this.startHand((this.dealerSeat + 1) % this.config.numeroGiocatori);
   }
 
   private pickFromHand(seat: Seat, cardIds: string[]): Card[] | null {
     if (cardIds.length === 0) return null;
     if (new Set(cardIds).size !== cardIds.length) return null; // duplicati nell'input
-    const hand = this.seats[seat].hand;
+    const hand = this.seatOf(seat).hand;
     const picked: Card[] = [];
     for (const id of cardIds) {
       const c = hand.find((h) => h.id === id);
@@ -571,7 +793,7 @@ export class GameEngine {
 
   private removeFromHand(seat: Seat, cardIds: string[]): void {
     const ids = new Set(cardIds);
-    this.seats[seat].hand = this.seats[seat].hand.filter((c) => !ids.has(c.id));
+    this.seatOf(seat).hand = this.seatOf(seat).hand.filter((c) => !ids.has(c.id));
   }
 
   private buildMeld(interp: MeldInterpretation, seat: Seat, keepId?: string): Meld {
@@ -588,6 +810,8 @@ export class GameEngine {
       type: interp.type,
       cards: interp.orderedCards,
       ownerSeat: seat,
+      // P4: la proprietà è di SQUADRA. In individuale team===seat (1v1 invariato).
+      ownerTeam: teamOfSeat(seat, this.config),
       isBurraco: interp.isBurraco,
       clean: interp.clean,
       wildIndices,
@@ -602,14 +826,14 @@ export class GameEngine {
   /* ─────────────────── viste per la redazione (anti-leak) ─────────────────── */
 
   handCount(seat: Seat): number {
-    return this.seats[seat].hand.length;
+    return this.seatOf(seat).hand.length;
   }
 
   handOf(seat: Seat): Card[] {
-    return this.seats[seat].hand;
+    return this.seatOf(seat).hand;
   }
 
   pozzettoTaken(seat: Seat): boolean {
-    return this.seats[seat].pozzettoTaken;
+    return this.seatOf(seat).pozzettoTaken;
   }
 }

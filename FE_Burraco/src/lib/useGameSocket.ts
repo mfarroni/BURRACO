@@ -10,6 +10,7 @@ import type {
   RejectCode,
   Seat,
   ServerMessage,
+  TeamId,
 } from "./contract";
 import type { CelebrationInfo } from "@/components/StateBanners";
 import { getClientId, saveToken, storedToken } from "./sessionIdentity";
@@ -44,11 +45,14 @@ export interface RejectionInfo {
 export interface HandEndedInfo {
   closerSeat: Seat | null;
   scores: HandScoreDetail[];
-  cumulative: [number, number];
+  /** Cumulati PER SQUADRA (C6, `TeamId`). In 1v1 team = seat → [team0, team1]. */
+  cumulative: number[];
 }
 export interface GameEndedInfo {
-  winnerSeat: Seat | null;
-  finalScores: [number, number];
+  /** SQUADRA vincitrice (C8). In 1v1 coincide col posto vincitore. */
+  winnerTeam: TeamId | null;
+  /** Punteggi finali PER SQUADRA (C8). */
+  finalScores: number[];
   /** "forfeit" se la partita è finita per abbandono dell'avversario. */
   reason?: "forfeit";
 }
@@ -99,13 +103,29 @@ export interface MergedInfo {
 }
 
 /**
+ * MODALITÀ del tavolo alla CREAZIONE (open_table / quick_match). Copia allineata a
+ * mano ai campi opzionali del contratto BE (`numeroGiocatori`/`modalita`). Default
+ * 1v1 = { 2, individuale }: chi non la specifica ottiene il comportamento invariato.
+ * Il server è comunque l'autorità: valida e normalizza le combinazioni non ammesse.
+ */
+export interface TableMode {
+  numeroGiocatori: 2 | 4;
+  modalita: "individuale" | "coppie";
+}
+
+/** Modalità 1v1 (default): comportamento storico, invariato. */
+export const DEFAULT_TABLE_MODE: TableMode = { numeroGiocatori: 2, modalita: "individuale" };
+
+/**
  * Intento del PRIMO frame da inviare all'apertura del socket. Alla riconnessione
- * si usa sempre join_room col codice noto (reclaim del posto).
+ * si usa sempre join_room col codice noto (reclaim del posto). La MODALITÀ viaggia
+ * solo su open_table/quick_match (creazione): il reclaim non la ritrasmette (il
+ * server la conosce già dal tavolo esistente).
  */
 type FirstFrame =
   | { kind: "join_room"; code: string }
-  | { kind: "open_table"; code: string; private: boolean }
-  | { kind: "quick_match" };
+  | { kind: "open_table"; code: string; private: boolean; mode: TableMode }
+  | { kind: "quick_match"; mode: TableMode };
 
 export interface GameSocketApi {
   connPhase: ConnPhase;
@@ -157,10 +177,17 @@ export interface GameSocketApi {
   sitRejected: SitRejectedInfo | null;
 
   join: (roomCode: string, displayName: string) => void;
-  /** LOBBY door (b) — "Gioca subito": il server decide seduta/creazione/fusione. */
-  quickMatch: (displayName?: string) => void;
-  /** LOBBY door (a) — "Apri un tavolo" (origin apertura_manuale; private = non in lista). */
-  openTable: (code: string, isPrivate: boolean, displayName?: string) => void;
+  /**
+   * LOBBY door (b) — "Gioca subito": il server decide seduta/creazione/fusione.
+   * `mode` (opz.) sceglie 1v1 o 2v2; il quick_match si fonde/siede solo su tavoli
+   * della stessa firma modalità+dimensione. Omesso ⇒ 1v1 (invariato).
+   */
+  quickMatch: (displayName?: string, mode?: TableMode) => void;
+  /**
+   * LOBBY door (a) — "Apri un tavolo" (origin apertura_manuale; private = non in
+   * lista). `mode` (opz.) sceglie 1v1 o 2v2. Omesso ⇒ 1v1 (invariato).
+   */
+  openTable: (code: string, isPrivate: boolean, displayName?: string, mode?: TableMode) => void;
   /** LOBBY — "Siediti" a un tavolo pubblico esistente della lista (= join_room). */
   sit: (code: string, displayName?: string) => void;
   /** LOBBY — "Annulla e torna alla lobby": invia reset_room e torna alla lista. */
@@ -187,7 +214,7 @@ export interface GameSocketApi {
   drawDiscard: () => void;
   meldNew: (cards: string[]) => void;
   meldExtend: (meldId: string, cards: string[]) => void;
-  pinellaSubstitute: (meldId: string, cardInHand: string) => void;
+  wildSubstitute: (meldId: string, cardInHand: string, edge?: "top" | "bottom") => void;
   discard: (card: string) => void;
   /** Annulla l'ultima calata del turno (intenzione `undo_last`); il server decide. */
   undoLast: () => void;
@@ -376,7 +403,7 @@ export function useGameSocket(): GameSocketApi {
           clearInFlight();
           break;
         case "game_ended":
-          setGameEnded({ winnerSeat: msg.winnerSeat, finalScores: msg.finalScores, reason: msg.reason });
+          setGameEnded({ winnerTeam: msg.winnerTeam, finalScores: msg.finalScores, reason: msg.reason });
           clearInFlight();
           break;
         case "room_closed":
@@ -462,12 +489,14 @@ export function useGameSocket(): GameSocketApi {
           // LOBBY (§5.4-D): avviso NON bloccante (i due posti sono lo stesso browser/utente).
           setSelfPlay(true);
           break;
-        case "opponent_disconnected":
-        case "opponent_reconnected":
+        case "player_disconnected":
+        case "player_reconnected":
+          // C9: aggiorna lo stato di connessione del posto interessato (in 1v1 è
+          // sempre l'avversario; a N posti può essere anche il compagno).
           setPlayers((prev) =>
             prev.map((p) =>
               p.seat === msg.seat
-                ? { ...p, connectionStatus: msg.type === "opponent_reconnected" ? "connected" : "disconnected" }
+                ? { ...p, connectionStatus: msg.type === "player_reconnected" ? "connected" : "disconnected" }
                 : p,
             ),
           );
@@ -492,9 +521,25 @@ export function useGameSocket(): GameSocketApi {
       const authToken = getAuthToken() ?? undefined;
       const displayName = nameRef.current;
       if (frame.kind === "quick_match") {
-        sendRaw({ type: "quick_match", displayName, clientId, authToken });
+        sendRaw({
+          type: "quick_match",
+          displayName,
+          clientId,
+          authToken,
+          numeroGiocatori: frame.mode.numeroGiocatori,
+          modalita: frame.mode.modalita,
+        });
       } else if (frame.kind === "open_table") {
-        sendRaw({ type: "open_table", code: frame.code, private: frame.private, displayName, clientId, authToken });
+        sendRaw({
+          type: "open_table",
+          code: frame.code,
+          private: frame.private,
+          displayName,
+          clientId,
+          authToken,
+          numeroGiocatori: frame.mode.numeroGiocatori,
+          modalita: frame.mode.modalita,
+        });
       } else {
         sendRaw({
           type: "join_room",
@@ -624,18 +669,18 @@ export function useGameSocket(): GameSocketApi {
   );
 
   const quickMatch = useCallback(
-    (displayName?: string) => {
+    (displayName?: string, mode: TableMode = DEFAULT_TABLE_MODE) => {
       // Il codice è generato dal server: `code:null` finché non arriva room_joined.
-      startConnection({ kind: "quick_match" }, { isPrivate: false, code: null, name: displayName });
+      startConnection({ kind: "quick_match", mode }, { isPrivate: false, code: null, name: displayName });
     },
     [startConnection],
   );
 
   const openTable = useCallback(
-    (code: string, isPrivate: boolean, displayName?: string) => {
+    (code: string, isPrivate: boolean, displayName?: string, mode: TableMode = DEFAULT_TABLE_MODE) => {
       const c = code.trim().toUpperCase().slice(0, 12);
       startConnection(
-        { kind: "open_table", code: c, private: isPrivate },
+        { kind: "open_table", code: c, private: isPrivate, mode },
         { isPrivate, code: c || null, name: displayName },
       );
     },
@@ -753,8 +798,11 @@ export function useGameSocket(): GameSocketApi {
     drawDiscard: () => sendMove({ type: "draw", source: "discard" }),
     meldNew: (cards) => sendMove({ type: "meld_new", cards }, cards),
     meldExtend: (meldId, cards) => sendMove({ type: "meld_extend", meldId, cards }, cards),
-    pinellaSubstitute: (meldId, cardInHand) =>
-      sendMove({ type: "pinella_substitute", meldId, cardInHand }, [cardInHand]),
+    wildSubstitute: (meldId, cardInHand, edge) =>
+      sendMove(
+        { type: "wild_substitute", meldId, cardInHand, ...(edge ? { edge } : {}) },
+        [cardInHand],
+      ),
     discard: (card) => sendMove({ type: "discard", card }, [card]),
     // Client muto: invia solo l'intenzione. Il server valida turno/fase/stack e,
     // se non c'è nulla da annullare, risponde NOTHING_TO_UNDO (→ RejectionToast).

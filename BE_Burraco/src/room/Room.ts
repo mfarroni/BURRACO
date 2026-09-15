@@ -7,10 +7,12 @@ import type {
   PlayerPublic,
   Seat,
   ServerMessage,
+  TeamId,
   WaitingTableView,
 } from "../contract/types.js";
 import { GameEngine, type GameEffect, type MoveResult } from "../engine/game.js";
-import { redactFor } from "./redact.js";
+import { canonicalSeatForTeam, teamCount, teamOfSeat, teamScores } from "../engine/teams.js";
+import { redactFor, type SeatMeta } from "./redact.js";
 import { persistence } from "../db/persistence.js";
 
 /** LOBBY: visibilità di un tavolo in attesa (i privati non compaiono in lista). */
@@ -128,7 +130,9 @@ export class Room {
   }
 
   isFull(): boolean {
-    return this.players.length >= 2;
+    // A N posti: pieno = tanti slot quanti i posti del tavolo (`seatsTotal`).
+    // In 1v1 `seatsTotal()` vale 2 → comportamento identico a prima.
+    return this.players.length >= this.seatsTotal();
   }
 
   hasEngine(): boolean {
@@ -147,7 +151,7 @@ export class Room {
     return this.players.reduce((n, p) => n + (this.isSeatLive(p) ? 1 : 0), 0);
   }
 
-  /** Posti totali del tavolo (predisposizione 4 posti: oggi sempre 2). */
+  /** Posti totali del tavolo (= `config.numeroGiocatori`: 2 in 1v1, 4 in coppie). */
   seatsTotal(): number {
     return this.config.numeroGiocatori;
   }
@@ -164,15 +168,22 @@ export class Room {
   }
 
   /**
-   * LOBBY (§5.4-A/B): candidabile alla fusione quick_match SE è un tavolo pubblico
-   * quick_match, ancora in attesa, con ESATTAMENTE un posto vivo.
+   * LOBBY (§5.4-A/B): candidabile alla seduta/fusione quick_match SE è un tavolo
+   * pubblico quick_match, ancora in attesa, con ALMENO un posto vivo e ANCORA
+   * capienza (`seatsTakenLive < seatsTotal`). Generalizzato a N posti: in 1v1
+   * (`seatsTotal` = 2) equivale a "esattamente un posto vivo" (comportamento
+   * invariato). La FIRMA modalità/dimensione è confrontata a monte
+   * (RoomManager.findQuickMatchCandidate / mergeQuickMatchTables): un quick_match
+   * 2v2 non si siede né si fonde con un tavolo 1v1.
    */
   isMergeableQuickMatch(): boolean {
+    const taken = this.seatsTakenLive();
     return (
       this.isWaiting() &&
       this.visibility === "pubblico" &&
       this.origin === "quick_match" &&
-      this.seatsTakenLive() === 1
+      taken >= 1 &&
+      taken < this.seatsTotal()
     );
   }
 
@@ -186,13 +197,17 @@ export class Room {
     if (!this.isWaiting()) return null;
     const taken = this.seatsTakenLive();
     if (taken < 1) return null; // solo con ≥1 socket vivo (anti-fantasma)
-    return {
+    const view: WaitingTableView = {
       code: this.code,
       creatorName: this.creatorName(),
       openedAt: this.openedAt,
       seatsTotal: this.seatsTotal(),
       seatsTaken: taken,
     };
+    // MODALITÀ (Tappa 3a): campo additivo esposto SOLO per i tavoli 2v2, così la
+    // vista serializzata dell'1v1 resta byte-identica a prima (whitelist a 5 chiavi).
+    if (this.config.modalita === "coppie") view.modalita = "coppie";
+    return view;
   }
 
   /**
@@ -204,6 +219,23 @@ export class Room {
     const live = this.players.find((p) => this.isSeatLive(p));
     if (!live || !live.ws) return null;
     return { ws: live.ws, name: live.displayName, clientId: live.clientId, userId: live.userId };
+  }
+
+  /**
+   * LOBBY (§5.4-A, N posti): identità di TUTTI i posti vivi del tavolo, usata dalla
+   * FUSIONE per spostarli in blocco in un altro tavolo della stessa firma. A N posti
+   * un quick_match può avere più di un occupante, quindi la fusione non può muovere
+   * un solo posto: li elenca tutti e li sposta finché il tavolo di destinazione ha
+   * capienza. In 1v1 l'array ha al più un elemento (comportamento invariato).
+   */
+  liveSeatIdentities(): { ws: WebSocket; name: string; clientId?: string; userId: string | null }[] {
+    const out: { ws: WebSocket; name: string; clientId?: string; userId: string | null }[] = [];
+    for (const p of this.players) {
+      if (this.isSeatLive(p) && p.ws) {
+        out.push({ ws: p.ws, name: p.displayName, clientId: p.clientId, userId: p.userId });
+      }
+    }
+    return out;
   }
 
   /** Trova lo slot associato a un socket (o undefined). */
@@ -249,7 +281,23 @@ export class Room {
       seat: p.seat,
       displayName: p.displayName,
       connectionStatus: p.status,
+      // C5: SQUADRA del posto per il raggruppamento delle coppie lato UI. In 1v1
+      // team = seat → il roster "Tu / Avversario" non cambia.
+      team: teamOfSeat(p.seat, this.config),
     }));
+  }
+
+  /**
+   * Metadati per-posto (nome autoritativo + stato connessione) per la REDAZIONE.
+   * Il motore non li conosce: li fornisce il Room a `redactFor`, indicizzati per
+   * `seat`. Nessun dato sensibile (mai token/carte): solo ciò che è già pubblico.
+   */
+  private seatMeta(): SeatMeta[] {
+    const meta: SeatMeta[] = [];
+    for (const p of this.players) {
+      meta[p.seat] = { displayName: p.displayName, connectionStatus: p.status };
+    }
+    return meta;
   }
 
   /** Un posto è "vivo" se ha uno stato connesso E un socket effettivamente aperto. */
@@ -476,7 +524,7 @@ export class Room {
       config: this.config,
       resumed: true, // riconnessione/reclaim di una sessione esistente
     });
-    this.notifyOpponent(slot.seat, { type: "opponent_reconnected", seat: slot.seat });
+    this.notifyOthers(slot.seat, { type: "player_reconnected", seat: slot.seat });
     this.sendStateTo(slot); // no-op se il match non è ancora avviato
     this.maybeStartMatch();
   }
@@ -489,7 +537,10 @@ export class Room {
    */
   private maybeStartMatch(): void {
     if (this.engine) return;
-    if (this.players.length !== 2) return;
+    // Avvio a TAVOLO PIENO (N posti): servono `seatsTotal` slot, tutti vivi. In 1v1
+    // `seatsTotal()` = 2, quindi la partita parte all'ingresso del secondo, come
+    // prima; in 2v2 attende i quattro posti (nessuna partita a tavolo incompleto).
+    if (this.players.length !== this.seatsTotal()) return;
     if (!this.players.every((p) => this.isSeatLive(p))) return;
     for (const p of this.players) {
       send(p.ws, {
@@ -506,20 +557,28 @@ export class Room {
   }
 
   /**
-   * LOBBY (§5.4-D): i due posti condividono l'identità per-browser (clientId) o
-   * lo stesso utente (userId). Deve avere ESATTAMENTE 2 posti per essere valutato.
+   * LOBBY (§5.4-D): self-play = due posti QUALSIASI del tavolo condividono
+   * l'identità per-browser (clientId) o lo stesso utente (userId). Generalizzato a
+   * N posti (in 2v2 basta una coppia di posti collidente): in 1v1 (2 posti) è la
+   * stessa verifica di prima. Serve almeno 2 posti per essere valutato.
    */
   private isSelfPlay(): boolean {
-    if (this.players.length !== 2) return false;
-    const [a, b] = this.players;
-    if (!a || !b) return false;
-    if (a.clientId !== undefined && a.clientId === b.clientId) return true;
-    if (a.userId !== null && a.userId === b.userId) return true;
+    if (this.players.length < 2) return false;
+    for (let i = 0; i < this.players.length; i++) {
+      for (let j = i + 1; j < this.players.length; j++) {
+        const a = this.players[i]!;
+        const b = this.players[j]!;
+        if (a.clientId !== undefined && a.clientId === b.clientId) return true;
+        if (a.userId !== null && a.userId === b.userId) return true;
+      }
+    }
     return false;
   }
 
   private startMatch(): void {
-    const firstDealer: Seat = Math.random() < 0.5 ? 0 : 1; // A6: mazziere a caso
+    // A6: mazziere iniziale a caso fra i posti del tavolo. In 1v1 (`seatsTotal` = 2)
+    // è 0 o 1 come prima; in 2v2 è un posto qualsiasi in [0, seatsTotal).
+    const firstDealer: Seat = Math.floor(Math.random() * this.seatsTotal());
     this.engine = new GameEngine(this.config, firstDealer);
 
     // LOBBY (§5.4-D) — SELF-PLAY: i due posti sono lo stesso browser (clientId
@@ -538,6 +597,8 @@ export class Room {
       this.matchId,
       this.players.map((p) => ({
         seat: p.seat,
+        // 2v2: la SQUADRA del posto (in 1v1 team = seat). Persistita in match_players.team.
+        team: teamOfSeat(p.seat, this.config),
         displayName: p.displayName,
         tokenHash: p.tokenHash,
         userId: selfPlay ? null : p.userId,
@@ -604,8 +665,8 @@ export class Room {
       case "meld_extend":
         result = this.engine.meldExtend(seat, msg.meldId, msg.cards);
         break;
-      case "pinella_substitute":
-        result = this.engine.pinellaSubstitute(seat, msg.meldId, msg.cardInHand);
+      case "wild_substitute":
+        result = this.engine.wildSubstitute(seat, msg.meldId, msg.cardInHand, msg.edge);
         break;
       case "discard":
         result = this.engine.discardCard(seat, msg.card);
@@ -647,7 +708,8 @@ export class Room {
           type: "hand_ended",
           closerSeat: eff.closerSeat,
           scores: eff.scores,
-          cumulative: eff.cumulative,
+          // C6: cumulati PER SQUADRA. In 1v1 (team = seat) è [cum0, cum1], invariato.
+          cumulative: this.teamScoresNow(eff.cumulative),
         });
         void persistence.endHand(this.matchId, this.handId, eff.closerSeat, eff.scores, this.snapshot());
         // Avvia la smazzata successiva dopo un ritardo, così i client mostrano
@@ -660,12 +722,15 @@ export class Room {
       } else if (eff.kind === "game_ended") {
         this.broadcast({
           type: "game_ended",
-          winnerSeat: eff.winnerSeat,
-          finalScores: eff.finalScores,
+          // C8: SQUADRA vincitrice (autoritativa dal motore, P4) + punteggi PER
+          // SQUADRA. In 1v1 team = seat → valori invariati.
+          winnerTeam: eff.winnerTeam,
+          finalScores: this.teamScoresNow(eff.finalScores),
         });
         // §7: fine LEGITTIMA (obiettivo raggiunto) → UNICO percorso 'completed',
-        // l'unico conteggiato nelle statistiche.
-        void persistence.completeMatch(this.matchId, eff.winnerSeat);
+        // l'unico conteggiato nelle statistiche. Persiste il posto canonico (audit)
+        // e la SQUADRA vincitrice (in 1v1 team = seat → winner_team = winner_seat).
+        void persistence.completeMatch(this.matchId, eff.winnerSeat, eff.winnerTeam);
         // SEC-05: partita conclusa → GC della room (rimozione dalla mappa RAM).
         this.dispose();
       } else if (eff.kind === "pozzetto_taken") {
@@ -699,23 +764,39 @@ export class Room {
     if (!slot) return;
     slot.ws = null;
     slot.status = "disconnected";
-    this.notifyOpponent(slot.seat, { type: "opponent_disconnected", seat: slot.seat });
+    this.notifyOthers(slot.seat, { type: "player_disconnected", seat: slot.seat });
 
     // LIFECYCLE: alla SCADENZA della grazia (default 180s) il disconnesso non
-    // rientra più. Decisione di prodotto (sostituisce il forfeit-win di SEC-05):
-    // la partita è ANNULLATA per abbandono, senza vincitore.
+    // rientra più. L'esito dipende da MODALITÀ e STATO (vedi sotto).
     if (slot.graceTimer) clearTimeout(slot.graceTimer);
     slot.graceTimer = setTimeout(() => {
       slot.graceTimer = null;
       if (this.disposed) return;
       // Riconnesso nel frattempo? Nessuna chiusura.
       if (slot.status === "connected") return;
-      // Entrambi disconnessi → room abbandonata: GC silenzioso senza messaggi.
+      // Tutti disconnessi → room abbandonata: GC silenzioso senza messaggi.
       if (this.isEmpty()) {
         this.dispose();
         return;
       }
-      // Avversario ancora presente → partita ANNULLATA per abbandono (no winner).
+      // ITEM 1 — ABBANDONO DI COPPIA (2v2): a partita IN CORSO (`this.engine`
+      // presente), la disconnessione oltre la grazia fa perdere a FORFAIT la
+      // COPPIA dell'assente; vince la squadra AVVERSARIA. Passa per la stessa via
+      // del forfait da stallo (`forfeitStalledSeat`, P4): game_ended{reason:
+      // "forfeit"} ai posti vivi + completeMatch (status 'completed', conta nelle
+      // statistiche). Vale anche se il COMPAGNO dell'assente è ancora connesso: la
+      // coppia non può schierare entrambi i giocatori.
+      //
+      // In INDIVIDUALE (1v1) il comportamento è INVARIATO: partita ANNULLATA per
+      // abbandono, SENZA vincitore (room_closed{abandoned}). In ATTESA
+      // (`engine === null`, tavolo non ancora avviato) nessun forfait: si annulla
+      // come oggi. Il ramo forfait è quindi condizionato a coppie + partita avviata.
+      if (this.engine && this.config.modalita === "coppie") {
+        this.forfeitStalledSeat(slot.seat);
+        return;
+      }
+      // Avversario ancora presente (1v1 in corso, o tavolo in attesa) → partita
+      // ANNULLATA per abbandono (no winner). Comportamento 1v1 invariato.
       this.closeRoom("abandoned");
     }, this.graceMs());
     slot.graceTimer.unref?.();
@@ -754,8 +835,10 @@ export class Room {
    * modo leggibile (nessuno smontaggio unilaterale di una partita in corso).
    */
   private handleReset(slot: PlayerSlot): void {
-    const opp = this.players.find((p) => p.seat !== slot.seat);
-    if (opp && this.isSeatLive(opp)) {
+    // A N posti: lo smontaggio è vietato se un QUALSIASI altro posto è vivo (non
+    // solo "l'avversario"). In 1v1 c'è un solo altro posto → verifica identica.
+    const anyOtherLive = this.players.some((p) => p.seat !== slot.seat && this.isSeatLive(p));
+    if (anyOtherLive) {
       send(slot.ws, {
         type: "error",
         message: "Non puoi chiudere il tavolo mentre l'avversario è connesso.",
@@ -926,26 +1009,58 @@ export class Room {
   }
 
   /**
-   * NEW-3: chiusura deterministica di un turno in stallo irrisolvibile: il seat
-   * in stallo perde d'ufficio, l'avversario è dichiarato vincitore della
-   * partita. Riusa il canale `game_ended` (reason "forfeit"). Poi GC della room.
+   * NEW-3 / FORFAIT DI COPPIA (P4): chiusura deterministica per FORFAIT del posto
+   * indicato. Due chiamanti, stessa semantica:
+   *  - turno in STALLO irrisolvibile (auto-play senza mossa legale);
+   *  - ABBANDONO in COPPIE (ITEM 1): disconnessione oltre la grazia a partita in
+   *    corso (percorso `onDisconnect`).
+   * A perdere è la SQUADRA del posto, non un singolo posto: la vincitrice è la
+   * squadra AVVERSARIA (mai il compagno). Riusa il canale `game_ended` (reason
+   * "forfeit") + `completeMatch`. Poi GC della room.
+   *
+   * In 1v1 (team = seat, due squadre) la squadra avversaria è `1 - stalledSeat`:
+   * vincitore e totali coincidono ESATTAMENTE col comportamento precedente. In 2v2
+   * (squadre 0+2 / 1+3) la vecchia logica `players.find(seat !== stalled)` avrebbe
+   * potuto premiare il COMPAGNO dello stallato: qui la vittoria va sempre all'altra
+   * squadra. Lo scope ammette solo tavoli a 2 squadre, quindi l'avversaria è l'unica
+   * squadra diversa da quella dello stallato.
    */
   private forfeitStalledSeat(stalledSeat: Seat): void {
     if (this.disposed) return;
     const e = this.engine;
-    const opp = this.players.find((p) => p.seat !== stalledSeat);
-    const winnerSeat = (opp ? opp.seat : (1 - stalledSeat)) as Seat;
+    const loserTeam = teamOfSeat(stalledSeat, this.config);
+    const winnerTeam = this.opposingTeam(loserTeam);
+    // Posto canonico della squadra vincitrice per l'audit/persistenza (in 1v1
+    // coincide col posto vincitore, come prima).
+    const winnerSeat = canonicalSeatForTeam(winnerTeam, this.config);
     if (e && e.status === "playing") {
       e.status = "game_ended";
+      e.winnerTeam = winnerTeam;
       e.winnerSeat = winnerSeat;
       e.turnEndsAt = null;
-      const finalScores: [number, number] = [e.cumulative[0], e.cumulative[1]];
-      this.broadcast({ type: "game_ended", winnerSeat, finalScores, reason: "forfeit" });
+      // C8: SQUADRA vincitrice + punteggi PER SQUADRA.
+      this.broadcast({
+        type: "game_ended",
+        winnerTeam,
+        finalScores: this.teamScoresNow(e.cumulative),
+        reason: "forfeit",
+      });
       // Decisione Gate 1: il forfeit da stallo dichiara un vincitore reale → conta
-      // come 'completed' (preserva il comportamento pre-esistente).
-      void persistence.completeMatch(this.matchId, winnerSeat);
+      // come 'completed' (preserva il comportamento pre-esistente). Persiste il
+      // posto canonico (audit) e la SQUADRA vincitrice (autoritativa, P4).
+      void persistence.completeMatch(this.matchId, winnerSeat, winnerTeam);
     }
     this.dispose();
+  }
+
+  /**
+   * Squadra AVVERSARIA di `team` in un tavolo a due squadre (scope 2v2:
+   * {2, individuale} e {4, coppie} hanno entrambe 2 squadre). In 1v1 team = seat →
+   * `1 - team`, identico a prima; in 2v2 è l'altra coppia.
+   */
+  private opposingTeam(team: TeamId): TeamId {
+    // Due sole squadre nello scope corrente: l'avversaria è l'altra.
+    return teamCount(this.config) === 2 ? ((team === 0 ? 1 : 0) as TeamId) : team;
   }
 
   /* ─────────────────────────── broadcast/redaction ─────────────────────── */
@@ -964,12 +1079,28 @@ export class Room {
 
   private sendStateTo(slot: PlayerSlot): void {
     if (!this.engine) return;
-    send(slot.ws, { type: "state", state: redactFor(this.engine, slot.seat) });
+    send(slot.ws, { type: "state", state: redactFor(this.engine, slot.seat, this.seatMeta()) });
   }
 
-  private notifyOpponent(seat: Seat, msg: ServerMessage): void {
-    const opp = this.players.find((p) => p.seat !== seat);
-    if (opp) send(opp.ws, msg);
+  /**
+   * Notifica un messaggio a TUTTI gli altri posti (C9/D-B): a N posti l'avversario
+   * non è più unico. Usato per `player_disconnected/reconnected`, che devono
+   * raggiungere l'intera room tranne il posto interessato.
+   */
+  private notifyOthers(seat: Seat, msg: ServerMessage): void {
+    for (const p of this.players) {
+      if (p.seat !== seat) send(p.ws, msg);
+    }
+  }
+
+  /**
+   * Proiezione per SQUADRA dei cumulati per il CONTRATTO (C4/C6/C8). Usa l'array
+   * autoritativo del motore (`engine.cumulative`), ripiegando sul per-seat passato
+   * dall'effetto se il motore non è più presente. In 1v1 (team = seat) restituisce
+   * `[cumulative[0], cumulative[1]]` — valori invariati.
+   */
+  private teamScoresNow(fallbackPerSeat: readonly number[]): number[] {
+    return teamScores(this.engine ? this.engine.cumulative : fallbackPerSeat, this.config);
   }
 
   private logEvent(type: string, actorSeat: Seat, payload: unknown): void {
@@ -978,19 +1109,21 @@ export class Room {
 
   /** Stato pieno server-side per il checkpoint (MAI inviato ai client). */
   private snapshot(): unknown {
-    if (!this.engine) return {};
+    const e = this.engine;
+    if (!e) return {};
     return {
-      handNumber: this.engine.handNumber,
-      dealerSeat: this.engine.dealerSeat,
-      currentSeat: this.engine.currentSeat,
-      phase: this.engine.phase,
-      cumulative: this.engine.cumulative,
-      melds: this.engine.melds,
-      discardCount: this.engine.discard.length,
-      drawPileCount: this.engine.drawPile.length,
-      pozzettiRemaining: this.engine.pozzetti.length,
-      hands: [this.engine.handOf(0), this.engine.handOf(1)],
-      status: this.engine.status,
+      handNumber: e.handNumber,
+      dealerSeat: e.dealerSeat,
+      currentSeat: e.currentSeat,
+      phase: e.phase,
+      cumulative: e.cumulative,
+      melds: e.melds,
+      discardCount: e.discard.length,
+      drawPileCount: e.drawPile.length,
+      pozzettiRemaining: e.pozzetti.length,
+      // N posti: una mano per posto (in 1v1 resta [hand0, hand1]).
+      hands: e.seats.map((_, i) => e.handOf(i as Seat)),
+      status: e.status,
     };
   }
 }

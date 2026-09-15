@@ -77,6 +77,12 @@ export const matches = pgTable(
     // (disconnessione oltre la grazia) non toccano mai i contatori.
     status: text("status").notNull(),
     winnerSeat: integer("winner_seat"),
+    // Macro-ciclo 3 (2v2, migrazione 0003): SQUADRA vincitrice. Nullable e additiva.
+    // `winner_seat` RESTA (audit: posto che ha materialmente chiuso). La vittoria è
+    // della SQUADRA (P4); le statistiche di coppia (Fase 3, differite) confronteranno
+    // `winner_team` con `match_players.team`. Backfill `winner_team = winner_seat` per
+    // le partite completate storiche (in 1v1 team = seat → identico).
+    winnerTeam: integer("winner_team"),
     // Fine partita (best-effort): valorizzato alla conclusione/annullamento/abbandono.
     endedAt: timestamp("ended_at", { withTimezone: true }),
     // Identità dell'utente che ha ANNULLATO la partita (solo per status "aborted"),
@@ -98,7 +104,14 @@ export const matchPlayers = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     matchId: uuid("match_id").notNull().references(() => matches.id),
-    seat: integer("seat").notNull(), // 0 | 1
+    seat: integer("seat").notNull(), // 0..n-1
+    // Macro-ciclo 3 (2v2, migrazione 0003): SQUADRA del posto. Nullable e additiva:
+    // le partite pre-migrazione restano valide (backfill `team = seat`). In modalità
+    // individuale `team === seat`; in coppie posti opposti condividono la squadra
+    // (0+2, 1+3). Il codice scrive sempre `team` d'ora in poi; le letture usano
+    // `team ?? seat` per le righe storiche. La PROPRIETÀ del posto (playerToken/
+    // clientId, SEC-04/10/11) resta INVARIATA: `team` è solo per punteggio/storico.
+    team: integer("team"),
     displayName: text("display_name").notNull(),
     playerTokenHash: text("player_token_hash").notNull(),
     connectionStatus: text("connection_status").notNull().default("connected"),

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ConnPhase, MergedInfo } from "@/lib/useGameSocket";
+import type { PlayerPublic } from "@/lib/contract";
 import { ConnectionBanner } from "@/components/StateBanners";
 
 /**
@@ -21,6 +22,14 @@ interface WaitingRoomProps {
   resumed: boolean;
   merged: MergedInfo | null;
   onCancel: () => void;
+  /** Posti totali del tavolo (2 in 1v1, 4 in coppie). */
+  seatsTotal: number;
+  /** Modalità del tavolo (per la resa a squadre in attesa). */
+  modalita?: "individuale" | "coppie";
+  /** Giocatori già seduti (posto + nome + stato). */
+  players: PlayerPublic[];
+  /** Il mio posto, per marcare "(tu)". */
+  yourSeat: number | null;
 }
 
 type CopyState = "idle" | "copied" | "error";
@@ -32,7 +41,7 @@ function formatElapsed(ms: number): string {
   return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
 
-export function WaitingRoom({ code, isPrivate, connPhase, resumed, merged, onCancel }: WaitingRoomProps) {
+export function WaitingRoom({ code, isPrivate, connPhase, resumed, merged, onCancel, seatsTotal, modalita, players, yourSeat }: WaitingRoomProps) {
   // Inizio attesa: al primo montaggio della schermata (persiste tra i re-render).
   const startedAt = useRef(Date.now());
   const [now, setNow] = useState(() => Date.now());
@@ -59,6 +68,11 @@ export function WaitingRoom({ code, isPrivate, connPhase, resumed, merged, onCan
     return () => clearTimeout(t);
   }, [copyState]);
 
+  // Posti al tavolo (2 o 4). In coppie i posti opposti formano le squadre (0+2 / 1+3).
+  const isCoppie = modalita === "coppie";
+  const slots = Array.from({ length: seatsTotal }, (_, i) => players.find((p) => p.seat === i) ?? null);
+  const seated = players.length;
+
   // Etichetta dettata per screen reader (una lettera/cifra alla volta).
   const spelled = code ? code.split("").join(" ") : "";
 
@@ -67,7 +81,7 @@ export function WaitingRoom({ code, isPrivate, connPhase, resumed, merged, onCan
       <div className="brand">
         <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
         <h1>
-          In attesa di un avversario
+          {isCoppie ? "In attesa dei giocatori (2 vs 2)" : "In attesa di un avversario"}
           <span className="waiting-dots" aria-hidden="true">
             <span>.</span>
             <span>.</span>
@@ -138,6 +152,41 @@ export function WaitingRoom({ code, isPrivate, connPhase, resumed, merged, onCan
         <span className="spinner-inline" aria-hidden="true" />
         In attesa da <strong className="num">{formatElapsed(now - startedAt.current)}</strong>
       </p>
+
+      {/* Posti al tavolo: N slot; in coppie raggruppati per squadra (0+2 / 1+3).
+          Resa funzionale (non rifinita): la cura estetica è di agente_ui_ux (Fase 4). */}
+      <div className="waiting-seats" role="group" aria-label="Posti al tavolo">
+        <span className="waiting-seats-count">
+          {seated}/{seatsTotal} seduti
+        </span>
+        {isCoppie ? (
+          <div className="waiting-teams">
+            {[0, 1].map((team) => (
+              <div key={team} className="waiting-team" data-team={team}>
+                <span className="waiting-team-label">Squadra {team === 0 ? "A" : "B"}</span>
+                {[team, team + 2].map((seat) => {
+                  const p = slots[seat];
+                  return (
+                    <span key={seat} className={`waiting-seat${p ? "" : " empty"}`}>
+                      {p ? p.displayName : "Libero"}
+                      {seat === yourSeat ? " (tu)" : ""}
+                    </span>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="waiting-seat-list">
+            {slots.map((p, seat) => (
+              <span key={seat} className={`waiting-seat${p ? "" : " empty"}`}>
+                {p ? p.displayName : "Libero"}
+                {seat === yourSeat ? " (tu)" : ""}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Nota per i tavoli privati: non compaiono in lista, va comunicato il codice.
           Per i pubblici, un promemoria che sono già visibili nella lista. */}

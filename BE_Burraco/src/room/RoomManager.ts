@@ -99,6 +99,31 @@ export class RoomManager {
     return room;
   }
 
+  /**
+   * MODALITÀ (Tappa 3a): costruisce la config di una NUOVA room dai campi scelti nel
+   * messaggio (open_table/quick_match), VALIDANDO la combinazione. Ammesse SOLO
+   * {2, individuale} e {4, coppie}; ogni altra combinazione (inclusi campi assenti o
+   * incoerenti come {4, individuale} o {2, coppie}) è NORMALIZZATA al 1v1 di default.
+   * Il resto della config (`punteggioObiettivo`, varianti, timeout) resta quello di
+   * `defaultGameConfig()`. Non rifiuta il messaggio: normalizza in modo sicuro.
+   */
+  private configForMode(numeroGiocatori?: number, modalita?: string): GameConfig {
+    const base = defaultGameConfig();
+    if (numeroGiocatori === 4 && modalita === "coppie") {
+      return { ...base, numeroGiocatori: 4, modalita: "coppie" };
+    }
+    return base; // {2, individuale} (default / normalizzazione delle combinazioni non ammesse)
+  }
+
+  /**
+   * FIRMA di fusione (Tappa 3a): dimensione + modalità del tavolo. La seduta e la
+   * fusione quick_match avvengono SOLO fra tavoli con la stessa firma (un 2v2 non
+   * entra in un 1v1 e viceversa).
+   */
+  private mergeSignature(room: Room): string {
+    return `${room.seatsTotal()}:${room.config.modalita}`;
+  }
+
   /** Numero di room attive in memoria (per test/diagnostica GC). */
   activeRoomCount(): number {
     return this.rooms.size;
@@ -393,7 +418,9 @@ export class RoomManager {
         this.rejectAtCapacity(ws);
         return;
       }
-      const room = this.makeRoom(code, defaultGameConfig(), {
+      // Tappa 3a: config-driven. La room nasce con la MODALITÀ scelta e validata
+      // ({2,individuale} | {4,coppie}); default 1v1 se i campi sono assenti/incoerenti.
+      const room = this.makeRoom(code, this.configForMode(msg.numeroGiocatori, msg.modalita), {
         visibility: msg.private ? "privato" : "pubblico",
         origin: "apertura_manuale",
       });
@@ -413,9 +440,12 @@ export class RoomManager {
     this.withIdentity(ws, msg, (id) => {
       if (this.socketRoom.has(ws)) return;
       const key = this.sessionKey(id);
+      // Tappa 3a: firma richiesta (dimensione + modalità), validata e normalizzata.
+      const wanted = this.configForMode(msg.numeroGiocatori, msg.modalita);
 
       // Idempotenza: la sessione ha già un tavolo in attesa → riaggancia il socket
-      // (reclaim del proprio posto se il vecchio socket è morto).
+      // (reclaim del proprio posto se il vecchio socket è morto). NB: si riaggancia
+      // al PROPRIO tavolo qualunque ne sia la modalità (idempotenza del posto).
       const own = this.waitingForSession(key);
       if (own) {
         this.socketRoom.set(ws, own);
@@ -423,38 +453,46 @@ export class RoomManager {
         return;
       }
 
-      // Cerca il candidato pubblico quick_match più vecchio con 1 solo posto vivo.
-      const candidate = this.findQuickMatchCandidate();
+      // Cerca il candidato pubblico quick_match più vecchio con posto libero E DELLA
+      // STESSA FIRMA (modalità/dimensione): un 2v2 non si siede su un tavolo 1v1.
+      const candidate = this.findQuickMatchCandidate(wanted);
       if (candidate) {
         this.socketRoom.set(ws, candidate);
-        candidate.join(ws, id.playerToken, id.name, id.clientId, id.userId); // 2° posto → playing
+        candidate.join(ws, id.playerToken, id.name, id.clientId, id.userId); // → siede; avvia a tavolo pieno
         return;
       }
 
-      // Nessun candidato: crea un nuovo tavolo pubblico quick_match → waiting.
+      // Nessun candidato: crea un nuovo tavolo pubblico quick_match della firma scelta.
       // R2a: rispetta il tetto globale prima di creare.
       if (this.atRoomCapacity()) {
         this.rejectAtCapacity(ws);
         return;
       }
       const code = this.generateFreeCode();
-      const room = this.makeRoom(code, defaultGameConfig(), {
+      const room = this.makeRoom(code, wanted, {
         visibility: "pubblico",
         origin: "quick_match",
       });
       this.socketRoom.set(ws, room);
       this.registerWaiting(key, room);
       room.join(ws, id.playerToken, id.name, id.clientId, id.userId);
-      // Rete di sicurezza deterministica contro la simmetria (§5.4-A).
+      // Rete di sicurezza deterministica contro la simmetria (§5.4-A): fonde solo
+      // tavoli della stessa firma.
       this.mergeQuickMatchTables();
     });
   }
 
-  /** Candidato quick_match più vecchio (openedAt minimo) con 1 posto vivo. */
-  private findQuickMatchCandidate(): Room | undefined {
+  /**
+   * Candidato quick_match più vecchio (openedAt minimo) con posto libero e della
+   * STESSA FIRMA (dimensione + modalità) del tavolo richiesto. In 1v1 la firma è
+   * `2:individuale`: la selezione coincide col comportamento precedente.
+   */
+  private findQuickMatchCandidate(wanted: GameConfig): Room | undefined {
+    const wantedSig = `${wanted.numeroGiocatori}:${wanted.modalita}`;
     let best: Room | undefined;
     for (const room of this.rooms.values()) {
       if (!room.isMergeableQuickMatch()) continue;
+      if (this.mergeSignature(room) !== wantedSig) continue;
       if (!best || room.openedAt < best.openedAt) best = room;
     }
     return best;
@@ -468,27 +506,50 @@ export class RoomManager {
    * Tocca SOLO tavoli pubblici quick_match (mai privati né apertura_manuale).
    */
   mergeQuickMatchTables(): void {
-    // Ripete finché restano ≥2 tavoli fondibili: ogni fusione ne consuma due.
+    // Ripete finché resta una fusione eseguibile. Ogni iterazione consolida UN
+    // tavolo sorgente nel più vecchio della sua FIRMA, poi ricomincia sullo stato
+    // aggiornato. Termina perché ogni fusione riuscita smaltisce una sorgente.
     for (;;) {
-      const list = [...this.rooms.values()]
-        .filter((r) => r.isMergeableQuickMatch())
-        .sort((a, b) => a.openedAt - b.openedAt);
-      if (list.length < 2) return;
+      // Raggruppa i tavoli fondibili per firma (dimensione + modalità): un 2v2 non
+      // si fonde mai con un 1v1.
+      const groups = new Map<string, Room[]>();
+      for (const r of this.rooms.values()) {
+        if (!r.isMergeableQuickMatch()) continue;
+        const sig = this.mergeSignature(r);
+        let arr = groups.get(sig);
+        if (!arr) {
+          arr = [];
+          groups.set(sig, arr);
+        }
+        arr.push(r);
+      }
 
-      const target = list[0]!; // il più vecchio
-      const source = list[list.length - 1]!; // il più recente
+      let progressed = false;
+      for (const list of groups.values()) {
+        if (list.length < 2) continue;
+        list.sort((a, b) => a.openedAt - b.openedAt);
+        const target = list[0]!; // il più vecchio della firma
+        const source = list[list.length - 1]!; // il più recente
+        const movers = source.liveSeatIdentities();
+        const free = target.seatsTotal() - target.seatsTakenLive();
+        // Fonde SOLO se l'intera sorgente entra nel target: nessun giocatore viene
+        // mai lasciato indietro/scartato (in 1v1 la sorgente ha 1 posto e il target
+        // ha 1 posto libero → sempre fondibile, comportamento invariato).
+        if (movers.length === 0 || movers.length > free) continue;
 
-      // Identità del posto in movimento (unico posto vivo del source).
-      const moving = source.liveSeatIdentity();
-      if (!moving) return; // difensivo: nessun socket vivo da spostare
+        for (const m of movers) {
+          // Prima l'evento esplicativo, poi la seduta nel tavolo di destinazione.
+          send(m.ws, { type: "room_merged", newCode: target.code });
+          this.socketRoom.set(m.ws, target);
+          target.join(m.ws, undefined, m.name, m.clientId, m.userId);
+        }
+        // La sorgente è stata interamente svuotata: dispose (sparisce dalla lista).
+        source.leaveWaiting();
+        progressed = true;
+        break; // rifai da capo sullo stato aggiornato
+      }
 
-      // Prima l'evento esplicativo, poi la seduta nel tavolo di destinazione.
-      send(moving.ws, { type: "room_merged", newCode: target.code });
-      this.socketRoom.set(moving.ws, target);
-      target.join(moving.ws, undefined, moving.name, moving.clientId, moving.userId);
-
-      // Il source è rimasto vuoto: dispose (sparisce dalla lista).
-      source.leaveWaiting();
+      if (!progressed) return;
     }
   }
 

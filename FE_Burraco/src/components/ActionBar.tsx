@@ -20,7 +20,7 @@ interface Props {
   onDrawDiscard: () => void;
   onMeldNew: () => void;
   onMeldExtend: () => void;
-  onPinellaSubstitute: () => void;
+  onWildSubstitute: () => void;
   onDiscard: () => void;
   onUndo: () => void;
 }
@@ -75,9 +75,9 @@ export function ActionBar(p: Props) {
       <button
         type="button"
         disabled={locked || !mayMeld || !p.selectedMeldId || nSel !== 1}
-        onClick={p.onPinellaSubstitute}
+        onClick={p.onWildSubstitute}
       >
-        Sostituisci pinella
+        Sostituisci matta
       </button>
 
       {/* AZIONE DI CORREZIONE (secondaria): annulla l'ultima calata del turno.

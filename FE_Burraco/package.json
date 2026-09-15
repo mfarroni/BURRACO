@@ -12,7 +12,7 @@
     "audit": "npm audit"
   },
   "dependencies": {
-    "next": "15.5.23",
+    "next": "15.5.25",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -25,7 +25,8 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "eslint": "^8.57.1",
-    "eslint-config-next": "15.5.23",
-    "typescript": "^5.7.2"
+    "eslint-config-next": "15.5.25",
+    "typescript": "^5.7.2",
+    "vercel": "^59.16.0"
   }
 }

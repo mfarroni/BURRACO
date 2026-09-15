@@ -1,4 +1,4 @@
-import type { GameConfig, HandScoreDetail, Seat } from "../contract/types.js";
+import type { GameConfig, HandScoreDetail, Seat, TeamId } from "../contract/types.js";
 import { db, schema } from "./client.js";
 import { and, eq, ne } from "drizzle-orm";
 
@@ -32,13 +32,23 @@ export const persistence = {
 
   async addPlayers(
     matchId: string,
-    players: { seat: Seat; displayName: string; tokenHash: string; userId?: string | null }[],
+    players: {
+      seat: Seat;
+      team: TeamId;
+      displayName: string;
+      tokenHash: string;
+      userId?: string | null;
+    }[],
   ): Promise<void> {
     await safe("addPlayers", () =>
       db!.insert(schema.matchPlayers).values(
         players.map((p) => ({
           matchId,
           seat: p.seat,
+          // Macro-ciclo 3 (2v2): SQUADRA del posto. In 1v1 team = seat → invariato.
+          // `?? p.seat` è una rete difensiva: se un chiamante omettesse il team, la
+          // riga resta coerente col vecchio backfill (team = seat).
+          team: p.team ?? p.seat,
           displayName: p.displayName,
           playerTokenHash: p.tokenHash,
           // Macro-ciclo 3: collega il posto all'identità (account o ospite) che lo
@@ -148,11 +158,23 @@ export const persistence = {
    * normale + forfeit da stallo); entrambi rappresentano una vittoria reale e ora
    * passano di qui.
    */
-  async completeMatch(matchId: string, winnerSeat: Seat | null): Promise<void> {
+  async completeMatch(
+    matchId: string,
+    winnerSeat: Seat | null,
+    winnerTeam: TeamId | null,
+  ): Promise<void> {
     await safe("completeMatch", () =>
       db!
         .update(schema.matches)
-        .set({ status: "completed", winnerSeat: winnerSeat ?? null, endedAt: new Date() })
+        .set({
+          status: "completed",
+          // `winner_seat` RESTA (audit: posto che ha chiuso). La vittoria è di SQUADRA
+          // (P4): `winner_team` è il campo autoritativo per lo storico di coppia. In
+          // 1v1 team = seat → i due campi coincidono, valori invariati.
+          winnerSeat: winnerSeat ?? null,
+          winnerTeam: winnerTeam ?? null,
+          endedAt: new Date(),
+        })
         // Condizionale/idempotente: un doppio invio (o una gara con abort) non
         // sovrascrive uno stato terminale già scritto.
         .where(and(eq(schema.matches.id, matchId), ne(schema.matches.status, "completed"))),

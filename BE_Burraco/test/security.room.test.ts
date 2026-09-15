@@ -132,7 +132,8 @@ test("NEW-3: turno in stallo irrisolvibile (mano ridotta a una sola matta) → f
     | Extract<ServerMessage, { type: "game_ended" }>
     | undefined;
   assert.ok(geA && geB, "entrambi i giocatori ricevono game_ended");
-  assert.equal(geA!.winnerSeat, (1 - activeSeat) as 0 | 1, "vince l'avversario del seat in stallo");
+  // C8: game_ended espone winnerTeam (in 1v1 team = seat → l'avversario del seat in stallo).
+  assert.equal(geA!.winnerTeam, (1 - activeSeat) as 0 | 1, "vince la squadra avversaria del seat in stallo");
   assert.equal(geA!.reason, "forfeit", "risoluzione via forfeit deterministico (canale game_ended)");
   // Il turno NON resta congelato: la room è conclusa e smaltita.
   assert.equal((room as unknown as { isDisposed(): boolean }).isDisposed(), true, "room smaltita dopo il forfeit di stallo");
@@ -155,7 +156,7 @@ test("LIFECYCLE: scaduta la grace-window su disconnessione, la partita è ANNULL
 
   // A cade: parte la grace-window.
   mgr.handleClose(a.as());
-  assert.ok(b.has("opponent_disconnected"), "avversario notificato della disconnessione");
+  assert.ok(b.has("player_disconnected"), "gli altri posti notificati della disconnessione");
 
   await delay(160); // > grace
 
@@ -265,7 +266,7 @@ test("SEC-07: parseClientMessage rifiuta gli input malformati (forma) senza ecce
     { type: "discard" }, // manca card
     { type: "join_room", roomCode: "X" }, // manca displayName
     { type: "meld_extend", cards: ["a"] }, // manca meldId
-    { type: "pinella_substitute", meldId: "m" }, // manca cardInHand
+    { type: "wild_substitute", meldId: "m" }, // manca cardInHand
     null,
     42,
     "stringa",
@@ -283,7 +284,7 @@ test("SEC-07: parseClientMessage rifiuta gli input malformati (forma) senza ecce
     { type: "draw", source: "discard", clientMoveId: "m1" },
     { type: "meld_new", cards: ["a", "b", "c"] },
     { type: "meld_extend", meldId: "m", cards: ["a"] },
-    { type: "pinella_substitute", meldId: "m", cardInHand: "c" },
+    { type: "wild_substitute", meldId: "m", cardInHand: "c" },
     { type: "discard", card: "c" },
     { type: "heartbeat" },
   ];
@@ -301,7 +302,7 @@ test("NEW-4: input oltre i limiti di lunghezza sono rifiutati come forma non con
     { type: "discard", card: "z".repeat(65) }, // cardId > 64
     { type: "meld_new", cards: Array.from({ length: 21 }, (_, i) => `c${i}`) }, // > 20 carte
     { type: "meld_extend", meldId: "z".repeat(65), cards: ["a"] }, // meldId > 64
-    { type: "pinella_substitute", meldId: "m", cardInHand: "z".repeat(65) }, // cardInHand > 64
+    { type: "wild_substitute", meldId: "m", cardInHand: "z".repeat(65) }, // cardInHand > 64
     { type: "draw", source: "deck", clientMoveId: "z".repeat(65) }, // clientMoveId > 64
     { type: "join_room", roomCode: "X", playerToken: "z".repeat(65), displayName: "A" }, // token > 64
   ];

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import type { OpenRejectedInfo } from "@/lib/useGameSocket";
+import type { OpenRejectedInfo, TableMode } from "@/lib/useGameSocket";
 import { fetchNewCode } from "@/lib/lobby";
 
 /**
@@ -23,6 +23,11 @@ interface OpenTableModalProps {
   /** errore di connessione/config (SEC-09): sblocca il pulsante e informa. */
   errorMessage: string | null;
   onDismissRejected: () => void;
+  /**
+   * MODALITÀ scelta in lobby (1v1/2v2). Qui è sola-lettura: la si mostra per dare
+   * contesto ("stai aprendo un tavolo 2v2"). La scelta resta nel selettore di lobby.
+   */
+  mode: TableMode;
 }
 
 export function OpenTableModal({
@@ -31,7 +36,9 @@ export function OpenTableModal({
   openRejected,
   errorMessage,
   onDismissRejected,
+  mode,
 }: OpenTableModalProps) {
+  const is2v2 = mode.numeroGiocatori === 4;
   const [code, setCode] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [loadingCode, setLoadingCode] = useState(true);
@@ -137,6 +144,16 @@ export function OpenTableModal({
         <h2 id={titleId}>Apri un tavolo</h2>
         <p id={descId} className="muted open-table-desc">
           Scegli un codice o usa quello proposto. Chi vuoi far sedere digiterà lo stesso codice.
+        </p>
+
+        {/* Modalità scelta in lobby (sola lettura): dà contesto sull'apertura. */}
+        <p className="open-table-mode" role="note">
+          <span className="table-mode-badge" data-mode={is2v2 ? "coppie" : "individuale"}>
+            {is2v2 ? "2v2 · a coppie" : "1v1 · individuale"}
+          </span>
+          {is2v2
+            ? "Servono 4 giocatori: la partita parte a tavolo pieno."
+            : "Testa a testa: la partita parte quando si siede l'avversario."}
         </p>
 
         <label htmlFor="open-code" className="open-code-label">

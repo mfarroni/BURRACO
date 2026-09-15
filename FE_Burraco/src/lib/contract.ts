@@ -17,7 +17,18 @@ export type Rank =
   | "A" | "2" | "3" | "4" | "5" | "6" | "7"
   | "8" | "9" | "10" | "J" | "Q" | "K" | "JOKER";
 
-export type Seat = 0 | 1;
+/**
+ * POSTO al tavolo. NUMERICO (non più il letterale `0 | 1`): copia allineata a mano
+ * del contratto BE (Fase 1, predisposizione N posti). In 1v1 i valori restano 0 e 1.
+ */
+export type Seat = number;
+
+/**
+ * Identità di SQUADRA (specchio di `TeamId` del BE). In individuale `team === seat`;
+ * in coppie (predisposizione, non attiva) posti opposti condividono la squadra.
+ * Il FE non calcola le regole: usa `Meld.ownerTeam` così com'è redatto dal server.
+ */
+export type TeamId = number;
 
 /**
  * IDENTITÀ "matta" della carta (non il ruolo che assume in un gioco):
@@ -40,7 +51,14 @@ export interface Meld {
   id: string;
   type: MeldType;
   cards: Card[];
+  /** Posto che ha calato il gioco (audit/log; NON usato per la proprietà). */
   ownerSeat: Seat;
+  /**
+   * SQUADRA proprietaria del gioco (specchio del BE, P4). Il FE raggruppa e decide
+   * la selezionabilità dei giochi per QUESTO campo, mai per `ownerSeat`. In 1v1
+   * `ownerTeam === ownerSeat`, quindi il raggruppamento "Noi/Loro" non cambia.
+   */
+  ownerTeam: TeamId;
   isBurraco: boolean;
   clean: boolean;
   /**
@@ -51,8 +69,10 @@ export interface Meld {
 }
 
 export interface GameConfig {
-  numeroGiocatori: 2;
-  modalita: "individuale";
+  /** Posti al tavolo: 2 (1v1) o 4 (coppie 2v2). Copia allineata al BE (widening C1). */
+  numeroGiocatori: 2 | 4;
+  /** Modalità: "coppie" = 2v2 (posti opposti 0+2 / 1+3). Copia allineata al BE (C2). */
+  modalita: "individuale" | "coppie";
   punteggioObiettivo: number;
   varianteChiusura: "italiana" | "internazionale";
   presaPozzetto: "in_diretta_e_differita" | "solo_differita";
@@ -69,12 +89,35 @@ export interface PlayerPublic {
   seat: Seat;
   displayName: string;
   connectionStatus: ConnectionStatus;
+  /**
+   * SQUADRA del posto (C5). La UI raggruppa le coppie (0+2 / 1+3) per QUESTO campo,
+   * mai deducendolo. In individuale/1v1 `team === seat` (invariato).
+   */
+  team: TeamId;
+}
+
+/**
+ * Vista PUBBLICA di un posto al tavolo (C3, anti-leak P3). Specchio di SeatPublic (BE):
+ * ogni posto porta SOLO il CONTEGGIO delle carte, mai le carte (compagno incluso).
+ * La sola mano completa nel payload è `GameStatePublic.yourHand` del destinatario.
+ */
+export interface SeatPublic {
+  seat: Seat;
+  team: TeamId;
+  handCount: number;
+  connectionStatus: ConnectionStatus;
+  displayName: string;
 }
 
 export interface GameStatePublic {
   yourHand: Card[];
   tableMelds: Meld[];
-  opponentHandCount: number;
+  /**
+   * TUTTI i posti del tavolo — VIEWER INCLUSO (D-A) — col solo CONTEGGIO delle carte
+   * (mai le carte: anti-leak P3). Sostituisce `opponentHandCount` (C3): a N posti
+   * l'avversario non è più unico. Il client filtra per `seat` per il proprio/gli altri.
+   */
+  seats: SeatPublic[];
   discardTop: Card | null;
   discardCount: number;
   drawPileCount: number;
@@ -95,7 +138,11 @@ export interface GameStatePublic {
    */
   canUndo: boolean;
   yourSeat: Seat;
-  scores: [number, number];
+  /**
+   * Punteggi cumulativi INDICIZZATI PER SQUADRA (`TeamId`, C4/D-E): `scores[team]`.
+   * In individuale/1v1 team = seat → coincide con la vecchia tupla per-seat.
+   */
+  scores: number[];
   status: "playing" | "hand_ended" | "game_ended";
 }
 
@@ -128,7 +175,13 @@ export type RejectCode =
   | "MUST_KEEP_CARD_TO_DISCARD"
   | "CANNOT_CLOSE_NO_BURRACO"
   | "ILLEGAL_LAST_DISCARD"
-  | "NO_PINELLA_TO_SUBSTITUTE"
+  | "NO_WILD_TO_SUBSTITUTE"
+  // Sostituzione della matta in una SEQUENZA: nessuna estremità (cima/fondo) è
+  // legale per la matta spostata (es. sequenza satura A-basso…A-alto) → rifiuto.
+  | "WILD_NO_LEGAL_POSITION"
+  // Sostituzione della matta in una SEQUENZA con ENTRAMBE le estremità legali ma
+  // senza `edge`: il server chiede al client di scegliere cima o fondo e ripetere.
+  | "WILD_EDGE_REQUIRED"
   | "NOTHING_TO_UNDO"
   | "GAME_NOT_ACTIVE"
   | "MALFORMED";
@@ -157,7 +210,20 @@ export type ClientMessage =
   | { type: "draw"; source: "deck" | "discard"; clientMoveId?: string }
   | { type: "meld_new"; cards: string[]; clientMoveId?: string }
   | { type: "meld_extend"; meldId: string; cards: string[]; clientMoveId?: string }
-  | { type: "pinella_substitute"; meldId: string; cardInHand: string; clientMoveId?: string }
+  // SOSTITUZIONE DELLA MATTA: la carta naturale (`cardInHand`) prende il posto
+  // della matta calata (jolly O pinella, l'unica presente nel gioco); la matta NON
+  // torna mai in mano. In una SEQUENZA la matta si sposta a cima ("top") o fondo
+  // ("bottom") estendendo la scala di una posizione: `edge` è la scelta del
+  // giocatore, necessaria SOLO quando entrambe le estremità sono legali (altrimenti
+  // il server usa l'unica legale, o rifiuta se nessuna lo è). Nei GRUPPI la matta
+  // resta dentro e `edge` è ignorato.
+  | {
+      type: "wild_substitute";
+      meldId: string;
+      cardInHand: string;
+      edge?: "top" | "bottom";
+      clientMoveId?: string;
+    }
   | { type: "discard"; card: string; clientMoveId?: string }
   // ANNULLA l'ultima calata annullabile del proprio turno (solo correlation id).
   | { type: "undo_last"; clientMoveId?: string }
@@ -168,6 +234,11 @@ export type ClientMessage =
   | { type: "game_abort" }
   // LOBBY (door a) — "Apri un tavolo". `private:true` → non compare in lista.
   // I campi identità hanno la stessa semantica di join_room (nome autoritativo dal token).
+  //
+  // MODALITÀ (Tappa 3a), ADDITIVA/OPZIONALE: `numeroGiocatori` 2 (1v1) | 4 (2v2),
+  // `modalita` "individuale" | "coppie". Default 2/individuale → 1v1 invariato. Il
+  // server VALIDA: ammesse SOLO {2, individuale} e {4, coppie}; altre combinazioni
+  // sono normalizzate a 1v1. Copia allineata a mano al BE (P2).
   | {
       type: "open_table";
       code: string;
@@ -176,14 +247,20 @@ export type ClientMessage =
       clientId?: string;
       authToken?: string;
       playerToken?: string;
+      numeroGiocatori?: 2 | 4;
+      modalita?: "individuale" | "coppie";
     }
-  // LOBBY (door b) — "Gioca subito". Decisione tutta server-side.
+  // LOBBY (door b) — "Gioca subito". Decisione tutta server-side. `numeroGiocatori`/
+  // `modalita`: come open_table (default 2/individuale; il quick_match fonde/siede
+  // solo su tavoli della stessa firma modalità+dimensione).
   | {
       type: "quick_match";
       displayName: string;
       clientId?: string;
       authToken?: string;
       playerToken?: string;
+      numeroGiocatori?: 2 | 4;
+      modalita?: "individuale" | "coppie";
     }
   | { type: "heartbeat" };
 
@@ -198,10 +275,13 @@ export type ServerMessage =
   | { type: "pozzetto_taken"; seat: Seat }
   | { type: "burraco_made"; seat: Seat; meldId: string; clean: boolean }
   | { type: "turn_changed"; seat: Seat; phase: Phase }
-  | { type: "hand_ended"; closerSeat: Seat | null; scores: HandScoreDetail[]; cumulative: [number, number] }
+  // C6: `cumulative` è PER SQUADRA (`TeamId`); `scores` resta per-seat (C7, il FE
+  // aggrega per squadra). In 1v1 team = seat → valori invariati.
+  | { type: "hand_ended"; closerSeat: Seat | null; scores: HandScoreDetail[]; cumulative: number[] }
+  // C8: `winnerTeam` = SQUADRA vincitrice (in 1v1 = posto); `finalScores` per squadra.
   // `reason?: "forfeit"` = l'avversario ha abbandonato (disconnessione oltre la
   // grazia); assente = fine normale per obiettivo raggiunto.
-  | { type: "game_ended"; winnerSeat: Seat | null; finalScores: [number, number]; reason?: "forfeit" }
+  | { type: "game_ended"; winnerTeam: TeamId | null; finalScores: number[]; reason?: "forfeit" }
   // Chiusura TERMINALE del tavolo SENZA vincitore, distinta da `game_ended`.
   // "interrupted" = reset esplicito; "abandoned" = avversario non rientrato.
   | { type: "room_closed"; reason: "interrupted" | "abandoned" }
@@ -209,8 +289,10 @@ export type ServerMessage =
   // room_closed). `byName` è chi ha annullato, per l'avviso in chiaro. La partita è
   // 'aborted' e NON conta nelle statistiche.
   | { type: "game_aborted"; byName: string }
-  | { type: "opponent_disconnected"; seat: Seat }
-  | { type: "opponent_reconnected"; seat: Seat }
+  // C9/D-B: un POSTO ha perso/ripreso la connessione (ex opponent_*; a N posti
+  // "opponent" è ambiguo — può essere il compagno). Broadcast a tutti gli altri posti.
+  | { type: "player_disconnected"; seat: Seat }
+  | { type: "player_reconnected"; seat: Seat }
   // Rifiuto di join_room PRIMA di occupare un posto. "AUTH_REQUIRED" = manca
   // l'authToken; "AUTH_INVALID" = token scaduto/revocato; "ROOM_JUST_TAKEN"
   // (LOBBY §5.4-C) = ci si è seduti a un tavolo appena riempito → messaggio + refresh lista.
@@ -234,8 +316,16 @@ export interface WaitingTableView {
   code: string;
   creatorName: string;
   openedAt: number;
+  /** Posti totali del tavolo (= config.numeroGiocatori; 2 in 1v1, 4 in coppie). */
   seatsTotal: number;
+  /** Posti occupati da un socket vivo in attesa (1..seatsTotal-1). */
   seatsTaken: number;
+  /**
+   * MODALITÀ del tavolo (Tappa 3a), ADDITIVA/OPZIONALE. Valorizzata "coppie" SOLO
+   * per i tavoli 2v2 (per distinguerli in lista oltre a `seatsTotal` = 4); OMESSA
+   * per l'1v1 (individuale). Specchio del BE, copia allineata a mano (P2).
+   */
+  modalita?: "individuale" | "coppie";
 }
 
 /** Risposta di GET /tables. Specchio di TablesResponse (BE). */

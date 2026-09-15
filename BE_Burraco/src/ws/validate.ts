@@ -51,6 +51,14 @@ const resetRoom = z.object({ type: z.literal("reset_room") });
 // sono dedotti dal socket lato server (mai dal client → nessuno spoof).
 const gameAbort = z.object({ type: z.literal("game_abort") });
 
+// MODALITÀ (Tappa 3a) — campi ADDITIVI e OPZIONALI del tavolo, condivisi da
+// open_table e quick_match. Solo FORMA: la combinazione ammessa ({2,individuale} |
+// {4,coppie}) e la normalizzazione delle altre le decide `RoomManager.configForMode`,
+// non qui. Assenti (client vecchio) → il RoomManager crea un tavolo 1v1 di default.
+// Devono restare allineati al contratto (contract/types.ts, open_table/quick_match).
+const numeroGiocatori = z.union([z.literal(2), z.literal(4)]).optional();
+const modalita = z.enum(["individuale", "coppie"]).optional();
+
 // LOBBY (door a) — "Apri un tavolo". `code` è normalizzato/troncato a valle dal
 // RoomManager; qui solo cap difensivo. I campi di identità hanno la stessa forma
 // di join_room (la validità reale del token la decide l'AuthService, non qui).
@@ -62,15 +70,20 @@ const openTable = z.object({
   clientId: z.string().max(MAX_ID).optional(),
   authToken: z.string().max(MAX_AUTH_TOKEN).optional(),
   playerToken: z.string().max(MAX_ID).optional(),
+  numeroGiocatori,
+  modalita,
 });
 
-// LOBBY (door b) — "Gioca subito". Nessun payload di gioco: solo identità.
+// LOBBY (door b) — "Gioca subito". Nessun payload di gioco: solo identità e la
+// firma di modalità/dimensione del tavolo desiderato (opzionale → 1v1).
 const quickMatch = z.object({
   type: z.literal("quick_match"),
   displayName: z.string().max(MAX_NAME),
   clientId: z.string().max(MAX_ID).optional(),
   authToken: z.string().max(MAX_AUTH_TOKEN).optional(),
   playerToken: z.string().max(MAX_ID).optional(),
+  numeroGiocatori,
+  modalita,
 });
 
 const draw = z.object({
@@ -92,10 +105,13 @@ const meldExtend = z.object({
   clientMoveId,
 });
 
-const pinellaSubstitute = z.object({
-  type: z.literal("pinella_substitute"),
+const wildSubstitute = z.object({
+  type: z.literal("wild_substitute"),
   meldId: z.string().max(MAX_ID),
   cardInHand: cardId,
+  // Scelta dell'estremità (solo forma; legalità decisa dal motore). Opzionale:
+  // assente = il client non ha ancora scelto / non serve scegliere.
+  edge: z.enum(["top", "bottom"]).optional(),
   clientMoveId,
 });
 
@@ -118,7 +134,7 @@ const clientMessageSchema = z.discriminatedUnion("type", [
   draw,
   meldNew,
   meldExtend,
-  pinellaSubstitute,
+  wildSubstitute,
   discard,
   undoLast,
   resetRoom,
