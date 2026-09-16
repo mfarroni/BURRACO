@@ -384,6 +384,43 @@ button:disabled {
 }
 
 /* ===================================================================
+ * SFONDO "TAVOLO VERDE" — accesso / registrazione / lobby (Lotto 3, R5)
+ * -------------------------------------------------------------------
+ * La base `.lobby` è CONDIVISA da tre card. Solo DUE ricevono il feltro
+ * da tavolo:
+ *   · `.auth-panel`  → AuthPanel (login + registrazione);
+ *   · `.lobby-wide`  → lobby autenticata (lista tavoli).
+ * Sono esclusi DI PROPOSITO, e restano identici a prima:
+ *   · `.profile-panel` → il profilo NON deve regredire (rischio #1);
+ *   · `.lobby` nuda    → lo splash "Ripristino sessione".
+ * Per questo si usa il selettore COMPOSTO (`.lobby.auth-panel` /
+ * `.lobby.lobby-wide`, specificità 0,2,0): batte sempre la base `.lobby`
+ * (0,1,0) a prescindere dall'ordine e non può MAI matchare `.lobby`
+ * nuda né `.lobby.profile-panel`. La regola sovrascrive solo `background`:
+ * bordo, filo d'oro superiore, raggio e ombra restano ereditati da `.lobby`.
+ *
+ * Palette: SOLO token feltro SCURI (famiglia --felt-800/900) → nessun asset,
+ * zero rischi CSP. Tre layer, tutti CSS: (1) alone caldo in alto = luce del
+ * tavolo, hue coerente col body; (2) trama a "panno"; (3) base opaca
+ * felt-800→felt-900 (fa anche da fallback). Contrasti AA verificati sui testi
+ * sovrapposti al pannello:
+ *   · --text-strong (h1/valori): ~10.9:1 (felt-800) … ~13.2:1 (felt-900) — AAA
+ *   · --text        (corpo):     ~9.7:1  … ~11.8:1 — AAA
+ *   · --text-muted  (label, tagline, tab, lead): ~7.1:1 … ~8.6:1 — AAA;
+ *     anche sotto l'alone caldo (max ≈ felt-700) resta ~5.7:1 — AA.
+ * Gli input NON dipendono da qui: `.lobby input` ha fondo proprio
+ * (--surface-sunken) e testo --text-strong; i placeholder --text-faint sul
+ * sunken restano ~6:1 — AA. Il focus ring (--brass-300) è invariato.
+ * =================================================================== */
+.lobby.auth-panel,
+.lobby.lobby-wide {
+  background:
+    radial-gradient(115% 80% at 50% 0%, rgba(46, 110, 86, 0.22) 0%, rgba(14, 42, 34, 0) 62%),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.014) 0 2px, rgba(0, 0, 0, 0.018) 2px 4px),
+    linear-gradient(180deg, var(--felt-800) 0%, var(--felt-900) 100%);
+}
+
+/* ===================================================================
  * LAYOUT PARTITA
  * =================================================================== */
 .game {
