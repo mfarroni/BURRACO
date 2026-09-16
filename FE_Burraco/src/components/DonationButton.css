@@ -1,0 +1,60 @@
+/*
+ * Foglio del pulsante donazione "Buy Me a Coffee" (Lotto 4 — R6).
+ *
+ * Tutte le classi sono prefissate `bmc-` per evitare qualsiasi collisione con
+ * globals.css e Landing.css (verificato: nessuna `bmc-` altrove). È un'ECCEZIONE
+ * DICHIARATA alla regola di Landing.css secondo cui ogni selettore discende da
+ * `.landing-root`: questo componente porta il proprio foglio isolato per nome.
+ *
+ * Dimensioni NEL FOGLIO (non inline: JSX non supporta !important). `max-width:100%`
+ * e `height:auto` garantiscono che a 375px il badge non sfori mai il contenitore.
+ */
+
+.bmc-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 24px auto 0;
+  text-align: center;
+}
+
+.bmc-link {
+  display: inline-block;
+  line-height: 0; /* rimuove lo spazio sotto l'immagine inline */
+  border-radius: 8px;
+  outline-offset: 3px;
+}
+
+/* Focus visibile per la navigazione da tastiera (accessibilità). */
+.bmc-link:focus-visible {
+  outline: 2px solid currentColor;
+}
+
+.bmc-img {
+  display: block;
+  width: 217px; /* dimensione nativa del badge */
+  max-width: 100%; /* non sfora contenitori stretti (≤ 375px) */
+  height: auto; /* mantiene le proporzioni 217×60 quando la larghezza scala */
+}
+
+/* Riga di testo discreta, senza enfasi: nessun conteggio/obiettivo/banner. */
+.bmc-note {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--text-muted, #b9b9b9);
+}
+
+/* Variante compatta (es. lobby): badge e testo leggermente ridotti. */
+.bmc-wrap[data-size="compatto"] {
+  gap: 6px;
+  margin-top: 16px;
+}
+.bmc-wrap[data-size="compatto"] .bmc-img {
+  width: 180px;
+}
+.bmc-wrap[data-size="compatto"] .bmc-note {
+  font-size: 0.75rem;
+}

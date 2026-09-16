@@ -41,6 +41,7 @@ export class DrizzleStatsStore implements StatsStore {
     // Partite CONCLUSE dell'utente con la sua SQUADRA e la squadra vincitrice.
     const rows = await this.db
       .select({
+        matchId: schema.matchPlayers.matchId,
         seat: schema.matchPlayers.seat,
         team: schema.matchPlayers.team,
         winnerSeat: schema.matches.winnerSeat,
@@ -162,6 +163,104 @@ export class DrizzleStatsStore implements StatsStore {
 
     const analysis = matchesPlayed === 0 ? emptyAnalysis() : buildAnalysis(agg, trendPoints);
 
+    /* ── Voci di profilo aggiuntive (Lotto 4) ────────────────────────────────
+     * Tutte ON-THE-FLY, coerenti col `periodo` come il resto (tranne memberSince,
+     * dato di profilo). Nessuna tabella nuova, query parametrizzate come sopra. */
+
+    // Miglior punteggio in una singola partita: max dei totali per-partita già
+    // aggregati in `perMatch` (rispetta il periodo). null se nessuna partita.
+    let bestMatchScore: number | null = null;
+    for (const r of perMatch) {
+      const t = num(r.matchTotal);
+      if (bestMatchScore === null || t > bestMatchScore) bestMatchScore = t;
+    }
+
+    // Data d'iscrizione: users.created_at del principale (indipendente dal periodo).
+    const [userRow] = await this.db
+      .select({ createdAt: schema.users.createdAt })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1);
+    const memberSince = userRow?.createdAt ? new Date(userRow.createdAt).getTime() : null;
+
+    // Ultime 5 partite completed (per ended_at desc), esito won/lost, poi INVERTITE
+    // in ordine cronologico (vecchia→nuova). Stesso pattern di `rows` + limit 5.
+    const lastFiveRows = await this.db
+      .select({
+        seat: schema.matchPlayers.seat,
+        team: schema.matchPlayers.team,
+        winnerSeat: schema.matches.winnerSeat,
+        winnerTeam: schema.matches.winnerTeam,
+      })
+      .from(schema.matchPlayers)
+      .innerJoin(schema.matches, eq(schema.matches.id, schema.matchPlayers.matchId))
+      .where(
+        and(
+          eq(schema.matchPlayers.userId, userId),
+          eq(schema.matches.status, "completed"),
+          ...periodConds(),
+        ),
+      )
+      .orderBy(
+        sql`${schema.matches.endedAt} desc nulls last`,
+        sql`${schema.matches.createdAt} desc`,
+      )
+      .limit(5);
+    const lastFive: ("won" | "lost")[] = lastFiveRows
+      .map((r) => {
+        const t = r.team ?? r.seat;
+        const w = r.winnerTeam ?? r.winnerSeat;
+        return w !== null && w === t ? "won" : "lost";
+      })
+      .reverse();
+
+    // Avversari: posti dell'ALTRA squadra nelle partite completed dell'utente.
+    // vsRegistered/vsGuest contano UNA volta per partita (rappresentante = posto
+    // avversario minore, come lo storico); topOpponents conta le PARTECIPAZIONI.
+    const yourTeamByMatch = new Map<string, TeamId>();
+    for (const r of rows) yourTeamByMatch.set(r.matchId, (r.team ?? r.seat) as TeamId);
+    const matchIds = [...yourTeamByMatch.keys()];
+
+    let vsRegistered = 0;
+    let vsGuest = 0;
+    const oppTally = new Map<string, { name: string; isGuest: boolean; count: number }>();
+
+    if (matchIds.length > 0) {
+      const oppRows = await this.db
+        .select({
+          matchId: schema.matchPlayers.matchId,
+          seat: schema.matchPlayers.seat,
+          team: schema.matchPlayers.team,
+          displayName: schema.matchPlayers.displayName,
+          userId: schema.matchPlayers.userId,
+          isGuest: schema.users.isGuest,
+        })
+        .from(schema.matchPlayers)
+        .leftJoin(schema.users, eq(schema.users.id, schema.matchPlayers.userId))
+        .where(inArray(schema.matchPlayers.matchId, matchIds));
+
+      for (const [matchId, yourTeam] of yourTeamByMatch) {
+        const opponents = oppRows
+          .filter((p) => p.matchId === matchId && (p.team ?? p.seat) !== yourTeam)
+          .sort((a, b) => a.seat - b.seat);
+        if (opponents.length === 0) continue;
+        // Rappresentante avversario (posto minore): stessa logica del flag ospite
+        // nello storico (`opp[0]?.isGuest ?? false`) → coerenza tra le due viste.
+        if (opponents[0]!.isGuest ?? false) vsGuest += 1;
+        else vsRegistered += 1;
+        for (const o of opponents) {
+          const key = o.userId ?? `name:${o.displayName}`;
+          const entry = oppTally.get(key);
+          if (entry) entry.count += 1;
+          else oppTally.set(key, { name: o.displayName, isGuest: o.isGuest ?? false, count: 1 });
+        }
+      }
+    }
+
+    const topOpponents = [...oppTally.values()]
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+      .slice(0, 3);
+
     return {
       matchesPlayed,
       matchesWon,
@@ -172,6 +271,12 @@ export class DrizzleStatsStore implements StatsStore {
       avgFinalScore,
       analysis,
       periodo,
+      memberSince,
+      bestMatchScore,
+      lastFive,
+      vsRegistered,
+      vsGuest,
+      topOpponents,
     };
   }
 

@@ -285,6 +285,20 @@ export interface StyleAnalysis {
   trend: StatTrend;
 }
 
+/**
+ * Avversario ricorrente (voce di "avversari più frequenti"). PRIVACY: espone SOLO
+ * il displayName, il flag ospite e il conteggio — MAI userId/email (coerente con
+ * gli altri DTO: nessun identificativo interno raggiunge il client).
+ */
+export interface TopOpponent {
+  /** display_name dell'avversario (autoritativo, mai un valore arbitrario del client). */
+  name: string;
+  /** true se quell'avversario era un ospite (per il suffisso "(ospite)" nella UI). */
+  isGuest: boolean;
+  /** Numero di partecipazioni avversarie contro l'utente (frequenza). */
+  count: number;
+}
+
 /** Statistiche aggregate di un utente (contatori base + blocco analisi). */
 export interface UserStats {
   matchesPlayed: number;
@@ -302,6 +316,24 @@ export interface UserStats {
   analysis: StyleAnalysis;
   /** Eco del periodo su cui sono calcolate (per l'UI). */
   periodo: StatsPeriod;
+  /* ── Voci di profilo aggiuntive (Lotto 4). Additive: nessun campo esistente
+   *    cambia. Calcolate ON-THE-FLY dallo StatsStore, coerenti col `periodo`
+   *    (tranne `memberSince`, che è un dato di profilo indipendente dal periodo). */
+  /** Epoch ms d'iscrizione (users.created_at del principale). null se sconosciuto. */
+  memberSince: number | null;
+  /** Miglior punteggio finale dell'utente in una singola partita completed; null se played = 0. */
+  bestMatchScore: number | null;
+  /**
+   * Esito delle ultime 5 partite completed, in ordine CRONOLOGICO (vecchia→nuova):
+   * 0..5 voci. Il FE le mostra a pallini (esito mai affidato al solo colore).
+   */
+  lastFive: ("won" | "lost")[];
+  /** # partite completed con avversario REGISTRATO. */
+  vsRegistered: number;
+  /** # partite completed con avversario OSPITE. */
+  vsGuest: number;
+  /** Avversari più frequenti (max 3, per frequenza desc). Solo name+isGuest+count. */
+  topOpponents: TopOpponent[];
 }
 
 /** Sintesi di una partita conclusa per lo storico paginato (decisione E). */
