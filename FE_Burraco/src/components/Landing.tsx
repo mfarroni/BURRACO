@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { AuthMode } from "@/components/AuthPanel";
+import { DonationButton } from "@/components/DonationButton";
 import "./Landing.css";
 
 /**
@@ -481,6 +482,8 @@ export function Landing({ onOpenAuth }: Props) {
             <p className="footer-fine-print">
               Si gioca senza denaro. Nessuna scommessa, nessun premio in denaro.
             </p>
+            {/* Donazione (Lotto 4 — R6): nel piè, dopo Contatti. Mai fissa/overlay. */}
+            <DonationButton />
           </footer>
         </div>
       </div>

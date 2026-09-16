@@ -13,6 +13,7 @@ import type {
 } from "@/lib/contract";
 import { fetchStats, fetchMatches, fetchMatchDetail } from "@/lib/profile";
 import { AuthClientError } from "@/lib/auth";
+import { DonationButton } from "@/components/DonationButton";
 
 /**
  * SCHERMATA PROFILO (macro-ciclo storico) — SOLA LETTURA.
@@ -249,7 +250,14 @@ export function ProfilePanel({ user, onBack }: Props) {
                   label="Punteggio medio"
                   value={stats.avgFinalScore == null ? "—" : nfInt.format(Math.round(stats.avgFinalScore))}
                 />
+                <StatCard
+                  label="Miglior punteggio"
+                  value={stats.bestMatchScore == null ? "—" : nfInt.format(stats.bestMatchScore)}
+                />
               </div>
+
+              {/* ── In sintesi (contesto): iscrizione, ultime 5, avversari ────── */}
+              <ProfileContext stats={stats} />
 
               {/* Blocco analisi + andamento: presenti SOLO se il backend è aggiornato
                   (campo `analysis`). Con un backend non ancora aggiornato la risposta
@@ -398,6 +406,11 @@ export function ProfilePanel({ user, onBack }: Props) {
                   )}
                 </>
               )}
+
+              {/* Donazione (Lotto 4 — R6): in fondo al pannello, dopo le sezioni
+                  statistiche/andamento/partite. Solo utente REGISTRATO (ramo
+                  non-ospite) e solo a dati caricati. Mai fissa/sticky/overlay. */}
+              <DonationButton />
             </>
           )}
         </>
@@ -606,6 +619,96 @@ function StatCard({
       <span className="stat-value">{value}</span>
       <span className="stat-label">{label}</span>
     </div>
+  );
+}
+
+/**
+ * Blocco "In sintesi" (Lotto 4 — R7): data d'iscrizione, partite vs registrati/ospiti,
+ * esito delle ultime 5 a pallini e avversari più frequenti. Tutti dati che il server
+ * ha già aggregato; qui solo formattazione IT e rendering accessibile.
+ *
+ * Robustezza: i campi sono opzionali (contratto tollerante col backend non aggiornato)
+ * → si applicano default gentili. `memberSince` si mostra sempre (esiste per ogni
+ * registrato); le altre voci mostrano un placeholder finché non ci sono partite, mai
+ * zeri fuorvianti.
+ */
+function ProfileContext({ stats }: { stats: UserStats }) {
+  const lastFive = stats.lastFive ?? [];
+  const topOpponents = stats.topOpponents ?? [];
+  const vsRegistered = stats.vsRegistered ?? 0;
+  const vsGuest = stats.vsGuest ?? 0;
+  const noGames = stats.matchesPlayed === 0;
+
+  return (
+    <section className="profile-context" aria-label="In sintesi">
+      <h2 className="profile-section-title">In sintesi</h2>
+
+      <dl className="context-facts">
+        <div className="context-fact">
+          <dt className="context-label">Iscritto dal</dt>
+          <dd className="context-value">
+            {stats.memberSince == null ? "—" : formatDate(stats.memberSince)}
+          </dd>
+        </div>
+        <div className="context-fact">
+          <dt className="context-label">Partite vs registrati</dt>
+          <dd className="context-value">{noGames ? "—" : nfInt.format(vsRegistered)}</dd>
+        </div>
+        <div className="context-fact">
+          <dt className="context-label">Partite vs ospiti</dt>
+          <dd className="context-value">{noGames ? "—" : nfInt.format(vsGuest)}</dd>
+        </div>
+      </dl>
+
+      {/* Ultime 5 partite a pallini: l'esito NON è affidato al solo colore → ogni
+          pallino porta la lettera V/S e un'etichetta per screen reader. Ordine
+          cronologico: da sinistra (più vecchia) a destra (più recente). */}
+      <div className="context-lastfive">
+        <span className="context-label">Ultime 5 partite</span>
+        {lastFive.length === 0 ? (
+          <p className="context-empty">Ancora nessuna partita conclusa.</p>
+        ) : (
+          <>
+            <ol
+              className="last-five"
+              aria-label="Esito delle ultime cinque partite, dalla più vecchia alla più recente"
+            >
+              {lastFive.map((r, i) => (
+                <li key={i} className="lf-dot" data-result={r}>
+                  <span className="lf-mark" aria-hidden="true">{r === "won" ? "V" : "S"}</span>
+                  <span className="sr-only">{r === "won" ? "Vinta" : "Persa"}</span>
+                </li>
+              ))}
+            </ol>
+            <span className="context-axis" aria-hidden="true">
+              <span>meno recenti</span>
+              <span>più recenti</span>
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Avversari più frequenti (max 3). Nome + "(ospite)" se ospite + conteggio. */}
+      <div className="context-opponents">
+        <span className="context-label">Avversari più frequenti</span>
+        {topOpponents.length === 0 ? (
+          <p className="context-empty">
+            Gioca qualche partita per vedere chi incontri più spesso.
+          </p>
+        ) : (
+          <ul className="top-opponents">
+            {topOpponents.map((o, i) => (
+              <li key={i} className="top-opponent">
+                <span className="top-opponent-name">{opponentLabel(o.name, o.isGuest)}</span>
+                <span className="top-opponent-count">
+                  {nfInt.format(o.count)} {o.count === 1 ? "partita" : "partite"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }
 

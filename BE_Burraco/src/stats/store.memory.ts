@@ -90,8 +90,19 @@ export class MemoryStatsStore implements StatsStore {
   private hands: HandRec[] = [];
   private handScores: HandScoreRec[] = [];
   private handSeq = 0;
+  /**
+   * Data d'iscrizione per utente (specchio in-RAM di users.created_at). Serve a
+   * `memberSince`: senza DB non esiste una tabella users, quindi i test la seminano
+   * via `putUser`. Utente non seminato → memberSince null (nessun dato di profilo).
+   */
+  private users = new Map<string, Date>();
 
   /* ───────────────────────────── INGEST (test/seed) ───────────────────────── */
+
+  /** Registra la data d'iscrizione di un utente (per `memberSince`). */
+  putUser(rec: { id: string; createdAt?: Date }): void {
+    this.users.set(rec.id, rec.createdAt ?? new Date());
+  }
 
   /** Registra/aggiorna una partita. */
   putMatch(rec: {
@@ -330,6 +341,54 @@ export class MemoryStatsStore implements StatsStore {
 
     const analysis = matchesPlayed === 0 ? emptyAnalysis() : buildAnalysis(agg, trendPoints);
 
+    /* ── Voci di profilo aggiuntive (Lotto 4) ────────────────────────────────
+     * Parità numerica con lo store Drizzle: stessa semantica, stesse regole. */
+
+    // Miglior punteggio in una singola partita: max dei totali per-partita del posto
+    // dell'utente (equivalente al `perMatch` di Drizzle). null se nessuna partita.
+    let bestMatchScore: number | null = null;
+    for (const v of finalByMatch.values()) {
+      if (bestMatchScore === null || v > bestMatchScore) bestMatchScore = v;
+    }
+
+    // Data d'iscrizione (indipendente dal periodo). null se l'utente non è seminato.
+    const memberCreated = this.users.get(userId);
+    const memberSince = memberCreated ? memberCreated.getTime() : null;
+
+    // Ultime 5 partite completed per fine (endedAt ?? createdAt) desc, esito won/lost,
+    // poi invertite in ordine cronologico (vecchia→nuova). Stesso ordinamento del trend.
+    const lastFive: ("won" | "lost")[] = completed
+      .slice()
+      .sort((a, b) => this.endedTime(b.match) - this.endedTime(a.match))
+      .slice(0, 5)
+      .map(({ player, match }) => {
+        const w = winnerTeamOf(match);
+        return w !== null && w === teamOf(player) ? "won" : "lost";
+      })
+      .reverse();
+
+    // Avversari: posti dell'ALTRA squadra nelle partite completed dell'utente.
+    // vsRegistered/vsGuest contano UNA volta per partita (rappresentante = posto
+    // avversario minore, come lo storico); topOpponents conta le PARTECIPAZIONI.
+    let vsRegistered = 0;
+    let vsGuest = 0;
+    const oppTally = new Map<string, { name: string; isGuest: boolean; count: number }>();
+    for (const { player, match } of completed) {
+      const { opp } = this.splitByTeam(match.id, teamOf(player));
+      if (opp.length === 0) continue;
+      if (opp[0]!.isGuest) vsGuest += 1;
+      else vsRegistered += 1;
+      for (const o of opp) {
+        const key = o.userId ?? `name:${o.displayName}`;
+        const entry = oppTally.get(key);
+        if (entry) entry.count += 1;
+        else oppTally.set(key, { name: o.displayName, isGuest: o.isGuest, count: 1 });
+      }
+    }
+    const topOpponents = [...oppTally.values()]
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+      .slice(0, 3);
+
     return {
       matchesPlayed,
       matchesWon,
@@ -340,6 +399,12 @@ export class MemoryStatsStore implements StatsStore {
       avgFinalScore,
       analysis,
       periodo,
+      memberSince,
+      bestMatchScore,
+      lastFive,
+      vsRegistered,
+      vsGuest,
+      topOpponents,
     };
   }
 

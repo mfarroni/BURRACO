@@ -406,13 +406,24 @@ export interface StyleAnalysis {
 }
 
 /**
+ * Avversario ricorrente (voce di "avversari più frequenti"). Specchio di TopOpponent
+ * (BE), copia allineata a mano (P2). PRIVACY: SOLO name+isGuest+count, mai userId/email.
+ */
+export interface TopOpponent {
+  name: string;
+  isGuest: boolean;
+  count: number;
+}
+
+/**
  * Statistiche aggregate di un utente (base + analisi). Specchio di UserStats (BE).
  *
- * ROBUSTEZZA (contratto tollerante): i campi introdotti da questa feature sono
- * OPZIONALI perché il FE può parlare con un backend non ancora aggiornato (es.
+ * ROBUSTEZZA (contratto tollerante): i campi introdotti dalle feature successive
+ * sono OPZIONALI perché il FE può parlare con un backend non ancora aggiornato (es.
  * preview Vercel del branch verso il Render di produzione ancora vecchio). In quel
  * caso la risposta contiene solo i campi base: la UI deve degradare (nascondere il
- * blocco analisi), MAI andare in crash dereferenziando `analysis` inesistente.
+ * blocco analisi, mostrare "—" sui contatori mancanti), MAI andare in crash
+ * dereferenziando un campo inesistente.
  */
 export interface UserStats {
   matchesPlayed: number;
@@ -428,6 +439,21 @@ export interface UserStats {
   /** Blocco analisi di stile. Assente su backend non aggiornato → sezione nascosta. */
   analysis?: StyleAnalysis;
   periodo?: StatsPeriod;
+  /* ── Voci di profilo aggiuntive (Lotto 4). Specchio dei campi BE, copia allineata
+   *    a mano (P2). OPZIONALI per la stessa robustezza dei campi sopra: su backend
+   *    non aggiornato sono assenti e la UI mostra placeholder gentili. */
+  /** Epoch ms d'iscrizione (users.created_at); null se sconosciuto. Assente su backend non aggiornato. */
+  memberSince?: number | null;
+  /** Miglior punteggio finale in una singola partita; null se played = 0. Assente su backend non aggiornato. */
+  bestMatchScore?: number | null;
+  /** Esito ultime 5 partite completed, ordine CRONOLOGICO (vecchia→nuova), 0..5. Assente su backend non aggiornato. */
+  lastFive?: ("won" | "lost")[];
+  /** # partite completed con avversario REGISTRATO. Assente su backend non aggiornato. */
+  vsRegistered?: number;
+  /** # partite completed con avversario OSPITE. Assente su backend non aggiornato. */
+  vsGuest?: number;
+  /** Avversari più frequenti (max 3). Solo name+isGuest+count. Assente su backend non aggiornato. */
+  topOpponents?: TopOpponent[];
 }
 
 /** Sintesi di una partita conclusa nello storico. Specchio di MatchSummary (BE). */

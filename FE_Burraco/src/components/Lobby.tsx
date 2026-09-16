@@ -5,6 +5,7 @@ import type { CSSProperties } from "react";
 import type { WaitingTableView } from "@/lib/contract";
 import type { LobbyStatus } from "@/lib/lobby";
 import type { SitRejectedInfo, TableMode } from "@/lib/useGameSocket";
+import { DonationButton } from "@/components/DonationButton";
 
 /** Un tavolo della lista è 2v2 se lo dichiara `modalita` o se ha 4 posti. */
 function isCouplesTable(t: WaitingTableView): boolean {
@@ -362,6 +363,10 @@ export function Lobby({
           Hai un codice da un amico? Digitalo per sederti al suo tavolo (anche privato).
         </p>
       </div>
+
+      {/* Donazione (Lotto 4 — R6): in fondo alla lobby, visibile anche agli ospiti.
+          Variante compatta per ridurre l'ingombro. Mai fissa/sticky. */}
+      <DonationButton size="compatto" />
     </div>
   );
 }

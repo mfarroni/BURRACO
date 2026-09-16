@@ -2248,9 +2248,11 @@ button:disabled {
   line-height: var(--lh-body);
 }
 
-/* ── Griglia statistiche (5 metriche) ────────────────────────────────
+/* ── Griglia statistiche ──────────────────────────────────────────────
    6 colonne proporzionali: le 2 metriche CHIAVE occupano mezza riga
-   ciascuna (span 3), i 3 conteggi un terzo ciascuno (span 2). */
+   ciascuna (span 3), i conteggi/contesto un terzo ciascuno (span 2). Con
+   6 card di conteggio (Giocate, Vinte, Perse, Abbandonate, Punteggio medio,
+   Miglior punteggio) si riempiono due righe intere da 3. */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -2297,14 +2299,6 @@ button:disabled {
 .stat-card[data-highlight="true"] .stat-label {
   color: var(--text-muted);
 }
-/* I due contatori "di contesto" (Abbandonate, Punteggio medio) occupano
-   mezza riga ciascuno: chiudono la griglia senza lasciare una riga monca e
-   dànno respiro alle etichette più lunghe. Esclusi gli skeleton, che sono in
-   numero diverso e restano a 3-per-riga. */
-.stats-grid .stat-card:not([data-highlight="true"]):not(.skeleton-card):nth-last-child(-n + 2) {
-  grid-column: span 3;
-}
-
 /* Mobile: la griglia collassa a 2 colonne; le chiave restano a piena
    larghezza in alto per mantenere la gerarchia. */
 @media (max-width: 520px) {
@@ -2317,8 +2311,137 @@ button:disabled {
   .stat-card[data-highlight="true"] {
     grid-column: span 2;
   }
-  .stats-grid .stat-card:not([data-highlight="true"]):not(.skeleton-card):nth-last-child(-n + 2) {
-    grid-column: span 1;
+}
+
+/* ── "In sintesi" (Lotto 4 — R7): iscrizione, vs, ultime 5, avversari ──── */
+.profile-context {
+  margin-bottom: var(--sp-5);
+}
+/* Fatti a coppie etichetta/valore (iscrizione, vs registrati, vs ospiti). */
+.context-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-4);
+}
+.context-fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.context-label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.context-value {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--fs-h2);
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* Ultime 5 partite a pallini. */
+.context-lastfive {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+.last-five {
+  list-style: none;
+  display: flex;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+}
+/* Ogni pallino: colore di esito + lettera V/S (mai solo colore). */
+.lf-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  font-family: var(--font-serif);
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.lf-dot[data-result="won"] {
+  background: rgba(62, 164, 107, 0.18);
+  color: var(--success-300);
+  border-color: var(--success-500);
+}
+.lf-dot[data-result="lost"] {
+  background: rgba(224, 87, 75, 0.14);
+  color: var(--danger-300);
+  border-color: var(--danger-500);
+}
+.context-axis {
+  display: flex;
+  justify-content: space-between;
+  max-width: 240px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* Avversari più frequenti. */
+.context-opponents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.top-opponents {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.top-opponent {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.top-opponent-name {
+  color: var(--text-strong);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.top-opponent-count {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+/* Placeholder gentile quando non ci sono ancora dati (nessuno zero fuorviante). */
+.context-empty {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+/* Mobile: i tre fatti passano a una colonna singola. */
+@media (max-width: 520px) {
+  .context-facts {
+    grid-template-columns: 1fr;
   }
 }
 
