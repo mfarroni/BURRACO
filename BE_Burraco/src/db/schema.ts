@@ -191,3 +191,27 @@ export const checkpoints = pgTable("checkpoints", {
   state: jsonb("state").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+/**
+ * Lotto 5 (R8 — PROTEZIONE LOGIN / LOCKOUT PROGRESSIVO, migrazione 0004): contatore
+ * PERSISTITO dei login falliti, così la protezione sopravvive al risveglio/cold start
+ * di Render (in RAM si azzererebbe, vanificandola). Additiva e non referenziata da FK.
+ *
+ * Nessun segreto: `key` è l'hash sha256 di (email normalizzata + IP) — mai l'email o
+ * l'IP in chiaro, mai password/token. `failed_count` cresce entro la finestra e si
+ * azzera dopo WINDOW_MS di inattività (nessun blocco definitivo). `last_failed_at`
+ * governa sia l'azzeramento automatico sia lo sweep periodico (indicizzato).
+ */
+export const loginAttempts = pgTable(
+  "login_attempts",
+  {
+    key: text("key").primaryKey(), // hash(email + ip); nessun segreto in chiaro
+    failedCount: integer("failed_count").notNull().default(0),
+    windowStartedAt: timestamp("window_started_at", { withTimezone: true }).defaultNow().notNull(),
+    lastFailedAt: timestamp("last_failed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    // Sweep dei record inattivi (pruneLoginAttempts) senza seq-scan dell'intera tabella.
+    lastFailedIdx: index("login_attempts_last_failed_idx").on(t.lastFailedAt),
+  }),
+);

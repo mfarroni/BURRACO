@@ -45,6 +45,10 @@ const registerBody = z.object({
 const loginBody = z.object({
   email: z.string().trim().toLowerCase().max(254),
   password: z.string().max(200),
+  // R8 — HONEYPOT: campo dal nome neutro/plausibile che gli umani non vedono e non
+  // compilano (input nascosto lato FE) ma i bot sì. Opzionale e ignorato se vuoto; se
+  // valorizzato → 401 immediato senza verifica password. `max` come tetto anti-abuso.
+  website: z.string().max(200).optional(),
 });
 const guestBody = z.object({ displayName: displayNameSchema });
 
@@ -192,8 +196,16 @@ export function createHttpApp(auth: AuthService, stats?: StatsStore, manager?: R
         res.status(401).json({ error: "INVALID_CREDENTIALS", message: "Credenziali non valide." });
         return;
       }
-      const { email, password } = parsed.data;
-      const result = await auth.login(email, password);
+      const { email, password, website } = parsed.data;
+      // R8 — HONEYPOT: se il campo nascosto è valorizzato è quasi certamente un bot →
+      // 401 IDENTICO immediato, SENZA verifica password né consumo argon2 (costo nullo).
+      if (website && website.trim().length > 0) {
+        res.status(401).json({ error: "INVALID_CREDENTIALS", message: "Credenziali non valide." });
+        return;
+      }
+      // R8 — lockout progressivo keyed su hash(email + IP). `req.ip` è affidabile
+      // (trust proxy impostato, SEC-A1). Il loginLimiter per-IP resta DAVANTI, invariato.
+      const result = await auth.login(email, password, req.ip ?? "");
       res.json({ token: result.sessionToken, user: result.user });
     }),
   );

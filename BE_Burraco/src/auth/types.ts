@@ -61,6 +61,19 @@ export interface AuthPrincipal {
 }
 
 /**
+ * Lotto 5 (R8): stato PERSISTITO del contatore di login falliti per una chiave
+ * `hash(email + IP)`. Nessun segreto: solo contatore e marche temporali.
+ *  - `failedCount`: fallimenti nella serie corrente (dentro la finestra).
+ *  - `windowStartedAt`: inizio della serie corrente (audit/diagnostica).
+ *  - `lastFailedAt`: ultimo fallimento; governa azzeramento automatico e sweep.
+ */
+export interface LoginAttempt {
+  failedCount: number;
+  windowStartedAt: Date;
+  lastFailedAt: Date;
+}
+
+/**
  * Porta di persistenza dell'auth. Tutte le operazioni sono async per uniformità
  * tra l'implementazione DB (query) e quella in-memory (Promise risolta subito).
  * L'AuthStore NON conosce hashing di password né generazione di token: quelle
@@ -132,4 +145,31 @@ export interface AuthStore {
    * cancellazione fisica è demandata allo sweep, e solo se non più referenziato.
    */
   markGuestExpired(userId: string, now: Date): Promise<void>;
+
+  /* ─────────── Lotto 5 (R8): lockout progressivo del login, persistito ─────────── */
+
+  /**
+   * Legge lo stato del contatore per la chiave `hash(email + IP)`. `null` se non
+   * esiste alcun fallimento registrato. NON applica azzeramento: il chiamante
+   * (servizio) decide se la finestra è ancora attiva confrontando `lastFailedAt`.
+   */
+  getLoginAttempt(key: string): Promise<LoginAttempt | null>;
+
+  /**
+   * Registra un login FALLITO per la chiave e ritorna il nuovo `failedCount`.
+   * Atomico/idempotente rispetto alla concorrenza (single-instance): se l'ultimo
+   * fallimento è più vecchio di `windowMs` (finestra scaduta per inattività) il
+   * contatore RIPARTE da 1 (azzeramento automatico), altrimenti incrementa. Aggiorna
+   * sempre `lastFailedAt = now`.
+   */
+  recordFailedLogin(key: string, now: Date, windowMs: number): Promise<number>;
+
+  /** Azzera il contatore della chiave su login RIUSCITO (rimuove la riga). */
+  clearLoginAttempts(key: string): Promise<void>;
+
+  /**
+   * Sweep periodico: elimina i contatori inattivi (`lastFailedAt` ≤ `cutoff`).
+   * Ritorna il numero di righe eliminate. Best-effort (chiamato da runMaintenance).
+   */
+  pruneLoginAttempts(cutoff: Date): Promise<number>;
 }

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AuthStore, StoredSession, StoredUser } from "./types.js";
+import type { AuthStore, LoginAttempt, StoredSession, StoredUser } from "./types.js";
 
 /**
  * Implementazione IN-MEMORY di AuthStore (decisione "TESTABILITÀ SENZA DB").
@@ -14,6 +14,9 @@ export class MemoryAuthStore implements AuthStore {
   private usersById = new Map<string, StoredUser>();
   private usersByEmail = new Map<string, StoredUser>(); // chiave: email lowercase
   private sessionsByTokenHash = new Map<string, StoredSession>();
+  // Lotto 5 (R8): contatore login falliti per chiave hash(email + IP). In RAM per
+  // test/dev; in produzione la persistenza è nello store Drizzle (tabella dedicata).
+  private loginAttemptsByKey = new Map<string, LoginAttempt>();
 
   async createUser(input: {
     email: string | null;
@@ -136,5 +139,51 @@ export class MemoryAuthStore implements AuthStore {
     // Idempotente e ristretto agli ospiti non ancora scaduti (mai sui registrati).
     const u = this.usersById.get(userId);
     if (u && u.isGuest && u.expiredAt === null) u.expiredAt = now;
+  }
+
+  /* ─────────── Lotto 5 (R8): lockout progressivo del login (in RAM) ─────────── */
+
+  async getLoginAttempt(key: string): Promise<LoginAttempt | null> {
+    const a = this.loginAttemptsByKey.get(key);
+    // Copia difensiva (le Date non vanno condivise per riferimento con lo store).
+    return a
+      ? {
+          failedCount: a.failedCount,
+          windowStartedAt: new Date(a.windowStartedAt),
+          lastFailedAt: new Date(a.lastFailedAt),
+        }
+      : null;
+  }
+
+  async recordFailedLogin(key: string, now: Date, windowMs: number): Promise<number> {
+    const existing = this.loginAttemptsByKey.get(key);
+    // Finestra scaduta per INATTIVITÀ (ultimo fallimento oltre windowMs fa) → azzera.
+    const expired = !existing || existing.lastFailedAt.getTime() < now.getTime() - windowMs;
+    if (expired) {
+      this.loginAttemptsByKey.set(key, {
+        failedCount: 1,
+        windowStartedAt: new Date(now),
+        lastFailedAt: new Date(now),
+      });
+      return 1;
+    }
+    existing.failedCount += 1;
+    existing.lastFailedAt = new Date(now);
+    return existing.failedCount;
+  }
+
+  async clearLoginAttempts(key: string): Promise<void> {
+    this.loginAttemptsByKey.delete(key);
+  }
+
+  async pruneLoginAttempts(cutoff: Date): Promise<number> {
+    let removed = 0;
+    for (const [k, a] of this.loginAttemptsByKey) {
+      if (a.lastFailedAt.getTime() <= cutoff.getTime()) {
+        this.loginAttemptsByKey.delete(k);
+        removed += 1;
+      }
+    }
+    return removed;
   }
 }
