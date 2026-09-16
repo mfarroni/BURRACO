@@ -547,6 +547,15 @@ button:disabled {
   gap: var(--sp-3);
   margin: var(--sp-4) 0;
   padding: var(--sp-3);
+  /* R4 — CONFINE DI STACKING DELL'INTERO TAVOLO. Rendere `.table-grid` un contesto
+     di impilamento a livello --z-table (0) CLAMPA tutto ciò che contiene — calate
+     (.meld z:5), carte delle calate (.card z:10) e loro eventuali stati — SOTTO la
+     .bottom-hand (z:--z-cards 10, sibling in .game). Un contesto di stacking è un
+     confine invalicabile: nessun discendente può dipingersi sopra la mano, qualunque
+     sia il suo z-index locale. Risolve il caso in cui la sola elevazione della mano
+     non bastava (le carte calate risalivano sopra la zona-mano durante lo scroll). */
+  position: relative;
+  z-index: var(--z-table);
   border: 2px solid var(--wood-700);
   border-radius: var(--r-lg);
   /* Feltro con VIGNETTATURA (angoli in ombra → profondità da tavolo reale) +
