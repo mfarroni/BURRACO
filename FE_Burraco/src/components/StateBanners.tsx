@@ -149,7 +149,7 @@ export function OpponentStatus({
   connected: boolean;
 }) {
   return (
-    <span className="badge" data-conn={connected ? "connected" : "disconnected"} aria-live="polite">
+    <span className="badge" data-conn={connected ? "connected" : "disconnected"} aria-live="polite" title={name}>
       <span className="dot" aria-hidden="true" />
       {name} · {handCount} carte
       {!connected && <span className="sr-only"> (disconnesso)</span>}

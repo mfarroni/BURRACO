@@ -20,7 +20,6 @@ interface Props {
   onDrawDiscard: () => void;
   onMeldNew: () => void;
   onMeldExtend: () => void;
-  onWildSubstitute: () => void;
   onDiscard: () => void;
   onUndo: () => void;
 }
@@ -60,8 +59,10 @@ export function ActionBar(p: Props) {
 
       <span className="sep" aria-hidden="true" />
 
-      {/* GRUPPO COSTRUTTIVO: calata / ampliamento / sostituzione — le azioni con
-          cui si "costruisce" sul tavolo. Stanno insieme per gestalt. */}
+      {/* GRUPPO COSTRUTTIVO: calata / ampliamento — le azioni con cui si
+          "costruisce" sul tavolo. Stanno insieme per gestalt. La sostituzione
+          della matta è AUTOMATICA lato server (nessun pulsante dedicato): il
+          motore la gestisce durante calata/ampliamento (DT-MATTA-01). */}
       <button type="button" disabled={locked || !mayMeld || nSel < 3} onClick={p.onMeldNew}>
         Cala gioco
       </button>
@@ -71,13 +72,6 @@ export function ActionBar(p: Props) {
         onClick={p.onMeldExtend}
       >
         Amplia
-      </button>
-      <button
-        type="button"
-        disabled={locked || !mayMeld || !p.selectedMeldId || nSel !== 1}
-        onClick={p.onWildSubstitute}
-      >
-        Sostituisci matta
       </button>
 
       {/* AZIONE DI CORREZIONE (secondaria): annulla l'ultima calata del turno.

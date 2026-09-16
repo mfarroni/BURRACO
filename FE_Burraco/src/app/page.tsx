@@ -62,12 +62,6 @@ export default function Page() {
   // Stato di SELEZIONE locale (nessuna regola: solo UI).
   const [selectedCards, setSelectedCards] = useState<string[]>([]);
   const [selectedMeldId, setSelectedMeldId] = useState<string | null>(null);
-  // Ultimo tentativo di sostituzione della matta (meld + carta), memorizzato per
-  // poter RIPETERE la mossa con la scelta cima/fondo quando il server risponde
-  // WILD_EDGE_REQUIRED. Nessuna logica di regole: si conserva solo l'intenzione.
-  const [wildAttempt, setWildAttempt] = useState<{ meldId: string; cardId: string } | null>(
-    null,
-  );
   // Conferma modale dell'annullamento partita (§5.1) — stato UI locale.
   const [confirmingAbort, setConfirmingAbort] = useState(false);
 
@@ -366,16 +360,32 @@ export default function Page() {
     s.seats.map((x) => x.team).find((t) => t !== youTeam) ?? (youTeam === 0 ? 1 : 0);
 
   const isMyTurn = s.whoseTurn === g.yourSeat;
+
+  // Nome REALE di un posto (R2): il server lo espone sia in `players[]` (room_joined)
+  // sia in `seats[]` (stato redatto), entrambi senza dati sensibili. Si preferisce il
+  // primo disponibile e non vuoto; il fallback generico è l'ultima risorsa (posto non
+  // ancora popolato). Nessuna logica di gioco: sola risoluzione di etichetta.
+  const nameForSeat = (seat: number, fallback: string): string => {
+    const fromPlayer = g.players.find((p) => p.seat === seat)?.displayName?.trim();
+    if (fromPlayer) return fromPlayer;
+    const fromSeat = s.seats.find((x) => x.seat === seat)?.displayName?.trim();
+    if (fromSeat) return fromSeat;
+    return fallback;
+  };
+
   // Nome del giocatore ATTIVO (whoseTurn): in 1v1, fuori dal tuo turno, è l'avversario.
-  const activePlayer = g.players.find((p) => p.seat === s.whoseTurn);
-  const activeName = activePlayer?.displayName ?? "Avversario";
+  const activeName = nameForSeat(s.whoseTurn, "Avversario");
 
   // Riferimenti all'UNICO avversario 1v1 (usati SOLO nel ramo a 2 posti, invariato).
   const oppSeatView = s.seats.find((x) => x.seat !== you);
   const opponentHandCount = oppSeatView?.handCount ?? 0;
   const opponent = g.players.find((p) => p.seat !== g.yourSeat);
-  const opponentName = opponent?.displayName ?? "Avversario";
+  const opponentName = nameForSeat(oppSeatView?.seat ?? -1, "Avversario");
   const opponentConnected = opponent?.connectionStatus !== "disconnected";
+
+  // Nome della postazione locale (Sud): stesso valore autoritativo che vedono gli
+  // altri; fallback all'identità di sessione e infine a "Tu".
+  const youName = nameForSeat(you, auth.user?.displayName?.trim() || "Tu");
 
   // Posti "altri" per le targhe a 4 postazioni. Il COMPAGNO è l'altro posto della
   // TUA squadra (server-driven via `team`, mai dedotto dal posto, P4); gli avversari
@@ -415,11 +425,11 @@ export default function Page() {
     if (!view) return null;
     const active = s.whoseTurn === view.seat;
     const connected = view.connectionStatus !== "disconnected";
-    const name = g.players.find((p) => p.seat === view.seat)?.displayName ?? `Giocatore ${view.seat + 1}`;
+    const name = nameForSeat(view.seat, `Giocatore ${view.seat + 1}`);
     return (
       <div className={`seat-plate ${area}`} data-team={teamKind} data-active={active ? "true" : "false"}>
         <span className="crest" aria-hidden="true">{crest}</span>
-        <span className="seat-name">{name}</span>
+        <span className="seat-name" title={name}>{name}</span>
         <span className="team-tag">{label}</span>
         <span className="seat-hand">{view.handCount} in mano</span>
         {active && <span className="turn-dot" aria-hidden="true" />}
@@ -580,7 +590,7 @@ export default function Page() {
         {!is2v2 ? (
           <div className="seat-plate seat-north" data-team="them" data-active={!isMyTurn ? "true" : "false"}>
             <span className="crest" aria-hidden="true">●</span>
-            <span className="seat-name">{opponentName}</span>
+            <span className="seat-name" title={opponentName}>{opponentName}</span>
             <span className="team-tag">Loro</span>
             <span className="seat-hand">{opponentHandCount} in mano</span>
             {!isMyTurn && <span className="turn-dot" aria-hidden="true" />}
@@ -653,7 +663,7 @@ export default function Page() {
         {/* Postazione locale (Sud) — squadra "Noi" (oro ◆ ), si accende al tuo turno. */}
         <div className="seat-plate seat-south" data-team="us" data-active={isMyTurn ? "true" : "false"}>
           <span className="crest" aria-hidden="true">◆</span>
-          <span className="seat-name">{auth.user?.displayName ?? "Tu"}</span>
+          <span className="seat-name" title={youName}>{youName}</span>
           <span className="team-tag">Noi</span>
           <span className="seat-hand">{s.yourHand.length} in mano</span>
           {isMyTurn && <span className="turn-dot" aria-hidden="true" />}
@@ -673,33 +683,6 @@ export default function Page() {
         onClearSelection={clearSelection}
       />
 
-      {/* Scelta CIMA/FONDO per la sostituzione della matta in una sequenza:
-          compare SOLO quando il server segnala che entrambe le estremità sono
-          legali (WILD_EDGE_REQUIRED). Il client non deduce nulla dalle regole:
-          si limita a offrire i due controlli e a ripetere la mossa con `edge`.
-          (Controllo minimo/funzionale: la rifinitura è rinviata alla Fase 4.) */}
-      {g.rejection?.code === "WILD_EDGE_REQUIRED" && wildAttempt && (
-        <div className="wild-edge-choice" role="group" aria-label="Sposta la matta">
-          <span>Dove sposto la matta?</span>
-          <button
-            type="button"
-            onClick={() =>
-              g.wildSubstitute(wildAttempt.meldId, wildAttempt.cardId, "top")
-            }
-          >
-            Cima
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              g.wildSubstitute(wildAttempt.meldId, wildAttempt.cardId, "bottom")
-            }
-          >
-            Fondo
-          </button>
-        </div>
-      )}
-
       <ActionBar
         state={s}
         yourSeat={g.yourSeat}
@@ -710,14 +693,6 @@ export default function Page() {
         onDrawDiscard={g.drawDiscard}
         onMeldNew={() => g.meldNew(selectedCards)}
         onMeldExtend={() => selectedMeldId && g.meldExtend(selectedMeldId, selectedCards)}
-        onWildSubstitute={() => {
-          if (selectedMeldId && selectedCards[0]) {
-            // Memorizza il tentativo così da poterlo ripetere con edge se il
-            // server chiede la scelta cima/fondo (WILD_EDGE_REQUIRED).
-            setWildAttempt({ meldId: selectedMeldId, cardId: selectedCards[0] });
-            g.wildSubstitute(selectedMeldId, selectedCards[0]);
-          }
-        }}
         onDiscard={() => selectedCards[0] && g.discard(selectedCards[0])}
         onUndo={g.undoLast}
       />

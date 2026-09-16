@@ -595,6 +595,14 @@ button:disabled {
 .seat-plate .seat-name {
   font-weight: 700;
   color: var(--text-strong);
+  /* R2: il displayName può arrivare a 40 caratteri (limite backend). Sulla targa
+     si cappa con ellissi per non sforare a 375px; il nome intero resta nel `title`
+     (tooltip nativo) e nello storico. `min-width:0` consente lo shrink nel flex. */
+  min-width: 0;
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .seat-plate .seat-hand {
   color: var(--text-muted);
@@ -1098,6 +1106,9 @@ button:disabled {
 .table-grid[data-seats="4"] .seat-plate .seat-name {
   flex: 1 1 auto;
   min-width: 0;
+  /* Sulle 4 targhe il nome riempie lo spazio disponibile ma resta cappato come in
+     1v1: si tronca al contenitore (flex) o al più a 14ch (nome fino a 40 char). */
+  max-width: 14ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
