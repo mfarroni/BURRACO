@@ -52,6 +52,37 @@ const MAX_SESSIONS_PER_USER = 10;
 const PRUNE_REVOKED_GRACE_MS = 24 * 60 * 60 * 1000;
 const GUEST_INACTIVITY_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * R8 — LOCKOUT PROGRESSIVO DEL LOGIN (anti brute-force, senza captcha).
+ *
+ * Il contatore è keyed su `hash(email normalizzata + IP)` (vedi `login`): un
+ * attaccante da un IP che martella l'account-A rallenta SOLO la coppia (A, quell'IP),
+ * mai l'utente legittimo di A dal proprio IP (nessuna weaponization / DoS d'account).
+ * Il rate-limit per-IP esistente (http/rateLimit.ts, login 20/15min) resta lo strato
+ * aggiuntivo DAVANTI. Il ritardo si applica IDENTICO che l'email esista o no (anche i
+ * tentativi su email inesistenti vengono contati): messaggio e curva dei tempi non
+ * rivelano se l'account esiste (anti-oracle). Successo → azzeramento; finestra scaduta
+ * per inattività → azzeramento automatico. NESSUN blocco definitivo.
+ *
+ * Costanti centralizzate e tarabili dal lead:
+ *  - LOGIN_WINDOW_MS: finestra di conteggio; trascorsa senza nuovi fallimenti il
+ *    contatore riparte da zero.
+ *  - LOGIN_FREE_TRIES: tentativi di grazia SENZA ritardo (assorbe gli errori umani).
+ *  - LOGIN_BASE_DELAY_MS / LOGIN_MAX_DELAY_MS: ritardo server-side crescente e CAPPATO.
+ *    Il cap prudente evita che il ritardo stesso diventi un vettore DoS su Render
+ *    single-instance (il numero di risposte ritardate concorrenti è già limitato dal
+ *    rate-limit per-IP).
+ */
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_FREE_TRIES = 3;
+const LOGIN_BASE_DELAY_MS = 500;
+const LOGIN_MAX_DELAY_MS = 8000;
+
+/** Attesa non bloccante (usata per il ritardo progressivo del login). */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export interface AuthResult {
   sessionToken: string;
   user: AuthUser;
@@ -117,8 +148,36 @@ export class AuthService {
     return { sessionToken, user: toAuthUser(user) };
   }
 
-  async login(email: string, password: string): Promise<AuthResult> {
+  /**
+   * R8 — login con lockout progressivo keyed su `hash(email + IP)`. `ip` è passato
+   * dall'handler HTTP (`req.ip`, affidabile con `trust proxy`); è OPZIONALE per
+   * retro-compatibilità dei chiamanti diretti (test/unit): assente → chiave sul solo
+   * email. Il ritardo si applica PRIMA di qualsiasi verifica, identico che l'email
+   * esista o no (nessun oracolo). Ogni fallimento resta `INVALID_CREDENTIALS` generico.
+   */
+  async login(email: string, password: string, ip = ""): Promise<AuthResult> {
     const normEmail = email.trim().toLowerCase();
+    const now = new Date();
+    // Chiave NON reversibile: sha256 di (email + IP). Nel DB non finiscono mai email
+    // né IP in chiaro. Il prefisso e il separatore evitano collisioni fra campi.
+    const key = hashToken(`login:${normEmail}|${ip}`);
+
+    // (1) RITARDO PROGRESSIVO prima di ogni verifica. Applicato SOLO se siamo ancora
+    // nella finestra (ultimo fallimento entro LOGIN_WINDOW_MS) e oltre la grazia. La
+    // decisione non dipende dall'esistenza dell'email → nessun oracolo di esistenza.
+    const attempt = await this.store.getLoginAttempt(key);
+    if (
+      attempt &&
+      attempt.lastFailedAt.getTime() > now.getTime() - LOGIN_WINDOW_MS &&
+      attempt.failedCount > LOGIN_FREE_TRIES
+    ) {
+      const delayMs = Math.min(
+        LOGIN_BASE_DELAY_MS * 2 ** (attempt.failedCount - LOGIN_FREE_TRIES),
+        LOGIN_MAX_DELAY_MS,
+      );
+      await sleep(delayMs);
+    }
+
     const user = await this.store.getUserByEmail(normEmail);
     // Errore GENERICO in ogni caso: nessun oracolo su "email inesistente" vs
     // "password errata". Se l'utente non esiste (o è un ospite senza hash),
@@ -127,12 +186,17 @@ export class AuthService {
       // Difesa timing oracle: esegui comunque una verifica argon2id fittizia, così
       // la durata non rivela se l'email è registrata (risposta già identica).
       await verifyDummy(password);
+      // Conta il fallimento ANCHE per email inesistenti: curva dei tempi identica.
+      await this.store.recordFailedLogin(key, now, LOGIN_WINDOW_MS);
       throw new AuthError("INVALID_CREDENTIALS", "Credenziali non valide.");
     }
     const ok = await verifyPassword(user.passwordHash, password);
     if (!ok) {
+      await this.store.recordFailedLogin(key, now, LOGIN_WINDOW_MS);
       throw new AuthError("INVALID_CREDENTIALS", "Credenziali non valide.");
     }
+    // Successo: azzera il contatore (l'attesa accumulata era breve e auto-inflitta).
+    await this.store.clearLoginAttempts(key);
     void this.store.touchLastSeen(user.id);
     const sessionToken = await this.issueSession(user.id);
     return { sessionToken, user: toAuthUser(user) };
@@ -195,10 +259,14 @@ export class AuthService {
    * scadute/revocate e ospiti inattivi. Best-effort: un errore viene loggato ma
    * non propagato (nessun impatto sul gioco). Ritorna un piccolo report per i log.
    */
-  async runMaintenance(now: Date = new Date()): Promise<{ sessions: number; guests: number }> {
+  async runMaintenance(
+    now: Date = new Date(),
+  ): Promise<{ sessions: number; guests: number; loginAttempts: number }> {
     const sessions = await this.store.pruneSessions(now, PRUNE_REVOKED_GRACE_MS);
     const guests = await this.store.pruneInactiveGuests(new Date(now.getTime() - GUEST_INACTIVITY_MS));
-    return { sessions, guests };
+    // R8: elimina i contatori di login inattivi da oltre la finestra (best-effort).
+    const loginAttempts = await this.store.pruneLoginAttempts(new Date(now.getTime() - LOGIN_WINDOW_MS));
+    return { sessions, guests, loginAttempts };
   }
 
   /**

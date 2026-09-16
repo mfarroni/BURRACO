@@ -23,7 +23,8 @@ export interface UseAuth {
   /** messaggio d'errore leggibile dell'ultima azione (o null). */
   error: string | null;
   register: (email: string, password: string, displayName?: string) => Promise<boolean>;
-  login: (email: string, password: string) => Promise<boolean>;
+  /** `website`: honeypot (R8) inoltrato al backend; di norma vuoto (default ""). */
+  login: (email: string, password: string, website?: string) => Promise<boolean>;
   guest: (displayName?: string) => Promise<boolean>;
   logout: () => Promise<void>;
   clearError: () => void;
@@ -80,7 +81,8 @@ export function useAuth(): UseAuth {
     [run],
   );
   const login = useCallback(
-    (email: string, password: string) => run(() => authClient.login(email, password)),
+    (email: string, password: string, website = "") =>
+      run(() => authClient.login(email, password, website)),
     [run],
   );
   const guest = useCallback((displayName?: string) => run(() => authClient.guest(displayName)), [run]);

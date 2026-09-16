@@ -1,7 +1,7 @@
 import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../db/schema.js";
-import type { AuthStore, StoredSession, StoredUser } from "./types.js";
+import type { AuthStore, LoginAttempt, StoredSession, StoredUser } from "./types.js";
 
 /**
  * Implementazione Drizzle/Neon di AuthStore (attiva con `DATABASE_URL`).
@@ -193,5 +193,51 @@ export class DrizzleAuthStore implements AuthStore {
           isNull(schema.users.expiredAt),
         ),
       );
+  }
+
+  /* ─────────── Lotto 5 (R8): lockout progressivo del login (persistito) ─────────── */
+
+  async getLoginAttempt(key: string): Promise<LoginAttempt | null> {
+    const [row] = await this.db
+      .select()
+      .from(schema.loginAttempts)
+      .where(eq(schema.loginAttempts.key, key))
+      .limit(1);
+    return row
+      ? { failedCount: row.failedCount, windowStartedAt: row.windowStartedAt, lastFailedAt: row.lastFailedAt }
+      : null;
+  }
+
+  async recordFailedLogin(key: string, now: Date, windowMs: number): Promise<number> {
+    // UPSERT atomico: una sola query gestisce sia il primo fallimento (INSERT) sia
+    // l'incremento/azzeramento (ON CONFLICT). L'azzeramento scatta quando l'ultimo
+    // fallimento registrato è più vecchio di `cutoff` (finestra scaduta per inattività):
+    // in tal caso il contatore riparte da 1 e la serie si riancora a `now`.
+    const cutoff = new Date(now.getTime() - windowMs);
+    const [row] = await this.db
+      .insert(schema.loginAttempts)
+      .values({ key, failedCount: 1, windowStartedAt: now, lastFailedAt: now })
+      .onConflictDoUpdate({
+        target: schema.loginAttempts.key,
+        set: {
+          failedCount: sql`case when ${schema.loginAttempts.lastFailedAt} < ${cutoff} then 1 else ${schema.loginAttempts.failedCount} + 1 end`,
+          windowStartedAt: sql`case when ${schema.loginAttempts.lastFailedAt} < ${cutoff} then ${now} else ${schema.loginAttempts.windowStartedAt} end`,
+          lastFailedAt: now,
+        },
+      })
+      .returning({ failedCount: schema.loginAttempts.failedCount });
+    return row!.failedCount;
+  }
+
+  async clearLoginAttempts(key: string): Promise<void> {
+    await this.db.delete(schema.loginAttempts).where(eq(schema.loginAttempts.key, key));
+  }
+
+  async pruneLoginAttempts(cutoff: Date): Promise<number> {
+    const rows = await this.db
+      .delete(schema.loginAttempts)
+      .where(lte(schema.loginAttempts.lastFailedAt, cutoff))
+      .returning({ key: schema.loginAttempts.key });
+    return rows.length;
   }
 }

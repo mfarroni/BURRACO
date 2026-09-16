@@ -106,11 +106,17 @@ export async function register(email: string, password: string, displayName?: st
   return res.user;
 }
 
-/** Effettua il login, salva il token e ritorna l'utente. */
-export async function login(email: string, password: string): Promise<AuthUser> {
+/**
+ * Effettua il login, salva il token e ritorna l'utente.
+ *
+ * R8 — HONEYPOT: `website` è un campo-trappola compilato di norma vuoto dall'input
+ * nascosto del form; i bot lo riempiono e il backend risponde 401 immediato. Nessun
+ * impatto per l'utente reale. Il backend resta l'unica autorità (401 sempre generico).
+ */
+export async function login(email: string, password: string, website = ""): Promise<AuthUser> {
   const res = await call<AuthSuccess>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, website }),
   });
   saveAuthToken(res.token);
   return res.user;

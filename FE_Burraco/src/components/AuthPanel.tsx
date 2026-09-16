@@ -54,6 +54,10 @@ export function AuthPanel({ auth, initialMode = "login", onBack, onRequestTable 
   const [name, setName] = useState("");
   // Codice tavolo facoltativo per l'ingresso diretto da Ospite (vuoto = lobby).
   const [table, setTable] = useState("");
+  // R8 — HONEYPOT: campo-trappola del solo form di login. Invisibile e non focalizzabile
+  // per gli umani (di norma resta ""), i bot lo compilano → il backend risponde 401. Il
+  // client NON prende decisioni: si limita a inoltrarne il valore.
+  const [website, setWebsite] = useState("");
 
   const busy = auth.busy;
 
@@ -77,7 +81,7 @@ export function AuthPanel({ auth, initialMode = "login", onBack, onRequestTable 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy || !canSubmit) return;
-    if (mode === "login") await auth.login(email, password);
+    if (mode === "login") await auth.login(email, password, website);
     else if (mode === "register") await auth.register(email, password, name.trim() || undefined);
     else {
       const ok = await auth.guest(name.trim() || undefined);
@@ -152,6 +156,36 @@ export function AuthPanel({ auth, initialMode = "login", onBack, onRequestTable 
               disabled={busy}
             />
           </>
+        )}
+
+        {mode === "login" && (
+          // R8 — HONEYPOT: fuori dal flusso visivo, di tastiera e degli screen reader.
+          // Nessun testo mostrato, nessun impatto UX; solo i bot lo compilano.
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              left: "-9999px",
+              width: 1,
+              height: 1,
+              overflow: "hidden",
+              opacity: 0,
+              pointerEvents: "none",
+            }}
+          >
+            <label htmlFor="auth-website">Non compilare questo campo</label>
+            <input
+              id="auth-website"
+              type="text"
+              name="website"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              tabIndex={-1}
+              autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+            />
+          </div>
         )}
 
         {mode !== "login" && (
