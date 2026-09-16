@@ -387,7 +387,12 @@ button:disabled {
  * LAYOUT PARTITA
  * =================================================================== */
 .game {
-  max-width: 1040px;
+  /* R3 — cap 1040→1100. Il collo di bottiglia desktop era lo split 1fr 1fr:
+     a 1040 ogni colonna calate offriva ~442px e una sequenza da 10 (467px)
+     andava a capo. A 1100 la colonna sale a ~472px → la sequenza da 10 entra
+     senza scorrere. Ceduto: topbar / isola centrale ~60px più larghe (layout
+     flessibili e centrati: impatto visivo trascurabile). Solo la regione match. */
+  max-width: 1100px;
   margin: 0 auto;
   padding: var(--sp-4) var(--sp-4) 96px; /* spazio per action-bar sticky */
   position: relative;
@@ -945,7 +950,12 @@ button:disabled {
   gap: var(--sp-4);
   margin: 0;
 }
-@media (max-width: 640px) {
+/* R3 — collasso anticipato a UNA colonna (era 640px). Sotto ~820px lo split
+   1fr 1fr lascia <326px a colonna e il burraco (326px) andrebbe a capo; con una
+   sola colonna la banda calate riceve tutta la larghezza (tablet: ~660px → ci
+   sta persino la scala massima). Ceduto: su tablet Noi/Loro si impilano
+   verticalmente invece di affiancarsi (più leggibile, scroll verticale in più). */
+@media (max-width: 820px) {
   .melds {
     grid-template-columns: 1fr;
   }
@@ -958,6 +968,11 @@ button:disabled {
   border-left: 3px solid var(--border);
   border-radius: var(--r-md);
   padding: var(--sp-3);
+  /* R3 — consente alle colonne 1fr 1fr di restringersi: senza questo, la
+     min-width:auto della cella griglia potrebbe dilatare la traccia col
+     contenuto delle calate. Il contenuto lungo è gestito dallo scroll interno
+     di .meld-cards, non dall'allargamento della colonna. */
+  min-width: 0;
 }
 .meld-group[data-team="us"] {
   border-left-color: var(--brass-500);
@@ -1025,8 +1040,30 @@ button:disabled {
 }
 .meld-cards {
   display: flex;
-  flex-wrap: wrap;
+  /* R3 — le carte di una calata restano su UNA riga: un burraco / una scala
+     spezzati su due righe sono illeggibili. Se la calata supera la colonna,
+     SCORRE in orizzontale come un'unica run invece di andare a capo. Se entra
+     (caso comune: burraco 7) non appare alcuna scrollbar. */
+  flex-wrap: nowrap;
   gap: 3px;
+  overflow-x: auto;
+  overflow-y: hidden; /* niente scrollbar verticale; il padding-bottom lascia
+                         respiro all'ombra inferiore delle carte. */
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--brass-600) transparent;
+}
+.meld-cards::-webkit-scrollbar {
+  height: 6px;
+}
+.meld-cards::-webkit-scrollbar-thumb {
+  background: var(--brass-600);
+  border-radius: var(--r-pill);
+}
+/* In nowrap le carte NON devono comprimersi: mantengono la misura e spingono
+   l'eccedenza nello scroll orizzontale. */
+.meld-cards > .card {
+  flex: 0 0 auto;
 }
 .meld-head {
   display: flex;
@@ -1823,6 +1860,15 @@ button:disabled {
   border-top-color: var(--border-strong);
   border-radius: var(--r-md);
   isolation: isolate;
+  /* R4 — LIVELLO ESPLICITO NELLA LADDER. Senza z-index questo elemento, pur
+     essendo `isolation: isolate` (contesto locale) + sticky, formerebbe un
+     contesto a z-index:auto (livello 0) e verrebbe dipinto PRIMA dei .meld
+     (position:relative; z-index:--z-melds:5): scorrendo, le calate finirebbero
+     DAVANTI alla zona-mano. Fissandolo a --z-cards (10) la zona-mano domina
+     sempre le calate (>5) restando sotto la action-bar (--z-badges:20). Gli
+     z-index INTERNI della mano (active 15, filo 25, drag 30) restano locali a
+     questo contesto e non competono con la ladder globale. */
+  z-index: var(--z-cards);
   box-shadow: var(--sh-panel);
   transition: box-shadow var(--dur-base), border-color var(--dur-base);
 }
