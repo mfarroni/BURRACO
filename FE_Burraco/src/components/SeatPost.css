@@ -283,12 +283,17 @@
   margin: 0;
   z-index: 4; /* il post resta SEMPRE sopra la mano (.hand-slot ha z-index: 1) */
 }
+/* Ovest/Est: il post è IN-FLOW nella sua colonna, che parte dopo i 18px di padding
+   del feltro; con margine -(--post-out) sporge ~52px oltre il bordo laterale (70 −
+   18 di padding). È il massimo sporgere che a finestre strette (≥900px) non manda
+   il post fuori dal viewport. La parte restante resta nella colonna, senza invadere
+   l'isola centrale. */
 .table-frame > .table-grid > .seat-post.seat-west {
-  margin-left: calc(-1 * (244px - var(--post-out)));
+  margin-left: calc(-1 * var(--post-out));
 }
 .table-frame > .table-grid > .seat-post.seat-east {
   margin-left: auto;
-  margin-right: calc(-1 * (244px - var(--post-out)));
+  margin-right: calc(-1 * var(--post-out));
 }
 
 /* La mano vive DENTRO il feltro, nell'area "south" della griglia, appoggiata al
