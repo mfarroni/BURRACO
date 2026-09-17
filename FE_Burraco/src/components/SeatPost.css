@@ -187,7 +187,20 @@
 
 .table-frame {
   position: relative;
-  margin: 48px 0 44px;
+  /* Il tavolo NON eredita il tetto della colonna .game (max-width 1100px): ha un
+     tetto proprio più alto, così il feltro può arrivare a ~1032px. max-width:none
+     annulla qualsiasi cap ereditato. Solo il tavolo si allarga: header, banner e
+     barra delle azioni restano nella colonna .game. */
+  width: min(1180px, 100vw - 32px);
+  max-width: none;
+  /* Il tavolo è più largo della colonna .game (max 1100px), quindi margin:auto NON
+     lo centra (collasserebbe a 0, allineandolo a sinistra). Lo centro sul viewport
+     con la tecnica left:50% + translateX(-50%): .game è già centrata, quindi il suo
+     centro coincide col centro del viewport. */
+  margin: 48px auto 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  box-sizing: border-box;
   padding: 44px;
   border-radius: 24px;
   background:
@@ -218,6 +231,9 @@
   border-radius: 16px;
   min-height: 0;
   align-content: center;
+  /* Verde del progetto approvato: sovrascrive il fondo di globals.css, inclusa la
+     vignettatura che lo scuriva (qui è un fondo pieno, niente overlay scuro). */
+  background: radial-gradient(120% 90% at 50% 45%, #2a5f46, #205039 55%, #14352a);
   /* Il post di Sud sporge di --post-out sotto il feltro: la sua metà ALTA sta
      dentro, quindi la fascia bassa del feltro le è riservata e la mano non può
      occuparla. */
@@ -231,20 +247,34 @@
 .table-frame > .table-grid[data-seats="4"] {
   grid-template-columns: 244px minmax(0, 1fr) 244px;
 }
-/* I post sono ancorati al FELTRO (.table-grid, che ha già position:relative), NON
-   alla cornice di legno: così l'offset cade sui bordi del feltro e non 44px più
-   in là. Metà del post fuori dal feltro: 60% di 112px ≈ 67px. */
-.table-frame > .table-grid { --post-out: 67px; }
+/* I post sono ancorati al FELTRO (.table-grid), NON alla cornice di legno: così
+   l'offset cade sui bordi del feltro. Il post è alto 112px: fuori dal feltro ne
+   restano 70px (60%+), dentro 42px. overflow:visible garantisce che il feltro non
+   ritagli i post che sporgono. */
+.table-frame > .table-grid {
+  --post-out: 70px;
+  position: relative;
+  overflow: visible;
+}
 
+/* grid-area:auto è ESSENZIALE: un elemento in position:absolute figlio di un grid,
+   se ha una grid-area assegnata (qui .seat-north/.seat-south la ricevono da
+   globals.css), viene contenuto da QUELL'AREA, non dal padding-box del feltro. Con
+   align-content:center l'area sta dentro il feltro, quindi il post non sporgerebbe
+   dal bordo. Azzerando la grid-area il blocco contenitore torna il feltro e top/
+   bottom:-70px fanno sporgere il post a cavallo del bordo. */
 .table-frame > .table-grid > .seat-post.seat-north {
   position: absolute;
+  grid-area: auto;
   top: calc(-1 * var(--post-out));
   left: 50%;
   transform: translateX(-50%);
   margin: 0;
+  z-index: 4;
 }
 .table-frame > .table-grid > .seat-post.seat-south {
   position: absolute;
+  grid-area: auto;
   bottom: calc(-1 * var(--post-out));
   left: 50%;
   transform: translateX(-50%);
@@ -291,8 +321,11 @@
    rientrano nel flusso (nessun post a cavallo del bordo su schermo piccolo). */
 @media (max-width: 720px) {
   .table-frame {
+    /* in portrait il tavolo è a piena larghezza nella colonna: niente breakout */
     padding: 18px;
     margin: 18px 0;
+    left: auto;
+    transform: none;
   }
   .table-frame > .table-grid {
     width: 100%;
@@ -311,6 +344,11 @@
     bottom: auto;
     transform: none;
     justify-self: center;
+  }
+  /* In portrait i post tornano nel flusso: ripristino la grid-area del post di
+     Nord (in desktop era azzerata per farlo sporgere in assoluto). */
+  .table-frame > .table-grid > .seat-post.seat-north {
+    grid-area: north;
   }
   /* La mano è nell'area "south": in portrait il post di Sud scende in una riga
      propria SOTTO la mano, così non si sovrappongono nella stessa cella. */
