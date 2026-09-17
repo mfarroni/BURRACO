@@ -218,7 +218,7 @@
   border-radius: 16px;
   min-height: 0;
   align-content: center;
-  padding: 62px 18px 18px;
+  padding: 18px;
   box-shadow: 0 0 0 2px rgba(200, 162, 74, 0.55), 0 0 0 3px rgba(0, 0, 0, 0.45),
     inset 0 3px 14px rgba(0, 0, 0, 0.5), inset 0 -2px 10px rgba(0, 0, 0, 0.35);
 }
@@ -228,23 +228,49 @@
 .table-frame > .table-grid[data-seats="4"] {
   grid-template-columns: 244px minmax(0, 1fr) 244px;
 }
-.table-frame .seat-post.seat-north {
+/* I post sono ancorati al FELTRO (.table-grid, che ha già position:relative), NON
+   alla cornice di legno: così l'offset cade sui bordi del feltro e non 44px più
+   in là. Metà del post fuori dal feltro: 60% di 112px ≈ 67px. */
+.table-frame > .table-grid { --post-out: 67px; }
+
+.table-frame > .table-grid > .seat-post.seat-north {
   position: absolute;
-  top: -70px;
+  top: calc(-1 * var(--post-out));
   left: 50%;
   transform: translateX(-50%);
+  margin: 0;
 }
-.table-frame .seat-post.seat-west { margin-left: -168px; }
-.table-frame .seat-post.seat-east { margin-left: auto; margin-right: -168px; }
+.table-frame > .table-grid > .seat-post.seat-south {
+  position: absolute;
+  bottom: calc(-1 * var(--post-out));
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+}
+.table-frame > .table-grid > .seat-post.seat-west {
+  margin-left: calc(-1 * (244px - var(--post-out)));
+}
+.table-frame > .table-grid > .seat-post.seat-east {
+  margin-left: auto;
+  margin-right: calc(-1 * (244px - var(--post-out)));
+}
 
-/* Il post di Sud vive FUORI dalla cornice, subito sotto la mano (BottomHand):
-   ordine visivo corretto = ventaglio delle carte, poi il post appoggiato sotto. */
-.seat-south-slot {
+/* La mano vive DENTRO il feltro, nell'area "south" della griglia, appoggiata al
+   bordo basso; il post di Sud le sta sotto (assoluto, a cavallo del bordo). */
+.hand-slot {
+  grid-area: south;
   display: flex;
   justify-content: center;
-  margin-top: -18px;   /* il post si accosta alla mano senza staccarsi */
-  position: relative;
-  z-index: 3;          /* sopra la mano, che ha z-index --z-cards */
+  align-items: flex-end;
+  min-width: 0;
+}
+/* Dentro il tavolo la mano non è più flottante (sticky/bottom ancorati al
+   viewport in globals.css): sta ferma nell'area south. Il riordino con Pointer
+   Events, la selezione con Shift e la tastiera restano intatti. */
+.hand-slot .bottom-hand {
+  position: static;
+  bottom: auto;
+  width: auto;
 }
 
 /* Portrait stretto: il tavolo degrada, i post passano alla forma compatta e
@@ -263,7 +289,8 @@
   .table-frame > .table-grid[data-seats="4"] {
     grid-template-columns: 1fr 1fr;
   }
-  .table-frame .seat-post.seat-north {
+  .table-frame > .table-grid > .seat-post.seat-north,
+  .table-frame > .table-grid > .seat-post.seat-south {
     position: static;
     left: auto;
     top: auto;
@@ -271,12 +298,17 @@
     transform: none;
     justify-self: center;
   }
-  .table-frame .seat-post.seat-west,
-  .table-frame .seat-post.seat-east {
+  /* La mano è nell'area "south": in portrait il post di Sud scende in una riga
+     propria SOTTO la mano, così non si sovrappongono nella stessa cella. */
+  .table-frame > .table-grid > .seat-post.seat-south {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .table-frame > .table-grid > .seat-post.seat-west,
+  .table-frame > .table-grid > .seat-post.seat-east {
     margin-left: 0;
     margin-right: 0;
   }
-  .seat-south-slot { margin-top: 0; }
   .seat-post {
     width: 168px;
     min-height: 86px;

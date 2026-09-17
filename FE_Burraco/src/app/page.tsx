@@ -648,26 +648,25 @@ export default function Page() {
           isMyTurn={isMyTurn}
         />
 
-      </div>
-      </div>
+        {/* ── La tua mano, DENTRO il feltro (area "south" della griglia), a
+            ventaglio e riordinabile. Il post di Sud le sta appoggiato sotto. ── */}
+        <div className="hand-slot">
+          <BottomHand
+            room={g.roomCode}
+            hand={s.yourHand}
+            selectedCards={selectedCards}
+            isMyTurn={isMyTurn}
+            pending={g.pending}
+            inFlightCardId={g.inFlightCardId}
+            onToggleCard={toggleCard}
+            onSelectRange={selectRange}
+            onClearSelection={clearSelection}
+          />
+        </div>
 
-      {/* ── La tua mano (ancorata in basso, a ventaglio, riordinabile) ──── */}
-      <BottomHand
-        room={g.roomCode}
-        hand={s.yourHand}
-        selectedCards={selectedCards}
-        isMyTurn={isMyTurn}
-        pending={g.pending}
-        inFlightCardId={g.inFlightCardId}
-        onToggleCard={toggleCard}
-        onSelectRange={selectRange}
-        onClearSelection={clearSelection}
-      />
-
-      {/* Postazione locale (Sud) — squadra "Noi" (oro ◆ ), si accende al tuo turno.
-          Vive FUORI dalla cornice, subito SOTTO la mano: così l'ordine visivo è
-          ventaglio delle carte, poi il post appoggiato al bordo basso. */}
-      <div className="seat-south-slot">
+        {/* Postazione locale (Sud) — squadra "Noi" (oro ◆ ), si accende al tuo
+            turno. Figlia di .table-grid: ancorata al bordo BASSO del feltro,
+            a metà fuori, sotto la mano. */}
         <SeatPost
           area="seat-south"
           team="us"
@@ -680,6 +679,7 @@ export default function Page() {
           burracoCount={burracoByTeam(youTeam)}
           size="extended"
         />
+      </div>
       </div>
 
       {/* Scelta CIMA/FONDO per la sostituzione della matta in una sequenza:
