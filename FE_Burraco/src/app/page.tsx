@@ -648,20 +648,6 @@ export default function Page() {
           isMyTurn={isMyTurn}
         />
 
-        {/* Postazione locale (Sud) — squadra "Noi" (oro ◆ ), si accende al tuo turno.
-            Il post sta sotto la mano, appoggiato al bordo basso del tavolo. */}
-        <SeatPost
-          area="seat-south"
-          team="us"
-          role={is2v2 ? "Sud · tu" : "Tu"}
-          name={auth.user?.displayName ?? "Tu"}
-          handCount={s.yourHand.length}
-          active={isMyTurn}
-          isGuest={auth.user?.isGuest}
-          pozzettoTaken={s.yourPozzettoTaken}
-          burracoCount={burracoByTeam(youTeam)}
-          size="extended"
-        />
       </div>
       </div>
 
@@ -677,6 +663,24 @@ export default function Page() {
         onSelectRange={selectRange}
         onClearSelection={clearSelection}
       />
+
+      {/* Postazione locale (Sud) — squadra "Noi" (oro ◆ ), si accende al tuo turno.
+          Vive FUORI dalla cornice, subito SOTTO la mano: così l'ordine visivo è
+          ventaglio delle carte, poi il post appoggiato al bordo basso. */}
+      <div className="seat-south-slot">
+        <SeatPost
+          area="seat-south"
+          team="us"
+          role={is2v2 ? "Sud · tu" : "Tu"}
+          name={auth.user?.displayName ?? "Tu"}
+          handCount={s.yourHand.length}
+          active={isMyTurn}
+          isGuest={auth.user?.isGuest}
+          pozzettoTaken={s.yourPozzettoTaken}
+          burracoCount={burracoByTeam(youTeam)}
+          size="extended"
+        />
+      </div>
 
       {/* Scelta CIMA/FONDO per la sostituzione della matta in una sequenza:
           compare SOLO quando il server segnala che entrambe le estremità sono

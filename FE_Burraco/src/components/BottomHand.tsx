@@ -312,7 +312,7 @@ export function BottomHand({
       aria-label={`La tua mano, ${count} carte`}
     >
       <div className="bottom-hand-head">
-        <h4>La tua mano · {count} carte</h4>
+        <h4>La tua mano</h4>
         <div className="bottom-hand-head-right">
           {selectionCount > 0 && (
             <button
