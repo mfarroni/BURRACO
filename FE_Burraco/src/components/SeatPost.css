@@ -1,0 +1,383 @@
+/* ===================================================================
+ * POST DEL GIOCATORE + rifinitura del tavolo
+ * Caricato da SeatPost.tsx. Usa i token di globals.css (--brass-*, --felt-*,
+ * --info-*, --text-*): nessun colore nuovo inventato.
+ * =================================================================== */
+
+.seat-post {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 244px;
+  min-height: 112px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: rgba(10, 24, 18, 0.78);
+  border: 1px solid rgba(200, 162, 74, 0.24);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(2px);
+  text-align: left;
+}
+
+/* Lato colorato di squadra, sempre sul bordo ESTERNO del tavolo: così il colore
+   coincide con la direzione da cui il giocatore "siede". */
+.seat-post.seat-north { border-top: 3px solid var(--brass-500); }
+.seat-post.seat-south { border-bottom: 3px solid var(--brass-500); }
+.seat-post.seat-west { border-left: 3px solid var(--info-500); }
+.seat-post.seat-east { border-right: 3px solid var(--info-500); }
+
+.seat-post[data-team="them"] { border-color: rgba(111, 168, 199, 0.32); }
+.seat-post[data-team="them"].seat-north { border-top-color: var(--info-500); }
+.seat-post[data-team="them"].seat-south { border-bottom-color: var(--info-500); }
+.seat-post[data-team="us"].seat-west { border-left-color: var(--brass-500); }
+.seat-post[data-team="us"].seat-east { border-right-color: var(--brass-500); }
+
+/* ── Avatar ─────────────────────────────────────────────────────────── */
+.seat-post-avatar {
+  flex: 0 0 auto;
+  display: block;
+  width: 56px;
+  height: 58px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid rgba(200, 162, 74, 0.45);
+}
+.seat-post[data-team="them"] .seat-post-avatar {
+  border-color: rgba(111, 168, 199, 0.5);
+}
+.seat-post-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.seat-post-mono {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--brass-300);
+  background: linear-gradient(180deg, #4a3a1e, #2a1f0f);
+}
+.seat-post[data-team="them"] .seat-post-mono {
+  color: var(--info-300);
+  background: linear-gradient(180deg, #274456, #16303c);
+}
+
+/* ── Colonna informazioni ───────────────────────────────────────────── */
+.seat-post-body {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.seat-post-name {
+  font-weight: 600;
+  font-size: 0.86rem;
+  line-height: 1.2;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seat-post-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.seat-post-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brass-300);
+  white-space: nowrap;
+}
+.seat-post[data-team="them"] .seat-post-role { color: var(--info-300); }
+.seat-post-crest { font-size: 0.7rem; line-height: 1; }
+
+.seat-post-badge {
+  flex: 0 0 auto;
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 3px 6px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  color: var(--text-muted);
+}
+.seat-post-badge[data-kind="burraco"] { color: var(--ok-300, #82d6a6); }
+.seat-post-badge[data-kind="pozzetto"] { color: var(--brass-300); }
+.seat-post-badge[data-kind="off"] { color: var(--warn-300, #eecf8b); }
+
+/* ── Conteggio carte ────────────────────────────────────────────────── */
+.seat-post-count {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  text-align: right;
+}
+.seat-post-num {
+  display: block;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--brass-300);
+  font-variant-numeric: tabular-nums;
+}
+.seat-post[data-team="them"] .seat-post-num { color: var(--info-300); }
+.seat-post-lbl {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.55rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ── Turno attivo: glow d'oro + etichetta ───────────────────────────── */
+.seat-post[data-active="true"] {
+  box-shadow: 0 0 0 2px var(--brass-300), 0 0 18px rgba(200, 162, 74, 0.32),
+    0 6px 16px rgba(0, 0, 0, 0.42);
+}
+.seat-post-turn {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--brass-300);
+  color: #211b12;
+}
+.seat-post[data-off="true"] { opacity: 0.82; }
+
+/* ── Varianti di misura ─────────────────────────────────────────────── */
+.seat-post[data-size="compact"] {
+  width: 168px;
+  min-height: 86px;
+  gap: 8px;
+  padding: 10px;
+}
+.seat-post[data-size="compact"] .seat-post-avatar { width: 40px; height: 42px; }
+.seat-post[data-size="compact"] .seat-post-badge { display: none; }
+.seat-post[data-size="compact"] .seat-post-lbl { display: none; }
+
+.seat-post[data-size="extended"] { min-height: 132px; }
+
+/* ===================================================================
+ * TAVOLO — cornice in legno rifinita, feltro in rapporto aureo,
+ * post a cavallo del bordo (60% fuori dal feltro).
+ * Sovrascrive .table-grid di globals.css senza toccarlo.
+ * =================================================================== */
+
+.table-frame {
+  position: relative;
+  /* Il tavolo NON eredita il tetto della colonna .game (max-width 1100px): ha un
+     tetto proprio più alto, così il feltro può arrivare a ~1032px. max-width:none
+     annulla qualsiasi cap ereditato. Solo il tavolo si allarga: header, banner e
+     barra delle azioni restano nella colonna .game. */
+  width: min(1180px, 100vw - 32px);
+  max-width: none;
+  /* Il tavolo è più largo della colonna .game (max 1100px), quindi margin:auto NON
+     lo centra (collasserebbe a 0, allineandolo a sinistra). Lo centro sul viewport
+     con la tecnica left:50% + translateX(-50%): .game è già centrata, quindi il suo
+     centro coincide col centro del viewport. */
+  margin: 48px auto 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  padding: 44px;
+  border-radius: 24px;
+  background:
+    repeating-linear-gradient(96deg, rgba(255, 231, 188, 0.14) 0 1px, rgba(0, 0, 0, 0) 1px 3px,
+      rgba(0, 0, 0, 0.16) 3px 4px, rgba(0, 0, 0, 0) 4px 9px),
+    repeating-linear-gradient(92deg, rgba(0, 0, 0, 0.2) 0 2px, rgba(0, 0, 0, 0) 2px 7px,
+      rgba(255, 231, 188, 0.1) 7px 8px, rgba(0, 0, 0, 0) 8px 19px),
+    repeating-linear-gradient(99deg, rgba(0, 0, 0, 0.1) 0 5px, rgba(255, 214, 150, 0.06) 5px 11px,
+      rgba(0, 0, 0, 0) 11px 31px),
+    radial-gradient(38% 120% at 12% 50%, rgba(255, 214, 150, 0.16), transparent 70%),
+    radial-gradient(30% 90% at 78% 22%, rgba(0, 0, 0, 0.22), transparent 72%),
+    linear-gradient(160deg, #7d5730, #5b3a1c 38%, #402813 68%, #291809);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.5), 0 3px 8px rgba(0, 0, 0, 0.4),
+    inset 0 2px 1px rgba(255, 231, 188, 0.3), inset 0 -2px 2px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(200, 162, 74, 0.35), inset 0 0 26px rgba(0, 0, 0, 0.3);
+}
+
+/* Il feltro dentro la cornice: filetto d'ottone al confine, rapporto aureo.
+   La larghezza è un TETTO (min con 100%), non una misura fissa: dentro la colonna
+   di .game il feltro non supera mai il legno; l'altezza segue il rapporto aureo. */
+.table-frame > .table-grid {
+  width: min(1032px, 100%);
+  max-width: 100%;
+  /* Il rapporto aureo è un MINIMO, non un vincolo: con height:auto e SENZA
+     min-height:0 il feltro parte da questa proporzione e cresce verso il basso
+     quando le calate aumentano, portandosi dietro bordo, post di Sud e mano. */
+  aspect-ratio: 1.618 / 1;
+  height: auto;
+  margin: 0 auto;
+  border: none;
+  border-radius: 16px;
+  align-content: start;
+  /* Verde del progetto approvato: sovrascrive il fondo di globals.css, inclusa la
+     vignettatura che lo scuriva (qui è un fondo pieno, niente overlay scuro). */
+  background: radial-gradient(120% 90% at 50% 45%, #2a5f46, #205039 55%, #14352a);
+  /* Il post di Sud sporge di --post-out sotto il feltro: la sua metà ALTA sta
+     dentro, quindi la fascia bassa del feltro le è riservata e la mano non può
+     occuparla. */
+  padding: 18px 18px calc(var(--post-out) - 6px);
+  box-shadow: 0 0 0 2px rgba(200, 162, 74, 0.55), 0 0 0 3px rgba(0, 0, 0, 0.45),
+    inset 0 3px 14px rgba(0, 0, 0, 0.5), inset 0 -2px 10px rgba(0, 0, 0, 0.35);
+}
+
+/* I quattro post stanno al 60% FUORI dal feltro, a cavallo del bordo di legno:
+   così non coprono l'isola centrale né le aree dei giochi. */
+.table-frame > .table-grid[data-seats="4"] {
+  grid-template-columns: 244px minmax(0, 1fr) 244px;
+}
+/* I post sono ancorati al FELTRO (.table-grid), NON alla cornice di legno: così
+   l'offset cade sui bordi del feltro. Il post è alto 112px: fuori dal feltro ne
+   restano 70px (60%+), dentro 42px. overflow:visible garantisce che il feltro non
+   ritagli i post che sporgono. */
+.table-frame > .table-grid {
+  --post-out: 70px;
+  position: relative;
+  overflow: visible;
+}
+
+/* grid-area:auto è ESSENZIALE: un elemento in position:absolute figlio di un grid,
+   se ha una grid-area assegnata (qui .seat-north/.seat-south la ricevono da
+   globals.css), viene contenuto da QUELL'AREA, non dal padding-box del feltro. Con
+   align-content:center l'area sta dentro il feltro, quindi il post non sporgerebbe
+   dal bordo. Azzerando la grid-area il blocco contenitore torna il feltro e top/
+   bottom:-70px fanno sporgere il post a cavallo del bordo. */
+.table-frame > .table-grid > .seat-post.seat-north {
+  position: absolute;
+  grid-area: auto;
+  top: calc(-1 * var(--post-out));
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  z-index: 4;
+}
+.table-frame > .table-grid > .seat-post.seat-south {
+  position: absolute;
+  grid-area: auto;
+  bottom: calc(-1 * var(--post-out));
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  z-index: 4; /* il post resta SEMPRE sopra la mano (.hand-slot ha z-index: 1) */
+}
+/* Ovest/Est: il post è IN-FLOW nella sua colonna, che parte dopo i 18px di padding
+   del feltro; con margine -(--post-out) sporge ~52px oltre il bordo laterale (70 −
+   18 di padding). È il massimo sporgere che a finestre strette (≥900px) non manda
+   il post fuori dal viewport. La parte restante resta nella colonna, senza invadere
+   l'isola centrale. */
+.table-frame > .table-grid > .seat-post.seat-west {
+  margin-left: calc(-1 * var(--post-out));
+}
+.table-frame > .table-grid > .seat-post.seat-east {
+  margin-left: auto;
+  margin-right: calc(-1 * var(--post-out));
+}
+
+/* La mano vive DENTRO il feltro, nell'area "south" della griglia, appoggiata al
+   bordo basso; il post di Sud le sta sotto (assoluto, a cavallo del bordo). */
+.hand-slot {
+  grid-area: south;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  min-width: 0;
+  position: relative;
+  z-index: 1; /* sotto il post di Sud (z-index: 4), che non va mai coperto */
+}
+/* Dentro il tavolo la mano non è più flottante (sticky/bottom ancorati al
+   viewport in globals.css): sta ferma nell'area south. Inoltre è il SOLO
+   ventaglio, senza pannello: niente fondo, bordo, ombra, raggio né padding
+   attorno al gruppo. Il riordino con Pointer Events, la selezione con Shift e la
+   tastiera restano intatti. */
+.hand-slot .bottom-hand {
+  position: static;
+  bottom: auto;
+  width: auto;
+  margin-top: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* Portrait stretto: il tavolo degrada, i post passano alla forma compatta e
+   rientrano nel flusso (nessun post a cavallo del bordo su schermo piccolo). */
+@media (max-width: 720px) {
+  .table-frame {
+    /* in portrait il tavolo è a piena larghezza nella colonna: niente breakout */
+    padding: 18px;
+    margin: 18px 0;
+    left: auto;
+    transform: none;
+  }
+  .table-frame > .table-grid {
+    width: 100%;
+    height: auto;
+    aspect-ratio: auto;
+    padding: 18px;
+  }
+  .table-frame > .table-grid[data-seats="4"] {
+    grid-template-columns: 1fr 1fr;
+  }
+  .table-frame > .table-grid > .seat-post.seat-north,
+  .table-frame > .table-grid > .seat-post.seat-south {
+    position: static;
+    left: auto;
+    top: auto;
+    bottom: auto;
+    transform: none;
+    justify-self: center;
+  }
+  /* In portrait i post tornano nel flusso: ripristino la grid-area del post di
+     Nord (in desktop era azzerata per farlo sporgere in assoluto). */
+  .table-frame > .table-grid > .seat-post.seat-north {
+    grid-area: north;
+  }
+  /* La mano è nell'area "south": in portrait il post di Sud scende in una riga
+     propria SOTTO la mano, così non si sovrappongono nella stessa cella. */
+  .table-frame > .table-grid > .seat-post.seat-south {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .table-frame > .table-grid > .seat-post.seat-west,
+  .table-frame > .table-grid > .seat-post.seat-east {
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .seat-post {
+    width: 168px;
+    min-height: 86px;
+    gap: 8px;
+    padding: 10px;
+  }
+  .seat-post .seat-post-avatar { width: 40px; height: 42px; }
+  .seat-post .seat-post-badge { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seat-post { backdrop-filter: none; }
+}

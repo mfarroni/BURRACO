@@ -1,0 +1,112 @@
+/* ===================================================================
+ * FACCIA DELLA CARTA — rifinitura da mazzo reale.
+ * Caricato da CardView.tsx. Sovrascrive la faccia di globals.css:
+ * carta bianca, indice d'angolo rango+seme, pip disposti in colonne
+ * (sinistra / centro / destra) con la metà inferiore ruotata, pannello
+ * con filetto per le figure.
+ * =================================================================== */
+
+.card[data-color="red"] { --ink: #b3182b; }
+.card[data-color="black"] { --ink: #211b12; }
+
+.card:not(.back) {
+  background: #fffefb;
+  border: 1px solid #d5cfbe;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.34);
+}
+
+/* Indice d'angolo: rango grande, seme piccolo sotto, come sul mazzo. */
+.card .index {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.78;
+  color: var(--ink);
+}
+.card .index.br {
+  top: auto;
+  left: auto;
+  bottom: 4px;
+  right: 5px;
+  transform: rotate(180deg);
+}
+.card .index .r { font-weight: 700; font-size: 0.92rem; }
+.card .index .s { font-size: 0.56rem; }
+
+/* ── Pip disposti come su una carta vera ────────────────────────────── */
+.card .pips {
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  color: var(--ink);
+}
+.card .pip-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 17px;
+}
+.card .pip-col[data-col="L"],
+.card .pip-col[data-col="R"] { justify-content: space-between; }
+.card .pip-col[data-col="C"] { justify-content: space-evenly; }
+.card .pip-col > span { font-size: 0.92rem; line-height: 1; }
+.card .pip-col > span[data-flip="true"] { transform: rotate(180deg); }
+
+/* Asso (e carte numeriche piccole): un solo segno grande al centro. Il jolly NON
+   è incluso qui: la stella è centrata da globals.css (inset:0 + grid) col colore
+   delle matte; aggiungere qui un transform la sposterebbe fuori centro. */
+.card .pip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2.1rem;
+  line-height: 1;
+  color: var(--ink);
+}
+
+/* ── Figure (J/Q/K): niente illustrazione. Seme grande al centro con la lettera
+      del rango sovrapposta in bianco, leggibili a colpo d'occhio (via il vecchio
+      pannello a taglio diagonale, che non si leggeva). ────────────────────── */
+.card .court {
+  position: absolute;
+  inset: 13px 8px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: none;
+}
+.card .court-suit {
+  font-size: 2.3rem;
+  line-height: 1;
+  color: var(--ink);
+}
+.card .court-letter {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: #fffefb;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+/* Carte piccole (monte scarti, giochi calati): niente pip, ma indice d'angolo e
+   seme centrale SEMPRE leggibili senza zoom. */
+.card[data-small="true"] .pips { display: none; }
+.card[data-small="true"] .index .r { font-size: 0.8rem; }
+.card[data-small="true"] .index .s { font-size: 0.62rem; }
+.card[data-small="true"] .pip,
+.card[data-small="true"] .jolly { font-size: 1.5rem; }
+.card[data-small="true"] .court-suit { font-size: 1.5rem; }
+.card[data-small="true"] .court-letter { font-size: 0.8rem; }

@@ -14,6 +14,7 @@ import { ProfilePanel } from "@/components/ProfilePanel";
 import { BottomHand } from "@/components/BottomHand";
 import { CardView } from "@/components/CardView";
 import { Melds } from "@/components/Melds";
+import { SeatPost } from "@/components/SeatPost";
 import { ActionBar } from "@/components/ActionBar";
 import {
   ConfirmDialog,
@@ -28,7 +29,6 @@ import {
   Celebration,
   ConnectionBanner,
   Countdown,
-  OpponentStatus,
   TurnBanner,
 } from "@/components/StateBanners";
 
@@ -404,27 +404,32 @@ export default function Page() {
   // posto. In 1v1 `youTeam === yourSeat`, quindi il raggruppamento "Noi/Loro" è identico.
   const teamOf = (team: TeamId): "us" | "them" => (team === youTeam ? "us" : "them");
 
-  // Targa di un posto "altro" (compagno/avversario) a 4 postazioni.
-  const renderOtherPlate = (
+  // Burraco per SQUADRA, derivati dai giochi già in `state.tableMelds` (campi
+  // `ownerTeam` e `isBurraco` del contratto). Nessun dato nuovo dal server: il
+  // client conta ciò che il server ha già redatto, non applica regole.
+  const burracoByTeam = (team: TeamId): number =>
+    s.tableMelds.filter((m) => m.ownerTeam === team && m.isBurraco).length;
+
+  // Post di un posto "altro" (compagno/avversario) a 4 postazioni.
+  const renderOtherPost = (
     view: SeatPublic | undefined,
     area: string,
     teamKind: "us" | "them",
-    crest: string,
-    label: string,
+    role: string,
   ) => {
     if (!view) return null;
-    const active = s.whoseTurn === view.seat;
-    const connected = view.connectionStatus !== "disconnected";
-    const name = g.players.find((p) => p.seat === view.seat)?.displayName ?? `Giocatore ${view.seat + 1}`;
+    const player = g.players.find((p) => p.seat === view.seat);
     return (
-      <div className={`seat-plate ${area}`} data-team={teamKind} data-active={active ? "true" : "false"}>
-        <span className="crest" aria-hidden="true">{crest}</span>
-        <span className="seat-name">{name}</span>
-        <span className="team-tag">{label}</span>
-        <span className="seat-hand">{view.handCount} in mano</span>
-        {active && <span className="turn-dot" aria-hidden="true" />}
-        {!connected && <span className="seat-off">offline</span>}
-      </div>
+      <SeatPost
+        area={area}
+        team={teamKind}
+        role={role}
+        name={player?.displayName ?? `Giocatore ${view.seat + 1}`}
+        handCount={view.handCount}
+        active={s.whoseTurn === view.seat}
+        connected={view.connectionStatus !== "disconnected"}
+        burracoCount={burracoByTeam(view.team)}
+      />
     );
   };
 
@@ -519,9 +524,6 @@ export default function Page() {
           {isMyTurn && turnEndsAt !== null && <Countdown turnEndsAt={turnEndsAt} />}
           {/* 1v1: stato dell'unico avversario nell'header. A 4 postazioni l'informazione
               per-giocatore vive sulle targhe attorno al tavolo (nome/conteggio/turno/offline). */}
-          {!is2v2 && (
-            <OpponentStatus name={opponentName} handCount={opponentHandCount} connected={opponentConnected} />
-          )}
           {/* Annulla partita (§5.1): azione discreta nell'area comandi in alto, MAI
               accanto a presa/scarto (che vivono nella barra in basso). Sempre
               disponibile durante la partita. Apre una conferma modale. */}
@@ -575,24 +577,27 @@ export default function Page() {
           2v2 (data-seats="4"): compagno a Nord, avversari a Ovest/Est (giro orario),
           tu a Sud; il CSS di data-seats="4" esiste già (aree north/west/east/south).
           Il client NON calcola regole: legge `state.seats[]` e la squadra dal server. */}
+      <div className="table-frame">
       <div className="table-grid" data-seats={String(seatsTotal)}>
         {/* Postazione a Nord. 1v1: l'avversario ("Loro"). 2v2: il compagno ("Noi"). */}
         {!is2v2 ? (
-          <div className="seat-plate seat-north" data-team="them" data-active={!isMyTurn ? "true" : "false"}>
-            <span className="crest" aria-hidden="true">●</span>
-            <span className="seat-name">{opponentName}</span>
-            <span className="team-tag">Loro</span>
-            <span className="seat-hand">{opponentHandCount} in mano</span>
-            {!isMyTurn && <span className="turn-dot" aria-hidden="true" />}
-            {!opponentConnected && <span className="seat-off">offline</span>}
-          </div>
+          <SeatPost
+            area="seat-north"
+            team="them"
+            role="Avversario"
+            name={opponentName}
+            handCount={opponentHandCount}
+            active={!isMyTurn}
+            connected={opponentConnected}
+            burracoCount={burracoByTeam(otherTeam)}
+          />
         ) : (
-          renderOtherPlate(partnerView, "seat-north", "us", "◆", "Noi · compagno")
+          renderOtherPost(partnerView, "seat-north", "us", "Compagno · Nord")
         )}
 
         {/* 2v2: avversari a Ovest ed Est (squadra "Loro"), in senso di giro orario. */}
-        {is2v2 && renderOtherPlate(westView, "seat-west", "them", "●", "Loro")}
-        {is2v2 && renderOtherPlate(eastView, "seat-east", "them", "●", "Loro")}
+        {is2v2 && renderOtherPost(westView, "seat-west", "them", "Ovest")}
+        {is2v2 && renderOtherPost(eastView, "seat-east", "them", "Est")}
 
         {/* Isola centrale FISSA: mazzo, monte scarti, (mano avversario 1v1), pozzetti. */}
         <div className="board-center">
@@ -614,15 +619,8 @@ export default function Page() {
             <div className="lbl">Monte scarti</div>
           </div>
 
-          {/* 1v1: mano dell'unico avversario. In 2v2 i conteggi per-posto sono già
-              sulle targhe attorno al tavolo → pila omessa per non fuorviare. */}
-          {!is2v2 && (
-            <div className="pile">
-              <div className="slot facedown" aria-hidden="true" />
-              <div className="num">{opponentHandCount}</div>
-              <div className="lbl">Mano avversario</div>
-            </div>
-          )}
+          {/* Il conteggio della mano avversaria vive ora nel post del giocatore
+              (una sola fonte per posto, a 2 come a 4 postazioni). */}
 
           <div className="pile">
             <div className="pozzetti" aria-hidden="true">
@@ -650,28 +648,39 @@ export default function Page() {
           isMyTurn={isMyTurn}
         />
 
-        {/* Postazione locale (Sud) — squadra "Noi" (oro ◆ ), si accende al tuo turno. */}
-        <div className="seat-plate seat-south" data-team="us" data-active={isMyTurn ? "true" : "false"}>
-          <span className="crest" aria-hidden="true">◆</span>
-          <span className="seat-name">{auth.user?.displayName ?? "Tu"}</span>
-          <span className="team-tag">Noi</span>
-          <span className="seat-hand">{s.yourHand.length} in mano</span>
-          {isMyTurn && <span className="turn-dot" aria-hidden="true" />}
+        {/* ── La tua mano, DENTRO il feltro (area "south" della griglia), a
+            ventaglio e riordinabile. Il post di Sud le sta appoggiato sotto. ── */}
+        <div className="hand-slot">
+          <BottomHand
+            room={g.roomCode}
+            hand={s.yourHand}
+            selectedCards={selectedCards}
+            isMyTurn={isMyTurn}
+            pending={g.pending}
+            inFlightCardId={g.inFlightCardId}
+            onToggleCard={toggleCard}
+            onSelectRange={selectRange}
+            onClearSelection={clearSelection}
+          />
         </div>
-      </div>
 
-      {/* ── La tua mano (ancorata in basso, a ventaglio, riordinabile) ──── */}
-      <BottomHand
-        room={g.roomCode}
-        hand={s.yourHand}
-        selectedCards={selectedCards}
-        isMyTurn={isMyTurn}
-        pending={g.pending}
-        inFlightCardId={g.inFlightCardId}
-        onToggleCard={toggleCard}
-        onSelectRange={selectRange}
-        onClearSelection={clearSelection}
-      />
+        {/* Postazione locale (Sud) — squadra "Noi" (oro ◆ ), si accende al tuo
+            turno. Figlia di .table-grid: ancorata al bordo BASSO del feltro,
+            a metà fuori, sotto la mano. */}
+        <SeatPost
+          area="seat-south"
+          team="us"
+          role={is2v2 ? "Sud · tu" : "Tu"}
+          name={auth.user?.displayName ?? "Tu"}
+          handCount={s.yourHand.length}
+          active={isMyTurn}
+          isGuest={auth.user?.isGuest}
+          pozzettoTaken={s.yourPozzettoTaken}
+          burracoCount={burracoByTeam(youTeam)}
+          size="extended"
+        />
+      </div>
+      </div>
 
       {/* Scelta CIMA/FONDO per la sostituzione della matta in una sequenza:
           compare SOLO quando il server segnala che entrambe le estremità sono

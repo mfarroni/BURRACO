@@ -137,28 +137,6 @@ export function ConnectionBanner({
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- * AVVERSARIO — nome, n. carte in mano, stato di connessione.
- * ───────────────────────────────────────────────────────────────────── */
-export function OpponentStatus({
-  name,
-  handCount,
-  connected,
-}: {
-  name: string;
-  handCount: number;
-  connected: boolean;
-}) {
-  return (
-    <span className="badge" data-conn={connected ? "connected" : "disconnected"} aria-live="polite">
-      <span className="dot" aria-hidden="true" />
-      {name} · {handCount} carte
-      {!connected && <span className="sr-only"> (disconnesso)</span>}
-      {!connected && " · offline"}
-    </span>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────────────
  * CELEBRAZIONI effimere (eventi presentazionali del server).
  * pozzetto_taken → "Pozzetto!" ; burraco_made → pulito vs sporco (distinti).
  * Non bloccano il gioco; rispettano prefers-reduced-motion (via CSS).
