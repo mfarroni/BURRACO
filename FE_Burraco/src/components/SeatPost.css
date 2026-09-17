@@ -224,13 +224,15 @@
 .table-frame > .table-grid {
   width: min(1032px, 100%);
   max-width: 100%;
-  height: auto;
+  /* Il rapporto aureo è un MINIMO, non un vincolo: con height:auto e SENZA
+     min-height:0 il feltro parte da questa proporzione e cresce verso il basso
+     quando le calate aumentano, portandosi dietro bordo, post di Sud e mano. */
   aspect-ratio: 1.618 / 1;
+  height: auto;
   margin: 0 auto;
   border: none;
   border-radius: 16px;
-  min-height: 0;
-  align-content: center;
+  align-content: start;
   /* Verde del progetto approvato: sovrascrive il fondo di globals.css, inclusa la
      vignettatura che lo scuriva (qui è un fondo pieno, niente overlay scuro). */
   background: radial-gradient(120% 90% at 50% 45%, #2a5f46, #205039 55%, #14352a);

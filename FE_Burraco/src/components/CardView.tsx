@@ -125,7 +125,7 @@ export function CardView({
       <span className="jolly" aria-hidden="true">
         ★
       </span>
-    ) : pipSpec && symbol ? (
+    ) : pipSpec && symbol && !small ? (
       <span className="pips" aria-hidden="true">
         {(["L", "C", "R"] as const).map((col) => (
           <span key={col} className="pip-col" data-col={col}>
@@ -138,15 +138,15 @@ export function CardView({
         ))}
       </span>
     ) : isCourt && symbol ? (
+      // Figure: nessuna illustrazione. Seme grande al centro + lettera del rango
+      // sovrapposta, leggibili a colpo d'occhio (niente pannello a taglio diagonale).
       <span className="court" aria-hidden="true">
-        <span className="court-split" />
-        <span className="court-r">{rankLabel}</span>
-        <span className="court-s">{symbol}</span>
-        <span className="court-r flip">{rankLabel}</span>
-        <span className="court-s flip">{symbol}</span>
-        <span className="court-mark" />
+        <span className="court-suit">{symbol}</span>
+        <span className="court-letter">{rankLabel}</span>
       </span>
     ) : (
+      // Asso, e carte numeriche in formato piccolo (giochi calati / scarti): un
+      // solo seme grande al centro, sempre riconoscibile.
       <span className="pip" aria-hidden="true">
         {symbol}
       </span>
