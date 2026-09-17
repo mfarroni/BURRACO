@@ -218,7 +218,10 @@
   border-radius: 16px;
   min-height: 0;
   align-content: center;
-  padding: 18px;
+  /* Il post di Sud sporge di --post-out sotto il feltro: la sua metà ALTA sta
+     dentro, quindi la fascia bassa del feltro le è riservata e la mano non può
+     occuparla. */
+  padding: 18px 18px calc(var(--post-out) - 6px);
   box-shadow: 0 0 0 2px rgba(200, 162, 74, 0.55), 0 0 0 3px rgba(0, 0, 0, 0.45),
     inset 0 3px 14px rgba(0, 0, 0, 0.5), inset 0 -2px 10px rgba(0, 0, 0, 0.35);
 }
@@ -246,6 +249,7 @@
   left: 50%;
   transform: translateX(-50%);
   margin: 0;
+  z-index: 4; /* il post resta SEMPRE sopra la mano (.hand-slot ha z-index: 1) */
 }
 .table-frame > .table-grid > .seat-post.seat-west {
   margin-left: calc(-1 * (244px - var(--post-out)));
@@ -263,14 +267,24 @@
   justify-content: center;
   align-items: flex-end;
   min-width: 0;
+  position: relative;
+  z-index: 1; /* sotto il post di Sud (z-index: 4), che non va mai coperto */
 }
 /* Dentro il tavolo la mano non è più flottante (sticky/bottom ancorati al
-   viewport in globals.css): sta ferma nell'area south. Il riordino con Pointer
-   Events, la selezione con Shift e la tastiera restano intatti. */
+   viewport in globals.css): sta ferma nell'area south. Inoltre è il SOLO
+   ventaglio, senza pannello: niente fondo, bordo, ombra, raggio né padding
+   attorno al gruppo. Il riordino con Pointer Events, la selezione con Shift e la
+   tastiera restano intatti. */
 .hand-slot .bottom-hand {
   position: static;
   bottom: auto;
   width: auto;
+  margin-top: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
 }
 
 /* Portrait stretto: il tavolo degrada, i post passano alla forma compatta e

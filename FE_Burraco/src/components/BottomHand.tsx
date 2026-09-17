@@ -311,24 +311,22 @@ export function BottomHand({
       data-active-turn={isMyTurn ? "true" : "false"}
       aria-label={`La tua mano, ${count} carte`}
     >
-      <div className="bottom-hand-head">
-        <h4>La tua mano</h4>
-        <div className="bottom-hand-head-right">
-          {selectionCount > 0 && (
-            <button
-              type="button"
-              className="selection-chip"
-              onClick={onClearSelection}
-              aria-label={`${selectionCount} carte selezionate. Tocca per deselezionare tutte.`}
-            >
-              {selectionCount} selezionate <span aria-hidden="true">✕</span>
-            </button>
-          )}
-          <span className="bottom-hand-hint muted">
-            Tocca per selezionare · tieni premuto/trascina per riordinare · Ctrl/⌘ + ← →
-          </span>
+      {/* Dentro il feltro la mano è SOLO il ventaglio: niente titolo "La tua mano"
+          né riga di istruzioni (il post di Sud dice già di chi è la mano e quante
+          carte). Resta il solo chip "N selezionate", funzionale: azzera la
+          selezione. Tutto il resto (handler, ARIA, riordino) è invariato. */}
+      {selectionCount > 0 && (
+        <div className="bottom-hand-head">
+          <button
+            type="button"
+            className="selection-chip"
+            onClick={onClearSelection}
+            aria-label={`${selectionCount} carte selezionate. Tocca per deselezionare tutte.`}
+          >
+            {selectionCount} selezionate <span aria-hidden="true">✕</span>
+          </button>
         </div>
-      </div>
+      )}
 
       {count === 0 ? (
         <p className="faint">Mano vuota — sei andato a pozzetto!</p>

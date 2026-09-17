@@ -630,17 +630,16 @@ button:disabled {
 .seat-north { grid-area: north; }
 .seat-south { grid-area: south; }
 
-/* Isola centrale: la vecchia .tableau, ora fissa nell'area "center". */
+/* Isola centrale: la vecchia .tableau, ora fissa nell'area "center". Come nel
+   progetto approvato le pile (mazzo, monte scarti, pozzetti) siedono direttamente
+   sul feltro, SENZA riquadro attorno: restano disposizione, conteggi ed etichette,
+   niente fondo/bordo/ombra che le racchiuda. */
 .board-center {
   grid-area: center;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: var(--sp-4);
   padding: var(--sp-4);
-  background: radial-gradient(120% 120% at 50% 0%, rgba(23, 74, 56, 0.6), rgba(14, 42, 34, 0.6));
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--sh-inset);
 }
 .pile {
   display: flex;
