@@ -1,6 +1,7 @@
 "use client";
 
 import type { Card, Suit } from "@/lib/contract";
+import "./CardFace.css";
 
 /**
  * CARTA — componente firma del "Circolo Notturno".
@@ -23,6 +24,25 @@ const SUIT_SYMBOL: Record<Suit, string> = {
 };
 
 const RED_SUITS: Suit[] = ["hearts", "diamonds"];
+
+/**
+ * Disposizione dei pip come su un mazzo reale: colonne sinistra / centro /
+ * destra, con la metà inferiore dei segni ruotata di 180°. "u" alto, "m" medio,
+ * "d" basso (ruotato). Nessuna regola di gioco: sola tipografia della carta.
+ */
+const PIP_LAYOUT: Record<number, { L: string[]; C: string[]; R: string[] }> = {
+  2: { L: [], C: ["u", "d"], R: [] },
+  3: { L: [], C: ["u", "m", "d"], R: [] },
+  4: { L: ["u", "d"], C: [], R: ["u", "d"] },
+  5: { L: ["u", "d"], C: ["m"], R: ["u", "d"] },
+  6: { L: ["u", "m", "d"], C: [], R: ["u", "m", "d"] },
+  7: { L: ["u", "m", "d"], C: ["u"], R: ["u", "m", "d"] },
+  8: { L: ["u", "m", "d"], C: ["u", "d"], R: ["u", "m", "d"] },
+  9: { L: ["u", "m", "m", "d"], C: ["m"], R: ["u", "m", "m", "d"] },
+  10: { L: ["u", "m", "m", "d"], C: ["u", "d"], R: ["u", "m", "m", "d"] },
+};
+
+const COURT_RANKS = ["J", "Q", "K"];
 
 export function cardLabel(card: Card): string {
   if (card.rank === "JOKER") return "Jolly";
@@ -95,18 +115,47 @@ export function CardView({
     </span>
   );
 
+  // Corpo della carta: pip disposti per i numeri, pannello per le figure,
+  // un solo segno grande per asso e jolly.
+  const pipSpec = PIP_LAYOUT[Number(card.rank)];
+  const isCourt = COURT_RANKS.includes(card.rank);
+
+  const body =
+    kind === "joker" ? (
+      <span className="jolly" aria-hidden="true">
+        ★
+      </span>
+    ) : pipSpec && symbol ? (
+      <span className="pips" aria-hidden="true">
+        {(["L", "C", "R"] as const).map((col) => (
+          <span key={col} className="pip-col" data-col={col}>
+            {pipSpec[col].map((slot, i) => (
+              <span key={i} data-flip={slot === "d" ? "true" : "false"}>
+                {symbol}
+              </span>
+            ))}
+          </span>
+        ))}
+      </span>
+    ) : isCourt && symbol ? (
+      <span className="court" aria-hidden="true">
+        <span className="court-split" />
+        <span className="court-r">{rankLabel}</span>
+        <span className="court-s">{symbol}</span>
+        <span className="court-r flip">{rankLabel}</span>
+        <span className="court-s flip">{symbol}</span>
+        <span className="court-mark" />
+      </span>
+    ) : (
+      <span className="pip" aria-hidden="true">
+        {symbol}
+      </span>
+    );
+
   const content = (
     <>
       {index}
-      {kind === "joker" ? (
-        <span className="jolly" aria-hidden="true">
-          ★
-        </span>
-      ) : (
-        <span className="pip" aria-hidden="true">
-          {symbol}
-        </span>
-      )}
+      {body}
       <span className="index br" aria-hidden="true">
         <span className="r">{rankLabel}</span>
         {symbol && <span className="s">{symbol}</span>}

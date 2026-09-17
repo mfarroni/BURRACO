@@ -1,0 +1,138 @@
+/* ===================================================================
+ * FACCIA DELLA CARTA — rifinitura da mazzo reale.
+ * Caricato da CardView.tsx. Sovrascrive la faccia di globals.css:
+ * carta bianca, indice d'angolo rango+seme, pip disposti in colonne
+ * (sinistra / centro / destra) con la metà inferiore ruotata, pannello
+ * con filetto per le figure.
+ * =================================================================== */
+
+.card[data-color="red"] { --ink: #b3182b; }
+.card[data-color="black"] { --ink: #211b12; }
+
+.card:not(.back) {
+  background: #fffefb;
+  border: 1px solid #d5cfbe;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.34);
+}
+
+/* Indice d'angolo: rango grande, seme piccolo sotto, come sul mazzo. */
+.card .index {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.78;
+  color: var(--ink);
+}
+.card .index.br {
+  top: auto;
+  left: auto;
+  bottom: 4px;
+  right: 5px;
+  transform: rotate(180deg);
+}
+.card .index .r { font-weight: 700; font-size: 0.92rem; }
+.card .index .s { font-size: 0.56rem; }
+
+/* ── Pip disposti come su una carta vera ────────────────────────────── */
+.card .pips {
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  color: var(--ink);
+}
+.card .pip-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 17px;
+}
+.card .pip-col[data-col="L"],
+.card .pip-col[data-col="R"] { justify-content: space-between; }
+.card .pip-col[data-col="C"] { justify-content: space-evenly; }
+.card .pip-col > span { font-size: 0.92rem; line-height: 1; }
+.card .pip-col > span[data-flip="true"] { transform: rotate(180deg); }
+
+/* Asso e jolly: un solo segno grande al centro. */
+.card .pip,
+.card .jolly {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2.1rem;
+  line-height: 1;
+  color: var(--ink);
+}
+
+/* ── Figure: pannello bianco con filetto e taglio diagonale ─────────── */
+.card .court {
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+  left: 8px;
+  right: 8px;
+  overflow: hidden;
+  background: #fffefb;
+  border: 1px solid #2b2b2b;
+}
+.card .court-split {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom right,
+    transparent calc(50% - 0.5px),
+    #2b2b2b calc(50% - 0.5px),
+    #2b2b2b calc(50% + 0.5px),
+    transparent calc(50% + 0.5px)
+  );
+}
+.card .court-r {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  line-height: 1;
+  color: var(--ink);
+}
+.card .court-s {
+  position: absolute;
+  top: 17px;
+  left: 4px;
+  font-size: 0.56rem;
+  line-height: 1;
+  color: var(--ink);
+}
+.card .court-r.flip,
+.card .court-s.flip {
+  top: auto;
+  left: auto;
+  transform: rotate(180deg);
+}
+.card .court-r.flip { bottom: 2px; right: 3px; }
+.card .court-s.flip { bottom: 17px; right: 4px; }
+.card .court-mark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--ink);
+  background: color-mix(in oklab, var(--ink) 12%, transparent);
+}
+
+/* Carte piccole (monte scarti, giochi calati): solo indice + segno centrale. */
+.card[data-small="true"] .pips,
+.card[data-small="true"] .court-mark { display: none; }
+.card[data-small="true"] .index .r { font-size: 0.72rem; }
+.card[data-small="true"] .pip,
+.card[data-small="true"] .jolly { font-size: 1.35rem; }

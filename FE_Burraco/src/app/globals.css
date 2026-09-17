@@ -623,85 +623,12 @@ button:disabled {
     "melds  melds  melds"
     "south  south  south";
 }
+
+/* Aree della griglia: le usa il post del giocatore (.seat-post, SeatPost.css). */
 .seat-west { grid-area: west; }
 .seat-east { grid-area: east; }
 .seat-north { grid-area: north; }
 .seat-south { grid-area: south; }
-
-/* Targa di postazione — nome + tag squadra + crest + conteggio mano + turno.
-   Tre canali di distinzione squadra: posizione (area) + colore (data-team) +
-   etichetta/crest. Il glow d'oro segnala la postazione ATTIVA (di turno). */
-.seat-plate {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  flex-wrap: wrap;
-  padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  background: var(--surface);
-  font-size: var(--fs-sm);
-  color: var(--text);
-}
-.seat-plate .seat-name {
-  font-weight: 700;
-  color: var(--text-strong);
-}
-.seat-plate .seat-hand {
-  color: var(--text-muted);
-  font-size: var(--fs-xs);
-}
-.seat-plate .crest {
-  font-size: 1rem;
-  line-height: 1;
-}
-.seat-plate .team-tag {
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 1px var(--sp-2);
-  border-radius: var(--r-pill);
-  border: 1px solid currentColor;
-}
-.seat-plate .seat-off {
-  font-size: var(--fs-xs);
-  color: var(--warn-500);
-}
-.seat-plate .turn-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--brass-300);
-  box-shadow: 0 0 8px var(--brass-300);
-  animation: pulse-dot 1.4s var(--ease-in-out) infinite;
-}
-/* Colore semantico di squadra (cieco-sicuro: oro vs blu). */
-.seat-plate[data-team="us"] {
-  border-color: var(--brass-500);
-}
-.seat-plate[data-team="us"] .crest,
-.seat-plate[data-team="us"] .team-tag {
-  color: var(--brass-300);
-}
-.seat-plate[data-team="them"] {
-  border-color: var(--info-500);
-}
-.seat-plate[data-team="them"] .crest,
-.seat-plate[data-team="them"] .team-tag {
-  color: var(--info-300);
-}
-/* Postazione ATTIVA (di turno): glow d'oro "a colpo d'occhio" + superficie
-   sollevata così la targa di turno EMERGE sulle altre anche in periferia visiva. */
-.seat-plate[data-active="true"] {
-  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
-  box-shadow: var(--glow-turn);
-}
-.seat-plate[data-active="true"] .seat-name {
-  color: var(--text-strong);
-}
-.seat-plate[data-active="true"] .seat-hand {
-  color: var(--text);
-}
 
 /* Isola centrale: la vecchia .tableau, ora fissa nell'area "center". */
 .board-center {
@@ -1163,11 +1090,6 @@ button:disabled {
    sua squadra — Noi (Nord/Sud) centrata sull'asse verticale, Loro
    (Ovest/Est) agli estremi orizzontali. Così la POSIZIONE (canale 1)
    resta leggibile a colpo d'occhio. */
-.table-grid[data-seats="4"] .seat-plate {
-  flex-wrap: nowrap;
-  max-width: 320px;
-  min-width: 0;
-}
 .table-grid[data-seats="4"] .seat-north,
 .table-grid[data-seats="4"] .seat-south {
   justify-self: center;
@@ -1177,31 +1099,6 @@ button:disabled {
 }
 .table-grid[data-seats="4"] .seat-east {
   justify-self: end;
-}
-.table-grid[data-seats="4"] .seat-plate .seat-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.table-grid[data-seats="4"] .seat-plate .crest,
-.table-grid[data-seats="4"] .seat-plate .team-tag,
-.table-grid[data-seats="4"] .seat-plate .seat-hand,
-.table-grid[data-seats="4"] .seat-plate .turn-dot {
-  flex: 0 0 auto;
-}
-/* Offline come CHIP d'ambra: in coppie serve capire A COLPO D'OCCHIO
-   QUALE posto è caduto (compagno vs avversario cambia le conseguenze).
-   --warn-300 su --surface ≈ AAA. Solo 4 posti → l'1v1 resta com'era. */
-.table-grid[data-seats="4"] .seat-plate .seat-off {
-  flex: 0 0 auto;
-  padding: 1px var(--sp-2);
-  border: 1px solid var(--warn-500);
-  border-radius: var(--r-pill);
-  color: var(--warn-300);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 /* Pannelli "I nostri/I loro giochi" tinti per squadra: rinforzo del
