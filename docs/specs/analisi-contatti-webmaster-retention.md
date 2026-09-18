@@ -627,6 +627,27 @@ GET /admin/logs/db                           → pg_stat_activity (+ pg_stat_sta
 
 ## 8. Elementi che richiedono il LEAD prima di procedere (cancelli)
 
+> **STATO CANCELLI — aggiornamento del lead (2026-09-18, FASE DI TEST):**
+> **Gate 2 e Gate 3 APPROVATI PROVVISORIAMENTE** per la fase di test. I valori qui sotto
+> diventano i **valori di lavoro** di `agente_develop`; la **verifica reale è RINVIATA**
+> e va completata **prima della produzione** (un'approvazione "per il test" ≠ numeri verificati, §9).
+>
+> - **Gate 2 (valori di lavoro):** fascia keep-alive **8:00–24:00 IT** (cron UTC: estate
+>   `0 6-21 * * *`, inverno `0 7-22 * * *`); intervallo di lavoro **~10 min**; `/health` con
+>   `SELECT 1` + timing; `pg_stat_statements` implementato con **fallback** se assente su Neon.
+>   **NON verificati (da confermare in console prima della produzione):** quote compute
+>   Render/Neon, tetto giornaliero Brevo (dimensiona i lotti broadcast), costo piano Render a
+>   pagamento. In test la fascia 8–24 è assunta sostenibile; da riconfermare col dato reale.
+> - **Gate 3 (orizzonti approvati):** dettaglio **3 mesi**, partita **12 mesi**, totali
+>   **permanenti**; `contact_messages` **180 gg** dopo letto; `app_events` **30–90 gg** + tetto;
+>   `admin_audit_log` **12 mesi**; `broadcast_recipients` **90 gg**; inattività account **12 mesi**;
+>   allarme budget **80%**; totali consolidati **incrementali su `completeMatch`** + riconciliazione
+>   periodica; **ospiti referenziati** eliminati via **denormalizzazione del nome** (§4.3).
+>   **NON eseguito (rinviato):** censimento sul DB reale (`DATABASE_URL` assente qui) — query pronte
+>   in §4.1; **nessun processo di rimozione in modalità reale** prima di una **dry-run** mostrata.
+> - **Ancora aperti:** **Gate 1** (piano complessivo → sblocca `agente_develop`) e **Gate 4**
+>   (rimozione utenti → approvazione separata, il Blocco A resta sul branch).
+
 - **Gate 1 (piano):** approvazione di schema, endpoint, politiche di conservazione e UI qui descritti.
 - **Gate 2 (disponibilità):** **quote reali** Render/Neon (ore compute/mese) e **tetto giornaliero
   Brevo** e **costo piano Render a pagamento** — **verificati in console e citati con la fonte**,
