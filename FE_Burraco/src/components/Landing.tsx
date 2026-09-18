@@ -63,7 +63,7 @@ const STEPS = [
   { n: "I", title: "Pesca", body: "Una carta dal mazzo, o tutto il monte degli scarti." },
   { n: "II", title: "Cala", body: "Tris e scale sul tavolo. Jolly e pinelle fanno da carta mancante." },
   { n: "III", title: "Pozzetto", body: "Finite le carte in mano, il mazzetto riservato diventa tuo." },
-  { n: "IV", title: "Chiudi", body: "Due burraco in tavola e la mano vuota. Poi si contano i punti." },
+  { n: "IV", title: "Chiudi", body: "Burraco in tavola e la mano vuota. Poi si contano i punti." },
 ] as const;
 
 /** Regole: contenuto STATICO di vetrina. La fonte di verità del gioco resta
