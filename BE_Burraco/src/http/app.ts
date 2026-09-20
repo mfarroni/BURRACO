@@ -17,6 +17,7 @@ import { logAppEvent } from "../events/log.js";
 import { createRequireAdmin } from "../admin/requireAdmin.js";
 import { getOccupancy } from "../admin/occupancy.js";
 import { runRetentionSweep } from "../retention/service.js";
+import { createBroadcast, enqueueSend, listBroadcasts, unsubscribeByToken } from "../broadcast/service.js";
 
 /**
  * APP HTTP del backend auth (Express) montata sullo STESSO http.Server del WS
@@ -93,6 +94,24 @@ const contactBody = z.object({
 
 /** Tempo minimo di compilazione plausibile: sotto → trattato come bot (§2.3). */
 const CONTACT_MIN_FILL_MS = 3_000;
+
+// FASE 5.3 — Comunicazioni broadcast. Corpo in TESTO semplice (nessun HTML). Il
+// criterio è un enum chiuso di filtri; un criterio vuoto (non `all`, nessun filtro)
+// risolve a ZERO destinatari (nessun invio accidentale a tutti).
+const broadcastCriterioSchema = z.object({
+  all: z.boolean().optional(),
+  registratiDopo: z.coerce.number().int().nonnegative().optional(),
+  minPartite: z.coerce.number().int().min(0).max(100000).optional(),
+  inattiviDaGiorni: z.coerce.number().int().min(0).max(3650).optional(),
+});
+const broadcastCreateBody = z.object({
+  oggetto: z.string().trim().min(1).max(150),
+  corpo: z.string().trim().min(1).max(5000),
+  tipo: z.enum(["servizio", "promozionale"]),
+  criterio: broadcastCriterioSchema,
+  dryRun: z.boolean().optional(),
+});
+const unsubscribeQuery = z.object({ token: z.string().min(1).max(200) });
 
 /* ─────────────────────────────── helper ──────────────────────────────────── */
 
@@ -400,6 +419,25 @@ export function createHttpApp(
     }),
   );
 
+  /* FASE 5.3 — Disiscrizione PUBBLICA dalle comunicazioni promozionali (link email).
+   * Azzera `promo_opt_in` per il token. Risposta di conferma in TESTO semplice
+   * (nessun HTML → nessuna superficie XSS) e sempre rassicurante (nessun oracolo). */
+  const unsubscribeLimiter = rateLimit({ name: "unsubscribe", windowMs: 60_000, max: 30 });
+  app.get(
+    "/unsubscribe",
+    unsubscribeLimiter,
+    handler(async (req, res) => {
+      const parsed = unsubscribeQuery.safeParse(req.query);
+      if (parsed.success) {
+        await unsubscribeByToken(parsed.data.token);
+      }
+      res
+        .status(200)
+        .type("text/plain; charset=utf-8")
+        .send("Disiscrizione registrata: non riceverai più comunicazioni promozionali. Puoi chiudere questa pagina.");
+    }),
+  );
+
   /* ───────────────────── STATISTICHE & PROFILO (macro-ciclo 3) ─────────────────
    * GET /users/me/stats            (Bearer) → UserStats del principale.
    * GET /users/me/matches?limit&offset (Bearer) → MatchSummary[] paginato.
@@ -595,6 +633,62 @@ export function createHttpApp(
       if (!principal) return;
       const reports = await runRetentionSweep("dry_run", principal.userId);
       res.json({ dryRun: true, reports });
+    }),
+  );
+
+  /* ── FASE 5.3 — Comunicazioni broadcast (dietro requireAdmin) ────────────────
+   * Crea (con dry-run per la conta), avvia l'invio ASINCRONO (ritorna subito) ed
+   * elenca lo stato. L'invio vero è del worker (ws/server.ts): mai in linea con la
+   * risposta HTTP. Idempotenza dell'invio via UNIQUE(broadcast_id, user_id). */
+  app.post(
+    "/admin/broadcasts",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const parsed = broadcastCreateBody.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_BODY", message: "Dati della comunicazione non validi." });
+        return;
+      }
+      const result = await createBroadcast(principal.userId, {
+        oggetto: parsed.data.oggetto,
+        corpo: parsed.data.corpo,
+        tipo: parsed.data.tipo,
+        criterio: parsed.data.criterio,
+        dryRun: parsed.data.dryRun ?? false,
+      });
+      res.json(result);
+    }),
+  );
+
+  app.post(
+    "/admin/broadcasts/:id/send",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const idParsed = matchIdSchema.safeParse(req.params.id);
+      if (!idParsed.success) {
+        res.status(400).json({ error: "INVALID_ID", message: "Identificativo non valido." });
+        return;
+      }
+      const result = await enqueueSend(idParsed.data);
+      if (!result.accepted) {
+        res.status(404).json({ error: "NOT_FOUND", message: "Comunicazione non trovata." });
+        return;
+      }
+      res.json({ accepted: true, queued: result.queued });
+    }),
+  );
+
+  app.get(
+    "/admin/broadcasts",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      res.json({ items: await listBroadcasts() });
     }),
   );
 

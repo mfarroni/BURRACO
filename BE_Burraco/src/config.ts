@@ -117,6 +117,13 @@ export const env = {
    * va impostato in produzione.
    */
   ipHashSalt: process.env.IP_HASH_SALT ?? "",
+
+  /**
+   * FASE 5.3 — URL PUBBLICO del backend (es. https://<servizio>.onrender.com), usato
+   * per costruire il link di disiscrizione nelle email promozionali. Se assente, il
+   * link non viene incluso (la disiscrizione resta possibile via endpoint diretto).
+   */
+  publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? "").trim().replace(/\/+$/, ""),
 };
 
 /**
