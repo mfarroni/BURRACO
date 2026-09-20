@@ -1,0 +1,136 @@
+import { env } from "../config.js";
+import type { EmailAddress, SendEmailInput, SendEmailResult } from "./types.js";
+
+/**
+ * Trasporto email verso Brevo con `fetch` NATIVO (Node 20+): nessuna dipendenza
+ * nuova, nessun SDK (§0/§7 del ciclo). Espone una sola funzione, `sendViaBrevo`,
+ * usata dal wrapper `mail/index.ts`.
+ *
+ * Comportamento d'errore (§1.3):
+ *  - `BREVO_ENABLED=false` → `skipped:disabled` SENZA toccare la rete.
+ *  - config assente (manca API key o mittente) → `skipped:disabled` (nulla da inviare).
+ *  - 402/429 (quota/limite) → `skipped:quota` (mai eccezione al chiamante).
+ *  - 4xx diverso (400/401 = config errata) → `error:provider` (nessun retry).
+ *  - 5xx / rete / timeout → `error` transitorio, con UN solo ritentativo (backoff ~1s).
+ *
+ * Sicurezza dei log: MAI la API key, MAI l'indirizzo completo. Ammesso il solo
+ * dominio del destinatario, l'esito, lo `httpStatus` e i `tags`.
+ */
+
+const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
+
+/** Timeout della singola chiamata: Render↔Brevo è veloce, oltre è anomalia (§1.3). */
+const REQUEST_TIMEOUT_MS = 8_000;
+/** Backoff breve prima dell'unico ritentativo su errore transitorio. */
+const RETRY_BACKOFF_MS = 1_000;
+
+/** Solo il dominio dell'indirizzo, per log privacy-safe ("***@dominio"). */
+function domainOf(email: string): string {
+  const at = email.lastIndexOf("@");
+  return at >= 0 ? email.slice(at + 1) : "sconosciuto";
+}
+
+/**
+ * Rete difensiva: rimuove newline e caratteri di controllo da un valore che
+ * finisce in un header/campo strutturato. Il chiamante DEVE già sanificare
+ * (§2.3); questo è un secondo strato (defense-in-depth), mai l'unico.
+ */
+function stripCtl(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\x00-\x1F\x7F]+/g, " ").trim();
+}
+
+function cleanAddress(a: EmailAddress): { email: string; name?: string } {
+  const out: { email: string; name?: string } = { email: stripCtl(a.email) };
+  if (a.name) out.name = stripCtl(a.name);
+  return out;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** true se l'esito è un errore transitorio che merita UN ritentativo. */
+function isTransient(r: SendEmailResult): boolean {
+  return (
+    r.status === "error" &&
+    (r.reason === "network" || r.reason === "timeout" || (r.reason === "provider" && (r.httpStatus ?? 0) >= 500))
+  );
+}
+
+/** Singolo tentativo di invio (senza retry). */
+async function attempt(input: SendEmailInput): Promise<SendEmailResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const to = cleanAddress(input.to);
+  const body = {
+    sender: { email: env.mail.senderEmail, name: env.mail.senderName },
+    to: [to],
+    subject: stripCtl(input.subject),
+    textContent: input.text, // testo puro nel corpo: newline legittimi ammessi
+    ...(input.replyTo ? { replyTo: cleanAddress(input.replyTo) } : {}),
+    ...(input.tags && input.tags.length > 0 ? { tags: input.tags.map(stripCtl) } : {}),
+  };
+
+  let res: Response;
+  try {
+    res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "api-key": env.mail.brevoApiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    const aborted = err instanceof Error && err.name === "AbortError";
+    console.warn(`[mail] to=***@${domainOf(to.email)} esito=${aborted ? "timeout" : "network"}`);
+    return { status: "error", reason: aborted ? "timeout" : "network" };
+  }
+  clearTimeout(timer);
+
+  if (res.ok) {
+    // Brevo ritorna { messageId }. Non è un segreto: utile per diagnosi.
+    const providerId = await res
+      .json()
+      .then((j: unknown) =>
+        j && typeof j === "object" && "messageId" in j ? String((j as { messageId: unknown }).messageId) : undefined,
+      )
+      .catch(() => undefined);
+    console.log(
+      `[mail] to=***@${domainOf(to.email)} esito=sent status=${res.status} tags=${(input.tags ?? []).join(",")}`,
+    );
+    return providerId ? { status: "sent", providerId } : { status: "sent" };
+  }
+
+  // Quota/limite: non è un errore per il chiamante (§1.3).
+  if (res.status === 402 || res.status === 429) {
+    console.warn(`[mail] to=***@${domainOf(to.email)} esito=quota status=${res.status}`);
+    return { status: "skipped", reason: "quota" };
+  }
+  // Altri 4xx = config errata (chiave/mittente/payload): non ritentare.
+  console.warn(`[mail] to=***@${domainOf(to.email)} esito=provider status=${res.status}`);
+  return { status: "error", reason: "provider", httpStatus: res.status };
+}
+
+/**
+ * Invio con al più UN ritentativo su errore transitorio (5xx/rete/timeout).
+ * Nessun retry su 4xx (config) né su quota (skipped). Non solleva mai: ritorna
+ * sempre un `SendEmailResult`, così il chiamante resta best-effort (§2.1).
+ */
+export async function sendViaBrevo(input: SendEmailInput): Promise<SendEmailResult> {
+  // Interruttore + guardia di configurazione: senza chiave o mittente non si tenta.
+  if (!env.mail.enabled) return { status: "skipped", reason: "disabled" };
+  if (!env.mail.brevoApiKey || !env.mail.senderEmail) {
+    console.warn("[mail] configurazione Brevo incompleta: invio saltato (disabled).");
+    return { status: "skipped", reason: "disabled" };
+  }
+
+  const first = await attempt(input);
+  if (!isTransient(first)) return first;
+  await sleep(RETRY_BACKOFF_MS);
+  return attempt(input);
+}

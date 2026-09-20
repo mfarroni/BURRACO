@@ -1,0 +1,263 @@
+import { randomUUID } from "node:crypto";
+import { and, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import { db, schema } from "../db/client.js";
+import { env } from "../config.js";
+import { sendEmail } from "../mail/index.js";
+import { logAppEvent } from "../events/log.js";
+import type { BroadcastCriterio, BroadcastRow, BroadcastTipo } from "../admin/types.js";
+
+/**
+ * FASE 5.3 — Comunicazioni ai registrati (Blocco B). Invio ASINCRONO a lotti, mai
+ * in linea con la risposta HTTP (centinaia di destinatari → timeout su Render). Un
+ * `sendEmail()` per destinatario (mai indirizzi in copia). Idempotenza garantita da
+ * UNIQUE(broadcast_id, user_id): un doppio `send` non duplica.
+ *
+ * Consenso: le comunicazioni di SERVIZIO sono sempre inviabili; le PROMOZIONALI
+ * richiedono `promo_opt_in=true` e includono il link di disiscrizione.
+ */
+
+/**
+ * Dimensione del lotto per tick del worker. ⚠️ Da confermare col TETTO GIORNALIERO
+ * reale Brevo (Gate 2): superarlo silenziosamente = comunicazioni perse. Valore di
+ * lavoro prudente in attesa della verifica in console.
+ */
+export const BROADCAST_BATCH_SIZE = 40;
+
+const num = (v: unknown): number => Number(v ?? 0);
+
+interface Recipient {
+  userId: string;
+  email: string;
+  displayName: string;
+}
+
+/**
+ * Risolve i destinatari REGISTRATI (mai ospiti: is_guest=false) secondo il criterio.
+ * Per le promozionali filtra su `promo_opt_in=true` (consenso). Un criterio "vuoto"
+ * (nessun filtro e non `all`) → nessun destinatario (evita invii accidentali a tutti).
+ */
+export async function resolveRecipients(criterio: BroadcastCriterio, tipo: BroadcastTipo): Promise<Recipient[]> {
+  if (!db) return [];
+  const conds = [eq(schema.users.isGuest, false), isNotNull(schema.users.email)];
+  if (tipo === "promozionale") conds.push(eq(schema.users.promoOptIn, true));
+
+  const hasFilter =
+    criterio.all === true ||
+    criterio.registratiDopo !== undefined ||
+    criterio.minPartite !== undefined ||
+    criterio.inattiviDaGiorni !== undefined;
+  if (!hasFilter) return [];
+
+  if (!criterio.all) {
+    if (criterio.registratiDopo !== undefined) {
+      conds.push(gte(schema.users.createdAt, new Date(criterio.registratiDopo)));
+    }
+    if (criterio.inattiviDaGiorni !== undefined) {
+      const c = new Date(Date.now() - criterio.inattiviDaGiorni * 24 * 60 * 60 * 1000);
+      conds.push(lt(sql`coalesce(${schema.users.lastSeenAt}, ${schema.users.createdAt})`, c));
+    }
+    if (criterio.minPartite !== undefined) {
+      conds.push(
+        sql`(select count(*) from ${schema.matchPlayers} mp join ${schema.matches} m on m.id = mp.match_id
+             where mp.user_id = ${schema.users.id} and m.status = 'completed') >= ${criterio.minPartite}`,
+      );
+    }
+  }
+
+  const rows = await db
+    .select({ userId: schema.users.id, email: schema.users.email, displayName: schema.users.displayName })
+    .from(schema.users)
+    .where(and(...conds));
+  return rows.filter((r): r is Recipient => r.email !== null);
+}
+
+/** Crea la comunicazione (stato 'bozza'); in dry-run non persiste, solo conta+campione. */
+export async function createBroadcast(
+  authorId: string,
+  input: { oggetto: string; corpo: string; tipo: BroadcastTipo; criterio: BroadcastCriterio; dryRun: boolean },
+): Promise<{ id: string | null; count: number; sample: string[]; dryRun: boolean }> {
+  const recipients = await resolveRecipients(input.criterio, input.tipo);
+  const sample = recipients.slice(0, 5).map((r) => r.displayName);
+  if (input.dryRun || !db) {
+    return { id: null, count: recipients.length, sample, dryRun: true };
+  }
+  const [row] = await db
+    .insert(schema.broadcasts)
+    .values({
+      authorId,
+      oggetto: input.oggetto,
+      corpo: input.corpo,
+      tipo: input.tipo,
+      criterio: input.criterio,
+      stato: "bozza",
+    })
+    .returning({ id: schema.broadcasts.id });
+  return { id: row?.id ?? null, count: recipients.length, sample, dryRun: false };
+}
+
+/**
+ * Avvia l'invio: marca 'in_invio' e ACCODA i destinatari (in_coda) idempotentemente
+ * (ON CONFLICT DO NOTHING su broadcast_id+user_id). Ritorna subito; il worker invia.
+ * Un doppio `send` non ricrea le righe già presenti né re-invia quelle 'inviato'.
+ */
+export async function enqueueSend(broadcastId: string): Promise<{ accepted: boolean; queued: number }> {
+  if (!db) return { accepted: false, queued: 0 };
+  const [b] = await db
+    .select({ id: schema.broadcasts.id, tipo: schema.broadcasts.tipo, criterio: schema.broadcasts.criterio })
+    .from(schema.broadcasts)
+    .where(eq(schema.broadcasts.id, broadcastId))
+    .limit(1);
+  if (!b) return { accepted: false, queued: 0 };
+
+  const recipients = await resolveRecipients(b.criterio as BroadcastCriterio, b.tipo as BroadcastTipo);
+  await db.update(schema.broadcasts).set({ stato: "in_invio" }).where(eq(schema.broadcasts.id, broadcastId));
+  if (recipients.length === 0) {
+    await db.update(schema.broadcasts).set({ stato: "completato" }).where(eq(schema.broadcasts.id, broadcastId));
+    return { accepted: true, queued: 0 };
+  }
+  await db
+    .insert(schema.broadcastRecipients)
+    .values(recipients.map((r) => ({ broadcastId, userId: r.userId, stato: "in_coda" as const })))
+    .onConflictDoNothing({ target: [schema.broadcastRecipients.broadcastId, schema.broadcastRecipients.userId] });
+  return { accepted: true, queued: recipients.length };
+}
+
+/** Costruisce il link di disiscrizione, se è configurato l'URL pubblico. */
+function unsubLine(token: string): string {
+  if (!env.publicBaseUrl) return "";
+  return `\n\n—\nPer non ricevere più comunicazioni promozionali: ${env.publicBaseUrl}/unsubscribe?token=${token}`;
+}
+
+/**
+ * Processa UN lotto di destinatari in coda (al più BROADCAST_BATCH_SIZE, i più
+ * vecchi). Un'email per destinatario. Ri-verifica il consenso al momento dell'invio
+ * per le promozionali. Alla fine marca 'completato' i broadcast senza più code.
+ * Best-effort: senza DB o su errore non solleva.
+ */
+export async function processPendingBroadcasts(): Promise<{ processed: number }> {
+  if (!db) return { processed: 0 };
+  try {
+    const pending = await db
+      .select({
+        rid: schema.broadcastRecipients.id,
+        broadcastId: schema.broadcastRecipients.broadcastId,
+        userId: schema.broadcastRecipients.userId,
+        oggetto: schema.broadcasts.oggetto,
+        corpo: schema.broadcasts.corpo,
+        tipo: schema.broadcasts.tipo,
+        email: schema.users.email,
+        displayName: schema.users.displayName,
+        isGuest: schema.users.isGuest,
+        promoOptIn: schema.users.promoOptIn,
+        unsubToken: schema.users.unsubToken,
+      })
+      .from(schema.broadcastRecipients)
+      .innerJoin(schema.broadcasts, eq(schema.broadcasts.id, schema.broadcastRecipients.broadcastId))
+      .leftJoin(schema.users, eq(schema.users.id, schema.broadcastRecipients.userId))
+      .where(eq(schema.broadcastRecipients.stato, "in_coda"))
+      .orderBy(schema.broadcastRecipients.updatedAt)
+      .limit(BROADCAST_BATCH_SIZE);
+
+    if (pending.length === 0) {
+      // Nessuna coda: promuovi a 'completato' i broadcast 'in_invio' senza pendenti.
+      await db.execute(sql`
+        update ${schema.broadcasts} set stato = 'completato'
+        where stato = 'in_invio'
+          and not exists (
+            select 1 from ${schema.broadcastRecipients} r
+            where r.broadcast_id = ${schema.broadcasts.id} and r.stato = 'in_coda'
+          )`);
+      return { processed: 0 };
+    }
+
+    for (const r of pending) {
+      // Destinatario non valido / ospite / consenso promozionale revocato → saltato.
+      const promoBlocked = r.tipo === "promozionale" && !r.promoOptIn;
+      if (!r.email || r.isGuest || promoBlocked) {
+        await db.update(schema.broadcastRecipients).set({ stato: "saltato", updatedAt: new Date() }).where(eq(schema.broadcastRecipients.id, r.rid));
+        continue;
+      }
+      // Per le promozionali assicura un unsub_token (lazy) e aggiunge il link.
+      let token = r.unsubToken ?? "";
+      if (r.tipo === "promozionale" && !token) {
+        token = randomUUID();
+        await db.update(schema.users).set({ unsubToken: token }).where(eq(schema.users.id, r.userId));
+      }
+      const text = r.tipo === "promozionale" ? `${r.corpo}${unsubLine(token)}` : r.corpo;
+      const result = await sendEmail({
+        to: { email: r.email, name: r.displayName ?? undefined },
+        subject: r.oggetto,
+        text,
+        tags: [`broadcast:${r.broadcastId}`],
+      });
+      const stato = result.status === "sent" ? "inviato" : result.status === "skipped" ? "saltato" : "errore";
+      await db.update(schema.broadcastRecipients).set({ stato, updatedAt: new Date() }).where(eq(schema.broadcastRecipients.id, r.rid));
+    }
+
+    void logAppEvent("info", "broadcast", `lotto broadcast processato: ${pending.length}`);
+    return { processed: pending.length };
+  } catch (err) {
+    console.error("[broadcast] worker fallito:", (err as Error).message);
+    void logAppEvent("error", "broadcast", "worker broadcast fallito", { message: (err as Error).message });
+    return { processed: 0 };
+  }
+}
+
+/** Elenco delle comunicazioni con lo stato e i conteggi per destinatario. */
+export async function listBroadcasts(): Promise<BroadcastRow[]> {
+  if (!db) return [];
+  const rows = await db
+    .select({
+      id: schema.broadcasts.id,
+      oggetto: schema.broadcasts.oggetto,
+      tipo: schema.broadcasts.tipo,
+      stato: schema.broadcasts.stato,
+      createdAt: schema.broadcasts.createdAt,
+    })
+    .from(schema.broadcasts)
+    .orderBy(sql`${schema.broadcasts.createdAt} desc`)
+    .limit(100);
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((r) => r.id);
+  const counts = await db
+    .select({
+      broadcastId: schema.broadcastRecipients.broadcastId,
+      stato: schema.broadcastRecipients.stato,
+      n: sql<number>`count(*)`,
+    })
+    .from(schema.broadcastRecipients)
+    .where(inArray(schema.broadcastRecipients.broadcastId, ids))
+    .groupBy(schema.broadcastRecipients.broadcastId, schema.broadcastRecipients.stato);
+
+  return rows.map((r) => {
+    const c = counts.filter((x) => x.broadcastId === r.id);
+    const of = (s: string) => num(c.find((x) => x.stato === s)?.n);
+    return {
+      id: r.id,
+      oggetto: r.oggetto,
+      tipo: r.tipo as BroadcastTipo,
+      stato: r.stato,
+      createdAt: r.createdAt ? new Date(r.createdAt).getTime() : null,
+      recipients: { inCoda: of("in_coda"), inviato: of("inviato"), errore: of("errore"), saltato: of("saltato") },
+    };
+  });
+}
+
+/**
+ * Disiscrizione promozionale via token pubblico. Idempotente: token ignoto → false
+ * (nessun oracolo utile). Azzera solo `promo_opt_in`; non tocca altro.
+ */
+export async function unsubscribeByToken(token: string): Promise<boolean> {
+  if (!db || !token) return false;
+  const rows = await db
+    .update(schema.users)
+    .set({ promoOptIn: false })
+    .where(and(eq(schema.users.unsubToken, token), eq(schema.users.promoOptIn, true)))
+    .returning({ id: schema.users.id });
+  // Anche se era già disiscritto (0 righe) rispondiamo "ok" a livello di endpoint:
+  // qui distinguiamo solo se il token esiste, per il log.
+  if (rows.length > 0) return true;
+  const [exists] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.unsubToken, token)).limit(1);
+  return !!exists;
+}

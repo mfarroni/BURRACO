@@ -30,6 +30,9 @@ export class MemoryAuthStore implements AuthStore {
       displayName: input.displayName,
       passwordHash: input.passwordHash,
       isGuest: input.isGuest,
+      // FASE 5.1: nuovi utenti nascono 'user'. La promozione ad 'admin' avviene
+      // solo via query manuale sul DB (nessun endpoint la esegue).
+      role: "user",
       createdAt: new Date(),
       lastSeenAt: null,
       expiredAt: null,

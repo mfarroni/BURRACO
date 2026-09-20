@@ -1026,6 +1026,88 @@
   margin-bottom: 0;
 }
 
+/* ── FASE 2 — Form contatti (struttura FUNZIONALE; rifinitura visiva → ui_ux) ──
+   Layout base e, soprattutto, l'occultamento FUNZIONALE dell'honeypot: deve
+   restare fuori dalla vista e dal tab-order in ogni caso (non è solo estetica). */
+.landing-root .contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 520px;
+}
+
+.landing-root .contact-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.landing-root .contact-field label {
+  font-size: 0.95rem;
+  color: var(--lp-cream);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.landing-root .contact-field input,
+.landing-root .contact-field textarea {
+  font: inherit;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--lp-cream);
+}
+
+.landing-root .contact-field textarea {
+  resize: vertical;
+  min-height: 110px;
+}
+
+.landing-root .contact-field input:focus-visible,
+.landing-root .contact-field textarea:focus-visible {
+  outline: 2px solid var(--lp-gold-light);
+  outline-offset: 2px;
+}
+
+/* Honeypot: fuori vista e fuori dal flusso, ma comunque nel DOM per i bot. */
+.landing-root .contact-hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.landing-root .contact-error {
+  color: #ffb4a2;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.landing-root .contact-success {
+  color: var(--lp-gold-light);
+  font-size: 1.05rem;
+}
+
+.landing-root .contact-form-status {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: flex-start;
+  max-width: 520px;
+}
+
+.landing-root .contact-mailto-fallback {
+  font-size: 0.95rem !important;
+  color: var(--lp-cream-dark) !important;
+  margin-top: 14px !important;
+}
+
+.landing-root .contact-mailto-fallback a {
+  color: var(--lp-gold-light);
+  text-decoration: underline;
+}
+
 /* ─────────────────────────────────────────────────────────────────────
    FOOTER
    ───────────────────────────────────────────────────────────────────── */

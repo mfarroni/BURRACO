@@ -47,6 +47,25 @@ export const users = pgTable("users", {
    * per gli account registrati: non vengono mai marcati scaduti né cancellati.
    */
   expiredAt: timestamp("expired_at", { withTimezone: true }),
+  /**
+   * FASE 5.1 (migrazione 0006): ruolo applicativo. `'user'` di default (additiva,
+   * non confligge con 2v2 né statistiche). `'admin'` abilita l'area webmaster. Il
+   * ruolo è letto dal DB a OGNI richiesta amministrativa (token opachi → revoca
+   * istantanea): nessun claim da scadere. Promozione del primo admin via query
+   * manuale documentata, mai da un endpoint.
+   */
+  role: text("role").notNull().default("user"),
+  /**
+   * FASE 5.3 (migrazione 0008): consenso alle comunicazioni PROMOZIONALI. Le
+   * comunicazioni di SERVIZIO (transazionali) prescindono da questo flag; le
+   * promozionali richiedono `promo_opt_in=true`. Default false (opt-in esplicito).
+   */
+  promoOptIn: boolean("promo_opt_in").notNull().default(false),
+  /**
+   * FASE 5.3: token opaco per la disiscrizione via link pubblico `GET /unsubscribe`.
+   * Nullable: valorizzato alla prima necessità. Non è un segreto di sessione.
+   */
+  unsubToken: text("unsub_token"),
 });
 
 /**
@@ -213,5 +232,133 @@ export const loginAttempts = pgTable(
   (t) => ({
     // Sweep dei record inattivi (pruneLoginAttempts) senza seq-scan dell'intera tabella.
     lastFailedIdx: index("login_attempts_last_failed_idx").on(t.lastFailedAt),
+  }),
+);
+
+/* ══════════════════ CICLO Contatti/Webmaster/Retention ══════════════════ */
+
+/**
+ * FASE 2 (migrazione 0005): messaggi del form contatti PUBBLICO. Principio
+ * portante (§2.1): il messaggio si salva SEMPRE; l'email è un di più. `ip_hash` è
+ * `sha256(ip + salt)`: mai l'IP in chiaro. `stato_invio` traccia l'esito email
+ * senza mai rivelarlo all'utente (risposta sempre generica).
+ */
+export const contactMessages = pgTable(
+  "contact_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nome: text("nome").notNull(),
+    email: text("email").notNull(),
+    oggetto: text("oggetto").notNull(),
+    messaggio: text("messaggio").notNull(),
+    // Nullable: il form è pubblico (anche non autenticato). FK ON DELETE no action.
+    userId: uuid("user_id").references(() => users.id),
+    ipHash: text("ip_hash").notNull(),
+    // 'salvato' | 'inviato' | 'errore_invio' | 'skippato'
+    statoInvio: text("stato_invio").notNull().default("salvato"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    // Valorizzato quando il webmaster legge il messaggio (governa la retention 180gg).
+    lettoAt: timestamp("letto_at", { withTimezone: true }),
+  },
+  (t) => ({
+    createdAtIdx: index("contact_messages_created_at_idx").on(t.createdAt.desc()),
+  }),
+);
+
+/**
+ * FASE 5.1 (migrazione 0006): traccia amministrativa. Ogni operazione webmaster
+ * scrive qui PRIMA dell'esecuzione, nella stessa transazione. `target` descrive i
+ * soggetti (id/criterio) senza segreti; `outcome` include 'dry_run'.
+ */
+export const adminAuditLog = pgTable(
+  "admin_audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    actorId: uuid("actor_id").notNull().references(() => users.id),
+    action: text("action").notNull(),
+    target: jsonb("target"),
+    outcome: text("outcome").notNull(), // 'ok'|'rejected'|'error'|'dry_run'
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    createdAtIdx: index("admin_audit_log_created_at_idx").on(t.createdAt.desc()),
+  }),
+);
+
+/**
+ * FASE 4 (migrazione 0007): totali CONSOLIDATI per utente registrato. Le
+ * statistiche sono ON-THE-FLY sul dettaglio: potare il dettaglio le cancellerebbe.
+ * Questa tabella conserva le voci PERMANENTI così il profilo mostra i totali anche
+ * dopo la potatura. Aggiornata incrementalmente su `completeMatch` + riconciliazione
+ * periodica (rete di sicurezza). Una riga per utente registrato (gli ospiti no).
+ */
+export const userStatsTotals = pgTable("user_stats_totals", {
+  userId: uuid("user_id").primaryKey().references(() => users.id),
+  matchesPlayed: integer("matches_played").notNull().default(0),
+  matchesWon: integer("matches_won").notNull().default(0),
+  matchesLost: integer("matches_lost").notNull().default(0),
+  matchesAbandoned: integer("matches_abandoned").notNull().default(0),
+  totalPoints: integer("total_points").notNull().default(0),
+  bestMatchScore: integer("best_match_score"),
+  burrachiPuliti: integer("burrachi_puliti").notNull().default(0),
+  burrachiSporchi: integer("burrachi_sporchi").notNull().default(0),
+  vsRegistered: integer("vs_registered").notNull().default(0),
+  vsGuest: integer("vs_guest").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * FASE 5.3 (migrazione 0008): comunicazione ai registrati. `corpo` è SOLO testo
+ * semplice; `criterio` seleziona i destinatari (registratiDopo/minPartite/
+ * inattiviDaGiorni/all). L'invio è asincrono a lotti; l'aggregato resta qui.
+ */
+export const broadcasts = pgTable("broadcasts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  authorId: uuid("author_id").notNull().references(() => users.id),
+  oggetto: text("oggetto").notNull(),
+  corpo: text("corpo").notNull(),
+  tipo: text("tipo").notNull(), // 'servizio' | 'promozionale'
+  criterio: jsonb("criterio").notNull(),
+  stato: text("stato").notNull().default("bozza"), // 'bozza'|'in_invio'|'completato'|'errore'
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * FASE 5.3: un destinatario per riga. `UNIQUE(broadcast_id, user_id)` = idempotenza
+ * (un doppio send non duplica). Retention 90gg dopo invio; l'aggregato resta in
+ * `broadcasts`.
+ */
+export const broadcastRecipients = pgTable(
+  "broadcast_recipients",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    broadcastId: uuid("broadcast_id").notNull().references(() => broadcasts.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    stato: text("stato").notNull().default("in_coda"), // 'in_coda'|'inviato'|'errore'|'saltato'
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    broadcastUserUq: uniqueIndex("broadcast_recipients_broadcast_user_uq").on(t.broadcastId, t.userId),
+    broadcastIdx: index("broadcast_recipients_broadcast_idx").on(t.broadcastId),
+  }),
+);
+
+/**
+ * FASE 5.4 (migrazione 0009): eventi applicativi NOSTRI (l'unica fonte di log che
+ * controlliamo). `messaggio`/`meta` sono GIÀ redatti (nessun segreto/token/indirizzo
+ * completo). Tetto righe + retention 30–90gg: cresce, ricade nel budget.
+ */
+export const appEvents = pgTable(
+  "app_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    livello: text("livello").notNull(), // 'info'|'warn'|'error'
+    categoria: text("categoria").notNull(), // 'auth'|'contact'|'cleanup'|'broadcast'|…
+    messaggio: text("messaggio").notNull(),
+    meta: jsonb("meta"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    createdAtIdx: index("app_events_created_at_idx").on(t.createdAt.desc()),
   }),
 );

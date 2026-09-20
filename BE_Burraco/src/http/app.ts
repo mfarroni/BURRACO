@@ -8,6 +8,17 @@ import { env } from "../config.js";
 import type { StatsStore } from "../stats/types.js";
 import type { RoomManager } from "../room/RoomManager.js";
 import type { TablesResponse, NewCodeResponse } from "../contract/types.js";
+import { pool } from "../db/client.js";
+import { createContactStore } from "../contact/store.js";
+import type { ContactStore } from "../contact/types.js";
+import { hashIp, stripHeaderInjection } from "../contact/util.js";
+import { sendEmail } from "../mail/index.js";
+import { logAppEvent } from "../events/log.js";
+import { createRequireAdmin } from "../admin/requireAdmin.js";
+import { getOccupancy } from "../admin/occupancy.js";
+import { runRetentionSweep } from "../retention/service.js";
+import { createBroadcast, enqueueSend, listBroadcasts, unsubscribeByToken } from "../broadcast/service.js";
+import { getAppLogs, getDbStatus, getRenderLogs } from "../admin/logs.js";
 
 /**
  * APP HTTP del backend auth (Express) montata sullo STESSO http.Server del WS
@@ -69,6 +80,49 @@ const statsQuery = z.object({
 // prima di qualsiasi query). Impedisce input malformati verso il DB.
 const matchIdSchema = z.string().uuid();
 
+// FASE 2 — Form contatti pubblico. Limiti di lunghezza (anti-abuso) + honeypot
+// (`website`, riuso del nome già usato dal login) + soglia di tempo (`renderedAt`,
+// timestamp di render del form). `renderedAt` dal client è manipolabile: vale come
+// filtro statistico, non come prova.
+const contactBody = z.object({
+  nome: z.string().trim().min(1).max(80),
+  email: z.string().trim().toLowerCase().email().max(254),
+  oggetto: z.string().trim().min(1).max(120),
+  messaggio: z.string().trim().min(1).max(2000),
+  website: z.string().max(200).optional(),
+  renderedAt: z.coerce.number().int().nonnegative().optional(),
+});
+
+/** Tempo minimo di compilazione plausibile: sotto → trattato come bot (§2.3). */
+const CONTACT_MIN_FILL_MS = 3_000;
+
+// FASE 5.3 — Comunicazioni broadcast. Corpo in TESTO semplice (nessun HTML). Il
+// criterio è un enum chiuso di filtri; un criterio vuoto (non `all`, nessun filtro)
+// risolve a ZERO destinatari (nessun invio accidentale a tutti).
+const broadcastCriterioSchema = z.object({
+  all: z.boolean().optional(),
+  registratiDopo: z.coerce.number().int().nonnegative().optional(),
+  minPartite: z.coerce.number().int().min(0).max(100000).optional(),
+  inattiviDaGiorni: z.coerce.number().int().min(0).max(3650).optional(),
+});
+const broadcastCreateBody = z.object({
+  oggetto: z.string().trim().min(1).max(150),
+  corpo: z.string().trim().min(1).max(5000),
+  tipo: z.enum(["servizio", "promozionale"]),
+  criterio: broadcastCriterioSchema,
+  dryRun: z.boolean().optional(),
+});
+const unsubscribeQuery = z.object({ token: z.string().min(1).max(200) });
+
+// FASE 5.4 — Viste log: finestra temporale OBBLIGATORIA (from/to epoch ms) e limit
+// cappato (nessuna query che scarichi tutto). `level` su enum chiuso.
+const logsQuery = z.object({
+  from: z.coerce.number().int().nonnegative(),
+  to: z.coerce.number().int().nonnegative(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+  level: z.enum(["info", "warn", "error"]).optional(),
+});
+
 /* ─────────────────────────────── helper ──────────────────────────────────── */
 
 /** Mappa i codici d'errore stabili del servizio agli status HTTP. */
@@ -106,7 +160,12 @@ function handler(fn: (req: Request, res: Response) => Promise<void>) {
 
 /* ─────────────────────────────── app ─────────────────────────────────────── */
 
-export function createHttpApp(auth: AuthService, stats?: StatsStore, manager?: RoomManager): Express {
+export function createHttpApp(
+  auth: AuthService,
+  stats?: StatsStore,
+  manager?: RoomManager,
+  deps?: { contactStore?: ContactStore },
+): Express {
   const app = express();
 
   // Dietro il proxy di Render: fidati del primo hop per un req.ip coerente
@@ -151,10 +210,33 @@ export function createHttpApp(auth: AuthService, stats?: StatsStore, manager?: R
   // Corpo JSON con tetto anti-DoS (i body auth sono piccoli).
   app.use(express.json({ limit: "8kb" }));
 
-  // Health check per Render / warm-up FE (invariato rispetto al server precedente).
-  app.get(["/health", "/"], (_req: Request, res: Response) => {
-    res.json({ status: "ok", service: "be-burraco" });
-  });
+  // FASE 3 — Health check STRUMENTATO (§3.2). Oltre a status/service, esegue un
+  // `SELECT 1` (SOLA LETTURA) e riporta i tempi, così sul deploy di branch il lead
+  // può MISURARE il fenomeno del cold start senza ambiente locale:
+  //  - tProcessMs: ms dal boot del processo (risveglio del processo Render);
+  //  - tQueryMs: durata del SELECT 1 (risveglio del compute Neon), null se no DB.
+  //  - db: "ok"|"down" (down anche senza DATABASE_URL, senza errore).
+  // Usato anche dal keep-alive CI e dalla schermata di connessione del FE. `status`
+  // resta "ok" (retro-compatibile con i test e i probe esistenti).
+  app.get(
+    ["/health", "/"],
+    handler(async (_req: Request, res: Response) => {
+      const tProcessMs = Math.round(process.uptime() * 1000);
+      let db: "ok" | "down" = "down";
+      let tQueryMs: number | null = null;
+      if (pool) {
+        const t0 = Date.now();
+        try {
+          await pool.query("SELECT 1");
+          db = "ok";
+        } catch {
+          db = "down";
+        }
+        tQueryMs = Date.now() - t0;
+      }
+      res.json({ status: "ok", service: "be-burraco", db, tProcessMs, tQueryMs });
+    }),
+  );
 
   // Rate limiter per gli endpoint sensibili (finestra 15 min).
   // SEC-A3a: register e guest hanno budget INDIPENDENTI (limiter distinti). Prima
@@ -247,6 +329,122 @@ export function createHttpApp(auth: AuthService, stats?: StatsStore, manager?: R
     handler(async (req, res) => {
       const user = await auth.me(bearer(req));
       res.json({ user });
+    }),
+  );
+
+  /* ─────────────────────────── FASE 2 — FORM CONTATTI (PUBBLICO) ───────────────
+   * POST /api/contact — l'endpoint più esposto: nessun Bearer richiesto.
+   * Principio (§2.1): il messaggio si salva SEMPRE; l'email è un di più. La risposta
+   * è SEMPRE generica (200 { ok:true }), non rivela mai l'esito dell'invio email.
+   * Difese server-authoritative (nascondere un pulsante non è sicurezza):
+   *  - rate-limit per IP più severo degli altri (5/60min);
+   *  - honeypot (`website`) → 200 silenzioso senza salvare né inviare;
+   *  - soglia di tempo minima → 200 silenzioso (filtro statistico anti-bot);
+   *  - anti-injection di header (newline/CTL) su nome/oggetto/reply-to;
+   *  - `ip_hash` = sha256(ip + salt): mai l'IP in chiaro.
+   */
+  const contactLimiter = rateLimit({ name: "contact", windowMs: 60 * 60 * 1000, max: 5 });
+  const contactStore = deps?.contactStore ?? createContactStore();
+
+  /** Invio email best-effort del messaggio (fuori dal path critico, §2.4). */
+  async function deliverContactEmail(
+    id: string | null,
+    data: { nome: string; email: string; oggetto: string; messaggio: string },
+  ): Promise<void> {
+    try {
+      // Senza destinatario configurato non si tenta: la riga resta 'skippato'.
+      if (!env.mail.contactTo) {
+        if (id) await contactStore.markSendStatus(id, "skippato");
+        return;
+      }
+      // Oggetto GENERATO dal server; i campi utente sono sanificati (anti-injection).
+      const subject = `[Contatti] ${stripHeaderInjection(data.oggetto)}`;
+      const text = `Da: ${stripHeaderInjection(data.nome)} <${data.email}>\n\n${data.messaggio}`;
+      const result = await sendEmail({
+        to: { email: env.mail.contactTo },
+        subject,
+        text,
+        // L'email utente in reply-to SOLO dopo validazione formato (zod) + strip CTL.
+        replyTo: { email: data.email, name: stripHeaderInjection(data.nome) },
+        tags: ["contact"],
+      });
+      const status =
+        result.status === "sent" ? "inviato" : result.status === "skipped" ? "skippato" : "errore_invio";
+      if (id) await contactStore.markSendStatus(id, status);
+      void logAppEvent("info", "contact", `messaggio contatti esito=${result.status}`);
+    } catch (err) {
+      console.error("[contact] invio email fallito:", (err as Error).message);
+      if (id) await contactStore.markSendStatus(id, "errore_invio").catch(() => {});
+    }
+  }
+
+  app.post(
+    "/api/contact",
+    contactLimiter,
+    handler(async (req, res) => {
+      const parsed = contactBody.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_BODY", message: "Dati del messaggio non validi." });
+        return;
+      }
+      const { nome, email, oggetto, messaggio, website, renderedAt } = parsed.data;
+
+      // Honeypot: campo nascosto valorizzato → bot → 200 generico, nessun salvataggio.
+      if (website && website.trim().length > 0) {
+        res.status(200).json({ ok: true });
+        return;
+      }
+      // Soglia di tempo: submit troppo rapido → bot → 200 generico, silenzioso.
+      if (typeof renderedAt === "number") {
+        const elapsed = Date.now() - renderedAt;
+        if (elapsed >= 0 && elapsed < CONTACT_MIN_FILL_MS) {
+          res.status(200).json({ ok: true });
+          return;
+        }
+      }
+
+      // Utente autenticato (best-effort): se c'è un Bearer valido, associa la riga.
+      const principal = await auth.getPrincipalByToken(bearer(req));
+
+      // INSERT SEMPRE (non deve fallire silenziosamente): su errore DB si logga e si
+      // prosegue col fallback email, ma la risposta all'utente resta generica.
+      let id: string | null = null;
+      try {
+        id = await contactStore.save({
+          nome: stripHeaderInjection(nome),
+          email,
+          oggetto: stripHeaderInjection(oggetto),
+          messaggio, // corpo testuale: nessun rischio di header injection
+          userId: principal?.userId ?? null,
+          ipHash: hashIp(req.ip ?? ""),
+        });
+      } catch (err) {
+        console.error("[contact] salvataggio fallito:", (err as Error).message);
+        void logAppEvent("error", "contact", "salvataggio messaggio contatti fallito");
+      }
+
+      // Risposta generica SUBITO; l'email parte dopo, fuori dal path critico.
+      res.status(200).json({ ok: true });
+      void deliverContactEmail(id, { nome, email, oggetto, messaggio });
+    }),
+  );
+
+  /* FASE 5.3 — Disiscrizione PUBBLICA dalle comunicazioni promozionali (link email).
+   * Azzera `promo_opt_in` per il token. Risposta di conferma in TESTO semplice
+   * (nessun HTML → nessuna superficie XSS) e sempre rassicurante (nessun oracolo). */
+  const unsubscribeLimiter = rateLimit({ name: "unsubscribe", windowMs: 60_000, max: 30 });
+  app.get(
+    "/unsubscribe",
+    unsubscribeLimiter,
+    handler(async (req, res) => {
+      const parsed = unsubscribeQuery.safeParse(req.query);
+      if (parsed.success) {
+        await unsubscribeByToken(parsed.data.token);
+      }
+      res
+        .status(200)
+        .type("text/plain; charset=utf-8")
+        .send("Disiscrizione registrata: non riceverai più comunicazioni promozionali. Puoi chiudere questa pagina.");
     }),
   );
 
@@ -414,6 +612,142 @@ export function createHttpApp(auth: AuthService, stats?: StatsStore, manager?: R
       }),
     );
   }
+
+  /* ─────────────────────────── AREA WEBMASTER (/admin/*) ───────────────────────
+   * Tutte dietro `requireAdmin`: un NON-admin (o non autenticato) riceve 404, mai
+   * 403 — l'esistenza dell'area non è osservabile. Il ruolo è letto dal DB a ogni
+   * richiesta (token opachi → revoca istantanea). Rate-limit dedicato.
+   */
+  const requireAdmin = createRequireAdmin(auth);
+  const adminLimiter = rateLimit({ name: "admin", windowMs: 60_000, max: 60 });
+
+  // Contatore di occupazione del DB (§4.4): righe per tabella, totale, % sul budget.
+  app.get(
+    "/admin/occupancy",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      res.json(await getOccupancy());
+    }),
+  );
+
+  // Anteprima RETENTION in DRY-RUN (§4.4): mostra al lead quante righe sarebbero
+  // rimosse, senza cancellare nulla. È la "simulazione mostrata" prima di ogni
+  // esecuzione reale. L'anonimizzazione di account registrati resta solo-detection.
+  app.post(
+    "/admin/retention/preview",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const reports = await runRetentionSweep("dry_run", principal.userId);
+      res.json({ dryRun: true, reports });
+    }),
+  );
+
+  /* ── FASE 5.3 — Comunicazioni broadcast (dietro requireAdmin) ────────────────
+   * Crea (con dry-run per la conta), avvia l'invio ASINCRONO (ritorna subito) ed
+   * elenca lo stato. L'invio vero è del worker (ws/server.ts): mai in linea con la
+   * risposta HTTP. Idempotenza dell'invio via UNIQUE(broadcast_id, user_id). */
+  app.post(
+    "/admin/broadcasts",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const parsed = broadcastCreateBody.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_BODY", message: "Dati della comunicazione non validi." });
+        return;
+      }
+      const result = await createBroadcast(principal.userId, {
+        oggetto: parsed.data.oggetto,
+        corpo: parsed.data.corpo,
+        tipo: parsed.data.tipo,
+        criterio: parsed.data.criterio,
+        dryRun: parsed.data.dryRun ?? false,
+      });
+      res.json(result);
+    }),
+  );
+
+  app.post(
+    "/admin/broadcasts/:id/send",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const idParsed = matchIdSchema.safeParse(req.params.id);
+      if (!idParsed.success) {
+        res.status(400).json({ error: "INVALID_ID", message: "Identificativo non valido." });
+        return;
+      }
+      const result = await enqueueSend(idParsed.data);
+      if (!result.accepted) {
+        res.status(404).json({ error: "NOT_FOUND", message: "Comunicazione non trovata." });
+        return;
+      }
+      res.json({ accepted: true, queued: result.queued });
+    }),
+  );
+
+  app.get(
+    "/admin/broadcasts",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      res.json({ items: await listBroadcasts() });
+    }),
+  );
+
+  /* ── FASE 5.4 — Viste log (dietro requireAdmin) ──────────────────────────────
+   * app_events + admin_audit_log (finestra obbligatoria), proxy Render (chiave mai
+   * sul FE), stato DB (pg_stat_* con fallback). Redazione lato server; il FE renderà
+   * come TESTO. from/to obbligatori, limit cappato. */
+  app.get(
+    "/admin/logs/app",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const parsed = logsQuery.safeParse(req.query);
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_QUERY", message: "Finestra temporale (from/to) obbligatoria." });
+        return;
+      }
+      const { from, to, limit, level } = parsed.data;
+      const items = await getAppLogs({ from: new Date(from), to: new Date(to), limit, level });
+      res.json({ items, limit });
+    }),
+  );
+
+  app.get(
+    "/admin/logs/render",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const parsed = logsQuery.safeParse(req.query);
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_QUERY", message: "Finestra temporale (from/to) obbligatoria." });
+        return;
+      }
+      const { from, to, limit } = parsed.data;
+      res.json(await getRenderLogs(new Date(from), new Date(to), limit));
+    }),
+  );
+
+  app.get(
+    "/admin/logs/db",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      res.json(await getDbStatus());
+    }),
+  );
 
   // 404 JSON per rotte sconosciute (nessuna pagina HTML/stack trace).
   app.use((_req: Request, res: Response) => {

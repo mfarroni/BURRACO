@@ -407,6 +407,15 @@ export function ProfilePanel({ user, onBack }: Props) {
                 </>
               )}
 
+              {/* Disclaimer di CONSERVAZIONE (§4.4): dice COSA si conserva e PER
+                  QUANTO. Non parla di cancellazione di avversari. I totali (questa
+                  pagina) restano sempre; il dettaglio smazzata-per-smazzata dello
+                  storico è conservato per alcuni mesi. */}
+              <p className="profile-retention-note" role="note">
+                Conserviamo il dettaglio delle tue partite per alcuni mesi; le statistiche
+                complessive restano sempre disponibili.
+              </p>
+
               {/* Donazione (Lotto 4 — R6): in fondo al pannello, dopo le sezioni
                   statistiche/andamento/partite. Solo utente REGISTRATO (ramo
                   non-ospite) e solo a dati caricati. Mai fissa/sticky/overlay. */}

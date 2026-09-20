@@ -283,7 +283,9 @@ export class AuthService {
     if (session.expiresAt.getTime() <= Date.now()) return null;
     const user = await this.store.getUserById(session.userId);
     if (!user) return null;
-    return { userId: user.id, displayName: user.displayName, isGuest: user.isGuest };
+    // FASE 5.1: `role` risolto dal DB a OGNI richiesta (nessun claim): una revoca
+    // del ruolo ha effetto immediato sull'accesso all'area riservata.
+    return { userId: user.id, displayName: user.displayName, isGuest: user.isGuest, role: user.role };
   }
 
   /** Come getPrincipalByToken ma restituisce la vista utente completa per /auth/me. */

@@ -11,6 +11,9 @@
  * ne tiene una copia allineata a mano (nessun package condiviso).
  */
 
+/** Ruolo applicativo dell'utente (FASE 5.1). Enum chiuso: mai valori liberi. */
+export type UserRole = "user" | "admin";
+
 /** Record utente COMPLETO come vive nello store (include l'hash password). */
 export interface StoredUser {
   id: string;
@@ -18,6 +21,11 @@ export interface StoredUser {
   displayName: string;
   passwordHash: string | null;
   isGuest: boolean;
+  /**
+   * FASE 5.1: ruolo applicativo, letto dal DB a ogni richiesta (token opachi →
+   * revoca istantanea). Default 'user'; 'admin' abilita l'area webmaster.
+   */
+  role: UserRole;
   createdAt: Date;
   lastSeenAt: Date | null;
   /**
@@ -58,6 +66,12 @@ export interface AuthPrincipal {
   userId: string;
   displayName: string;
   isGuest: boolean;
+  /**
+   * FASE 5.1: ruolo del principale, per il gate `requireAdmin`. È BE-only (non
+   * viene esposto nel DTO pubblico `AuthUser`): il FE non ne dipende, l'accesso
+   * all'area riservata è deciso dagli endpoint (404 se non admin).
+   */
+  role: UserRole;
 }
 
 /**

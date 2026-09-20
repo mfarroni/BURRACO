@@ -17,6 +17,8 @@ function toUser(row: typeof schema.users.$inferSelect): StoredUser {
     displayName: row.displayName,
     passwordHash: row.passwordHash,
     isGuest: row.isGuest,
+    // FASE 5.1: la colonna ha DEFAULT 'user'; il cast restringe all'enum chiuso.
+    role: row.role === "admin" ? "admin" : "user",
     createdAt: row.createdAt,
     lastSeenAt: row.lastSeenAt,
     expiredAt: row.expiredAt,

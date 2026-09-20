@@ -1,0 +1,177 @@
+/*
+ * FASE 5.1 — Stili dell'area webmaster, TOTALMENTE SCOPATI sotto `.webmaster-root`.
+ * Nessuna regola su `body`/`html` (il layout radice resta intatto e nessuna regola
+ * contamina lobby/tavolo/profilo). Variabili prefissate `--wm-`. Stile funzionale e
+ * sobrio: la rifinitura visiva è di agente_ui_ux.
+ */
+
+.webmaster-root {
+  --wm-bg: #0e1a16;
+  --wm-panel: #14241d;
+  --wm-border: rgba(212, 175, 55, 0.28);
+  --wm-text: #eae6da;
+  --wm-muted: #a9b3ac;
+  --wm-gold: #d4af37;
+  --wm-alert: #ffb4a2;
+
+  box-sizing: border-box;
+  min-height: 100vh;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 28px 20px 64px;
+  color: var(--wm-text);
+  background: var(--wm-bg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.webmaster-root * {
+  box-sizing: border-box;
+}
+
+.webmaster-root .wm-title {
+  font-size: 1.8rem;
+  color: var(--wm-gold);
+  margin: 0 0 20px;
+}
+
+.webmaster-root .wm-status {
+  color: var(--wm-muted);
+}
+
+.webmaster-root .wm-card {
+  background: var(--wm-panel);
+  border: 1px solid var(--wm-border);
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 20px;
+}
+
+.webmaster-root .wm-h2 {
+  font-size: 1.25rem;
+  color: var(--wm-gold);
+  margin: 0 0 10px;
+}
+
+.webmaster-root .wm-h3 {
+  font-size: 1.05rem;
+  margin: 18px 0 8px;
+}
+
+.webmaster-root .wm-muted {
+  color: var(--wm-muted);
+}
+
+.webmaster-root .wm-alert {
+  color: var(--wm-alert);
+  font-weight: 600;
+}
+
+.webmaster-root .wm-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.webmaster-root .wm-table th,
+.webmaster-root .wm-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--wm-border);
+}
+
+.webmaster-root .wm-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.webmaster-root .wm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+  border: none;
+}
+
+.webmaster-root .wm-field label,
+.webmaster-root .wm-field legend {
+  color: var(--wm-muted);
+  font-size: 0.95rem;
+}
+
+.webmaster-root .wm-field input,
+.webmaster-root .wm-field textarea,
+.webmaster-root .wm-field select {
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--wm-border);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--wm-text);
+}
+
+.webmaster-root .wm-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  display: flex;
+}
+
+.webmaster-root .wm-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.webmaster-root .wm-btn {
+  font: inherit;
+  cursor: pointer;
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--wm-gold);
+  background: transparent;
+  color: var(--wm-gold);
+}
+
+.webmaster-root .wm-btn:hover:not(:disabled) {
+  background: rgba(212, 175, 55, 0.12);
+}
+
+.webmaster-root .wm-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.webmaster-root .wm-btn-small {
+  padding: 5px 10px;
+  font-size: 0.85rem;
+}
+
+.webmaster-root .wm-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+
+.webmaster-root .wm-list-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--wm-border);
+}
+
+.webmaster-root .wm-log {
+  background: #0a1512;
+  border: 1px solid var(--wm-border);
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  color: var(--wm-text);
+}

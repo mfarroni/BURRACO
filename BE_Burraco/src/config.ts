@@ -85,6 +85,45 @@ export const env = {
    * override su Render.
    */
   vercelTeamSlug: (process.env.VERCEL_TEAM_SLUG ?? "groupgames").trim(),
+
+  /**
+   * FASE 1 — Integrazione email Brevo (SOLO backend, §1.1). La API key non può
+   * stare sul FE ("use client" + CSP). `enabled` è un interruttore che spegne
+   * l'invio SENZA rimuovere codice: default OFF (attivo solo con BREVO_ENABLED="true"),
+   * così un branch/preview non invia email reali finché il lead non lo decide.
+   */
+  mail: {
+    brevoApiKey: process.env.BREVO_API_KEY ?? "",
+    senderEmail: (process.env.BREVO_SENDER_EMAIL ?? "").trim(),
+    senderName: (process.env.BREVO_SENDER_NAME ?? "Circolo Nettuno").trim(),
+    /** Destinatario dei messaggi del form contatti (§2). */
+    contactTo: (process.env.CONTACT_TO_EMAIL ?? "").trim(),
+    enabled: process.env.BREVO_ENABLED === "true",
+  },
+
+  /**
+   * FASE 5.4 — Proxy dei log di Render (Blocco C). Il FE non vede MAI la chiave:
+   * il BE fa da proxy verso l'API di Render. Entrambe le env vivono solo su Render.
+   */
+  render: {
+    apiKey: process.env.RENDER_API_KEY ?? "",
+    serviceId: (process.env.RENDER_SERVICE_ID ?? "").trim(),
+  },
+
+  /**
+   * Sale per gli hash NON reversibili di dati sensibili a riposo (es. l'IP di chi
+   * usa il form contatti → `sha256(ip + salt)`, §2.3): mai l'IP in chiaro nel DB.
+   * Se assente, l'hash resta valido ma senza sale aggiuntivo (peggior anonimato):
+   * va impostato in produzione.
+   */
+  ipHashSalt: process.env.IP_HASH_SALT ?? "",
+
+  /**
+   * FASE 5.3 — URL PUBBLICO del backend (es. https://<servizio>.onrender.com), usato
+   * per costruire il link di disiscrizione nelle email promozionali. Se assente, il
+   * link non viene incluso (la disiscrizione resta possibile via endpoint diretto).
+   */
+  publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? "").trim().replace(/\/+$/, ""),
 };
 
 /**

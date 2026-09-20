@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Card, SeatPublic, TeamId } from "@/lib/contract";
 import { useGameSocket, type TableMode } from "@/lib/useGameSocket";
 import { useAuth } from "@/lib/useAuth";
+import { useServiceHealth } from "@/lib/useServiceHealth";
+import { getAuthToken } from "@/lib/auth";
 import { useLobbyList, useLeaveOnPageHide } from "@/lib/lobby";
 import { AuthPanel, type AuthMode } from "@/components/AuthPanel";
 import { Landing } from "@/components/Landing";
@@ -31,10 +33,32 @@ import {
   Countdown,
   TurnBanner,
 } from "@/components/StateBanners";
+import { ConnectionScreen } from "@/components/ConnectionScreen";
 
 export default function Page() {
   const g = useGameSocket();
   const auth = useAuth();
+  // FASE 3 — disponibilità del backend: sonda /health con backoff. Serve a coprire
+  // il cold start di Render e ogni deploy (= un riavvio).
+  const health = useServiceHealth();
+  // C'è un token salvato? (returning player). Letto client-side dopo il mount per
+  // non toccare il render SSR. Solo per un token esistente ha senso bloccare
+  // l'ingresso in attesa del backend: un visitatore nuovo vede subito la vetrina.
+  const [hasSession, setHasSession] = useState(false);
+  const reloadedRef = useRef(false);
+  useEffect(() => {
+    setHasSession(!!getAuthToken());
+  }, []);
+  // Ingresso AUTOMATICO: quando il backend torna su e un token è ancora presente ma
+  // il ripristino era finito in "anonimo" (per un'indisponibilità precedente),
+  // ritenta /auth/me una sola volta così l'utente rientra senza ri-accedere.
+  useEffect(() => {
+    if (health.ready && hasSession && auth.status === "anonymous" && !reloadedRef.current) {
+      reloadedRef.current = true;
+      void auth.reload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [health.ready, hasSession, auth.status]);
 
   // LOBBY: la lista dei tavoli pubblici + contatore viene dal polling HTTP,
   // attivo SOLO quando l'utente è autenticato e non ancora seduto a un tavolo.
@@ -166,6 +190,15 @@ export default function Page() {
       setSelectedMeldId(null);
     }
   }, [g.joined]);
+
+  /* ── Backend non ancora disponibile (cold start / deploy) ──────────────
+   * Solo per chi ha una sessione salvata (returning player): lo teniamo su una
+   * schermata di connessione con riprova automatica finché /health non risponde,
+   * poi rientra da solo. Un visitatore nuovo (nessun token) NON è bloccato: vede
+   * subito la vetrina, e il suo /auth/me non fa nemmeno rete (nessun token). */
+  if (hasSession && !health.ready) {
+    return <ConnectionScreen longWait={health.longWait} />;
+  }
 
   /* ── Ripristino sessione in corso ──────────────────────────────────── */
   if (auth.status === "initializing") {

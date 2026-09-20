@@ -36,6 +36,41 @@
       "when": 1789060662000,
       "tag": "0004_login_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789060663000,
+      "tag": "0005_contact_messages",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789060664000,
+      "tag": "0006_role_admin_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789060665000,
+      "tag": "0007_user_stats_totals",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789060666000,
+      "tag": "0008_broadcasts",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789060667000,
+      "tag": "0009_app_events",
+      "breakpoints": true
     }
   ]
 }
