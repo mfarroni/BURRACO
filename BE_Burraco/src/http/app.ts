@@ -18,6 +18,7 @@ import { createRequireAdmin } from "../admin/requireAdmin.js";
 import { getOccupancy } from "../admin/occupancy.js";
 import { runRetentionSweep } from "../retention/service.js";
 import { createBroadcast, enqueueSend, listBroadcasts, unsubscribeByToken } from "../broadcast/service.js";
+import { getAppLogs, getDbStatus, getRenderLogs } from "../admin/logs.js";
 
 /**
  * APP HTTP del backend auth (Express) montata sullo STESSO http.Server del WS
@@ -112,6 +113,15 @@ const broadcastCreateBody = z.object({
   dryRun: z.boolean().optional(),
 });
 const unsubscribeQuery = z.object({ token: z.string().min(1).max(200) });
+
+// FASE 5.4 — Viste log: finestra temporale OBBLIGATORIA (from/to epoch ms) e limit
+// cappato (nessuna query che scarichi tutto). `level` su enum chiuso.
+const logsQuery = z.object({
+  from: z.coerce.number().int().nonnegative(),
+  to: z.coerce.number().int().nonnegative(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+  level: z.enum(["info", "warn", "error"]).optional(),
+});
 
 /* ─────────────────────────────── helper ──────────────────────────────────── */
 
@@ -689,6 +699,53 @@ export function createHttpApp(
       const principal = await requireAdmin(req, res);
       if (!principal) return;
       res.json({ items: await listBroadcasts() });
+    }),
+  );
+
+  /* ── FASE 5.4 — Viste log (dietro requireAdmin) ──────────────────────────────
+   * app_events + admin_audit_log (finestra obbligatoria), proxy Render (chiave mai
+   * sul FE), stato DB (pg_stat_* con fallback). Redazione lato server; il FE renderà
+   * come TESTO. from/to obbligatori, limit cappato. */
+  app.get(
+    "/admin/logs/app",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const parsed = logsQuery.safeParse(req.query);
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_QUERY", message: "Finestra temporale (from/to) obbligatoria." });
+        return;
+      }
+      const { from, to, limit, level } = parsed.data;
+      const items = await getAppLogs({ from: new Date(from), to: new Date(to), limit, level });
+      res.json({ items, limit });
+    }),
+  );
+
+  app.get(
+    "/admin/logs/render",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const parsed = logsQuery.safeParse(req.query);
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_QUERY", message: "Finestra temporale (from/to) obbligatoria." });
+        return;
+      }
+      const { from, to, limit } = parsed.data;
+      res.json(await getRenderLogs(new Date(from), new Date(to), limit));
+    }),
+  );
+
+  app.get(
+    "/admin/logs/db",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      res.json(await getDbStatus());
     }),
   );
 
