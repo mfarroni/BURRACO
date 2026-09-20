@@ -28,6 +28,12 @@ export interface UseAuth {
   guest: (displayName?: string) => Promise<boolean>;
   logout: () => Promise<void>;
   clearError: () => void;
+  /**
+   * Ri-tenta il ripristino di sessione via /auth/me. Usato quando il backend torna
+   * disponibile dopo un cold start/deploy: se un token è ancora salvato, l'utente
+   * rientra automaticamente senza dover ri-accedere (§3.4, ingresso automatico).
+   */
+  reload: () => Promise<void>;
 }
 
 export function useAuth(): UseAuth {
@@ -36,10 +42,21 @@ export function useAuth(): UseAuth {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Ripristino di sessione al primo mount (best-effort).
+  // Ripristino di sessione (best-effort): risolve l'utente dal token salvato.
+  // Riusabile sia al mount sia quando il backend torna su (auto-rientro, §3.4).
+  const reload = useCallback(async () => {
+    try {
+      const u = await authClient.me();
+      setUser(u);
+      setStatus(u ? "authenticated" : "anonymous");
+    } catch {
+      setStatus("anonymous");
+    }
+  }, []);
+
   useEffect(() => {
     let alive = true;
-    authClient
+    void authClient
       .me()
       .then((u) => {
         if (!alive) return;
@@ -100,5 +117,5 @@ export function useAuth(): UseAuth {
 
   const clearError = useCallback(() => setError(null), []);
 
-  return { status, user, busy, error, register, login, guest, logout, clearError };
+  return { status, user, busy, error, register, login, guest, logout, clearError, reload };
 }

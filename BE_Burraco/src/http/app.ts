@@ -8,6 +8,7 @@ import { env } from "../config.js";
 import type { StatsStore } from "../stats/types.js";
 import type { RoomManager } from "../room/RoomManager.js";
 import type { TablesResponse, NewCodeResponse } from "../contract/types.js";
+import { pool } from "../db/client.js";
 import { createContactStore } from "../contact/store.js";
 import type { ContactStore } from "../contact/types.js";
 import { hashIp, stripHeaderInjection } from "../contact/util.js";
@@ -177,10 +178,33 @@ export function createHttpApp(
   // Corpo JSON con tetto anti-DoS (i body auth sono piccoli).
   app.use(express.json({ limit: "8kb" }));
 
-  // Health check per Render / warm-up FE (invariato rispetto al server precedente).
-  app.get(["/health", "/"], (_req: Request, res: Response) => {
-    res.json({ status: "ok", service: "be-burraco" });
-  });
+  // FASE 3 — Health check STRUMENTATO (§3.2). Oltre a status/service, esegue un
+  // `SELECT 1` (SOLA LETTURA) e riporta i tempi, così sul deploy di branch il lead
+  // può MISURARE il fenomeno del cold start senza ambiente locale:
+  //  - tProcessMs: ms dal boot del processo (risveglio del processo Render);
+  //  - tQueryMs: durata del SELECT 1 (risveglio del compute Neon), null se no DB.
+  //  - db: "ok"|"down" (down anche senza DATABASE_URL, senza errore).
+  // Usato anche dal keep-alive CI e dalla schermata di connessione del FE. `status`
+  // resta "ok" (retro-compatibile con i test e i probe esistenti).
+  app.get(
+    ["/health", "/"],
+    handler(async (_req: Request, res: Response) => {
+      const tProcessMs = Math.round(process.uptime() * 1000);
+      let db: "ok" | "down" = "down";
+      let tQueryMs: number | null = null;
+      if (pool) {
+        const t0 = Date.now();
+        try {
+          await pool.query("SELECT 1");
+          db = "ok";
+        } catch {
+          db = "down";
+        }
+        tQueryMs = Date.now() - t0;
+      }
+      res.json({ status: "ok", service: "be-burraco", db, tProcessMs, tQueryMs });
+    }),
+  );
 
   // Rate limiter per gli endpoint sensibili (finestra 15 min).
   // SEC-A3a: register e guest hanno budget INDIPENDENTI (limiter distinti). Prima

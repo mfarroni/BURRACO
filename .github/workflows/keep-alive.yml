@@ -1,0 +1,59 @@
+name: keep-alive
+
+# FASE 3 (Livello 1) — Mantiene sveglio il backend Render nella fascia oraria di
+# utilizzo, così il PRIMO accesso non paga il cold start (decine di secondi su
+# Render free). SOLA LETTURA: un semplice GET a /health, che esegue un SELECT 1 ma
+# NON scrive nulla. Riconoscibile nei log dall'header User-Agent "keepalive-ci".
+#
+# Fascia di lavoro (Gate 2 provvisorio): 8:00–24:00 ora italiana, intervallo ~10 min.
+# GitHub Actions usa UTC e NON gestisce il DST: si dichiarano DUE finestre, una per
+# l'ora legale (CEST, UTC+2) e una per l'ora solare (CET, UTC+1). Nel periodo in cui
+# una finestra non è pertinente, al più si aggiunge qualche ping ai bordi: innocuo.
+#
+# ATTENZIONE (Gate 2, da confermare prima della produzione): l'intervallo va scelto
+# DOPO aver verificato in console le ore di compute incluse su Render/Neon. Una
+# copertura troppo ampia rischia di esaurire la quota e causare un blocco a fine
+# mese — un danno peggiore del problema. 16h/giorno × 30 ≈ 480 h/mese di "sveglio".
+#
+# L'URL del servizio è una variabile di repository (Settings → Variables):
+#   KEEPALIVE_URL = https://<servizio>.onrender.com/health
+# Se non impostata, il job termina senza errore (nessun segreto hard-coded qui).
+
+on:
+  schedule:
+    # Ora legale (CEST = UTC+2): 8:00–24:00 IT ≈ 06:00–22:00 UTC.
+    - cron: "*/10 6-21 * * *"
+    # Ora solare (CET = UTC+1): 8:00–24:00 IT ≈ 07:00–23:00 UTC.
+    - cron: "*/10 7-22 * * *"
+  workflow_dispatch: {}
+
+# Privilegio minimo: il workflow non tocca il repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping /health (sola lettura)
+        env:
+          KEEPALIVE_URL: ${{ vars.KEEPALIVE_URL }}
+        run: |
+          if [ -z "${KEEPALIVE_URL}" ]; then
+            echo "KEEPALIVE_URL non impostata: keep-alive saltato (nessun ping)."
+            exit 0
+          fi
+          echo "Ping keep-alive verso l'endpoint di salute…"
+          # -sS silenzioso ma con errori; -f fallisce sugli status >= 400; timeout
+          # generoso per assorbire il risveglio (cold start) senza far fallire il job.
+          curl -sS -f \
+            --max-time 90 \
+            --retry 2 --retry-delay 15 \
+            -H "User-Agent: keepalive-ci" \
+            "${KEEPALIVE_URL}" \
+            || echo "Ping non riuscito (il servizio potrebbe risvegliarsi): non è un errore bloccante."
