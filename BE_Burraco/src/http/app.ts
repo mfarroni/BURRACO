@@ -14,6 +14,9 @@ import type { ContactStore } from "../contact/types.js";
 import { hashIp, stripHeaderInjection } from "../contact/util.js";
 import { sendEmail } from "../mail/index.js";
 import { logAppEvent } from "../events/log.js";
+import { createRequireAdmin } from "../admin/requireAdmin.js";
+import { getOccupancy } from "../admin/occupancy.js";
+import { runRetentionSweep } from "../retention/service.js";
 
 /**
  * APP HTTP del backend auth (Express) montata sullo STESSO http.Server del WS
@@ -561,6 +564,39 @@ export function createHttpApp(
       }),
     );
   }
+
+  /* ─────────────────────────── AREA WEBMASTER (/admin/*) ───────────────────────
+   * Tutte dietro `requireAdmin`: un NON-admin (o non autenticato) riceve 404, mai
+   * 403 — l'esistenza dell'area non è osservabile. Il ruolo è letto dal DB a ogni
+   * richiesta (token opachi → revoca istantanea). Rate-limit dedicato.
+   */
+  const requireAdmin = createRequireAdmin(auth);
+  const adminLimiter = rateLimit({ name: "admin", windowMs: 60_000, max: 60 });
+
+  // Contatore di occupazione del DB (§4.4): righe per tabella, totale, % sul budget.
+  app.get(
+    "/admin/occupancy",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      res.json(await getOccupancy());
+    }),
+  );
+
+  // Anteprima RETENTION in DRY-RUN (§4.4): mostra al lead quante righe sarebbero
+  // rimosse, senza cancellare nulla. È la "simulazione mostrata" prima di ogni
+  // esecuzione reale. L'anonimizzazione di account registrati resta solo-detection.
+  app.post(
+    "/admin/retention/preview",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const reports = await runRetentionSweep("dry_run", principal.userId);
+      res.json({ dryRun: true, reports });
+    }),
+  );
 
   // 404 JSON per rotte sconosciute (nessuna pagina HTML/stack trace).
   app.use((_req: Request, res: Response) => {

@@ -1,6 +1,7 @@
 import type { GameConfig, HandScoreDetail, Seat, TeamId } from "../contract/types.js";
 import { db, schema } from "./client.js";
 import { and, eq, ne } from "drizzle-orm";
+import { consolidateAbandonedTotals, consolidateMatchTotals } from "../stats/totals.js";
 
 /**
  * Persistenza best-effort (checkpoint + audit). Ogni operazione è isolata in
@@ -164,20 +165,28 @@ export const persistence = {
     winnerTeam: TeamId | null,
   ): Promise<void> {
     await safe("completeMatch", () =>
-      db!
-        .update(schema.matches)
-        .set({
-          status: "completed",
-          // `winner_seat` RESTA (audit: posto che ha chiuso). La vittoria è di SQUADRA
-          // (P4): `winner_team` è il campo autoritativo per lo storico di coppia. In
-          // 1v1 team = seat → i due campi coincidono, valori invariati.
-          winnerSeat: winnerSeat ?? null,
-          winnerTeam: winnerTeam ?? null,
-          endedAt: new Date(),
-        })
-        // Condizionale/idempotente: un doppio invio (o una gara con abort) non
-        // sovrascrive uno stato terminale già scritto.
-        .where(and(eq(schema.matches.id, matchId), ne(schema.matches.status, "completed"))),
+      // FASE 4: la marcatura 'completed' e il consolidamento dei totali avvengono
+      // nella STESSA transazione (nessuna finestra di incoerenza, §4.2). L'UPDATE è
+      // condizionato a `status != 'completed'` e RITORNA le righe modificate: se la
+      // partita era già conclusa (doppio invio / gara con abort) non transita e i
+      // totali NON vengono contati di nuovo (idempotenza del consolidamento).
+      db!.transaction(async (tx) => {
+        const updated = await tx
+          .update(schema.matches)
+          .set({
+            // `winner_seat` RESTA (audit: posto che ha chiuso). La vittoria è di SQUADRA
+            // (P4): `winner_team` è il campo autoritativo per lo storico di coppia. In
+            // 1v1 team = seat → i due campi coincidono, valori invariati.
+            status: "completed",
+            winnerSeat: winnerSeat ?? null,
+            winnerTeam: winnerTeam ?? null,
+            endedAt: new Date(),
+          })
+          .where(and(eq(schema.matches.id, matchId), ne(schema.matches.status, "completed")))
+          .returning({ id: schema.matches.id });
+        if (updated.length === 0) return; // già 'completed': nessun doppio conteggio
+        await consolidateMatchTotals(tx, matchId, winnerTeam ?? winnerSeat ?? null);
+      }),
     );
   },
 
@@ -203,10 +212,24 @@ export const persistence = {
    */
   async abandonMatch(matchId: string): Promise<void> {
     await safe("abandonMatch", () =>
-      db!
-        .update(schema.matches)
-        .set({ status: "abandoned", endedAt: new Date() })
-        .where(eq(schema.matches.id, matchId)),
+      // FASE 4: come completeMatch, l'aggiornamento dello stato e il consolidamento
+      // (matches_abandoned) stanno nella stessa transazione. L'UPDATE è condizionato
+      // a uno stato NON terminale così un doppio invio non conta due volte.
+      db!.transaction(async (tx) => {
+        const updated = await tx
+          .update(schema.matches)
+          .set({ status: "abandoned", endedAt: new Date() })
+          .where(
+            and(
+              eq(schema.matches.id, matchId),
+              ne(schema.matches.status, "abandoned"),
+              ne(schema.matches.status, "completed"),
+            ),
+          )
+          .returning({ id: schema.matches.id });
+        if (updated.length === 0) return;
+        await consolidateAbandonedTotals(tx, matchId);
+      }),
     );
   },
 

@@ -9,6 +9,9 @@ import { createAuthStore } from "../auth/store.js";
 import { createStatsStore } from "../stats/store.js";
 import { createHttpApp } from "../http/app.js";
 import type { StatsStore } from "../stats/types.js";
+import { db } from "../db/client.js";
+import { reconcileTotals } from "../stats/totals.js";
+import { runRetentionSweep } from "../retention/service.js";
 
 /**
  * Layer di trasporto WebSocket (lib `ws`). NESSUNA logica di regole qui: solo
@@ -25,6 +28,13 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
  * frequenza alta. Coerente v1 single-instance (nessun coordinamento multi-istanza).
  */
 const AUTH_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * FASE 4 — cadenza dei job di manutenzione dati. La riconciliazione dei totali e il
+ * giro di retention (dry-run di default) sono operazioni pesanti e non urgenti: 24h
+ * è ampiamente sufficiente. Aggancio allo stesso pattern setInterval().unref().
+ */
+const DATA_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /** SEC-02: tetto massimo di un singolo frame WS (payload oversize → 1009). */
 const MAX_PAYLOAD_BYTES = 16 * 1024;
@@ -185,11 +195,33 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
   }, AUTH_SWEEP_INTERVAL_MS);
   authSweep.unref?.();
 
+  // FASE 4: manutenzione dati (solo con DB attivo). Riconciliazione dei totali
+  // (rete di sicurezza contro derive del consolidamento incrementale) + giro di
+  // retention. La retention gira in DRY-RUN salvo RETENTION_MODE="live" (§4.4:
+  // nessuna cancellazione reale prima di una simulazione mostrata al lead), e
+  // l'anonimizzazione di account registrati resta comunque solo-detection (Gate 4).
+  const dataMaintenance = setInterval(() => {
+    if (!db) return;
+    reconcileTotals(db)
+      .then(({ users, matches }) => {
+        if (matches > 0) console.log(`[stats] riconciliazione totali: utenti=${users}, partite=${matches}`);
+      })
+      .catch((err) => console.error("[stats] riconciliazione fallita:", (err as Error).message));
+    runRetentionSweep()
+      .then((reports) => {
+        const summary = reports.map((r) => `${r.step}=${r.dryRun ? r.matched : r.removed}`).join(" ");
+        if (summary) console.log(`[retention] sweep: ${summary}`);
+      })
+      .catch((err) => console.error("[retention] sweep fallito:", (err as Error).message));
+  }, DATA_MAINTENANCE_INTERVAL_MS);
+  dataMaintenance.unref?.();
+
   // A4: ferma gli intervalli sia alla chiusura del WSS sia dell'http server, così
   // lo shutdown termina pulito senza handle attivi che impediscano l'uscita.
   const stopTimers = () => {
     clearInterval(heartbeat);
     clearInterval(authSweep);
+    clearInterval(dataMaintenance);
   };
   wss.on("close", stopTimers);
   httpServer.on("close", stopTimers);
