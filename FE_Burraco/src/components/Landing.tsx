@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AuthMode } from "@/components/AuthPanel";
 import { DonationButton } from "@/components/DonationButton";
+import { ContactForm } from "@/components/ContactForm";
 import "./Landing.css";
 
 /**
@@ -464,10 +465,14 @@ export function Landing({ onOpenAuth }: Props) {
                   Un errore al tavolo, una regola che non torna, un&apos;idea: scrivere è la
                   cosa più utile che puoi fare.
                 </p>
+                {/* FASE 2 — form contatti reale (sostituisce il solo CTA mailto).
+                    Il messaggio si salva sempre lato server; l'email è un di più. */}
+                <ContactForm />
                 {CONTACT_MAIL ? (
-                  <a className="btn btn-ghost-gold" href={`mailto:${CONTACT_MAIL}`}>
-                    Scrivi al circolo
-                  </a>
+                  <p className="contact-mailto-fallback">
+                    Preferisci la tua casella?{" "}
+                    <a href={`mailto:${CONTACT_MAIL}`}>Scrivi al circolo</a>
+                  </p>
                 ) : null}
               </div>
               <div className="contact-aside">

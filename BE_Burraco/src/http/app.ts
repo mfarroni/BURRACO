@@ -8,6 +8,11 @@ import { env } from "../config.js";
 import type { StatsStore } from "../stats/types.js";
 import type { RoomManager } from "../room/RoomManager.js";
 import type { TablesResponse, NewCodeResponse } from "../contract/types.js";
+import { createContactStore } from "../contact/store.js";
+import type { ContactStore } from "../contact/types.js";
+import { hashIp, stripHeaderInjection } from "../contact/util.js";
+import { sendEmail } from "../mail/index.js";
+import { logAppEvent } from "../events/log.js";
 
 /**
  * APP HTTP del backend auth (Express) montata sullo STESSO http.Server del WS
@@ -69,6 +74,22 @@ const statsQuery = z.object({
 // prima di qualsiasi query). Impedisce input malformati verso il DB.
 const matchIdSchema = z.string().uuid();
 
+// FASE 2 — Form contatti pubblico. Limiti di lunghezza (anti-abuso) + honeypot
+// (`website`, riuso del nome già usato dal login) + soglia di tempo (`renderedAt`,
+// timestamp di render del form). `renderedAt` dal client è manipolabile: vale come
+// filtro statistico, non come prova.
+const contactBody = z.object({
+  nome: z.string().trim().min(1).max(80),
+  email: z.string().trim().toLowerCase().email().max(254),
+  oggetto: z.string().trim().min(1).max(120),
+  messaggio: z.string().trim().min(1).max(2000),
+  website: z.string().max(200).optional(),
+  renderedAt: z.coerce.number().int().nonnegative().optional(),
+});
+
+/** Tempo minimo di compilazione plausibile: sotto → trattato come bot (§2.3). */
+const CONTACT_MIN_FILL_MS = 3_000;
+
 /* ─────────────────────────────── helper ──────────────────────────────────── */
 
 /** Mappa i codici d'errore stabili del servizio agli status HTTP. */
@@ -106,7 +127,12 @@ function handler(fn: (req: Request, res: Response) => Promise<void>) {
 
 /* ─────────────────────────────── app ─────────────────────────────────────── */
 
-export function createHttpApp(auth: AuthService, stats?: StatsStore, manager?: RoomManager): Express {
+export function createHttpApp(
+  auth: AuthService,
+  stats?: StatsStore,
+  manager?: RoomManager,
+  deps?: { contactStore?: ContactStore },
+): Express {
   const app = express();
 
   // Dietro il proxy di Render: fidati del primo hop per un req.ip coerente
@@ -247,6 +273,103 @@ export function createHttpApp(auth: AuthService, stats?: StatsStore, manager?: R
     handler(async (req, res) => {
       const user = await auth.me(bearer(req));
       res.json({ user });
+    }),
+  );
+
+  /* ─────────────────────────── FASE 2 — FORM CONTATTI (PUBBLICO) ───────────────
+   * POST /api/contact — l'endpoint più esposto: nessun Bearer richiesto.
+   * Principio (§2.1): il messaggio si salva SEMPRE; l'email è un di più. La risposta
+   * è SEMPRE generica (200 { ok:true }), non rivela mai l'esito dell'invio email.
+   * Difese server-authoritative (nascondere un pulsante non è sicurezza):
+   *  - rate-limit per IP più severo degli altri (5/60min);
+   *  - honeypot (`website`) → 200 silenzioso senza salvare né inviare;
+   *  - soglia di tempo minima → 200 silenzioso (filtro statistico anti-bot);
+   *  - anti-injection di header (newline/CTL) su nome/oggetto/reply-to;
+   *  - `ip_hash` = sha256(ip + salt): mai l'IP in chiaro.
+   */
+  const contactLimiter = rateLimit({ name: "contact", windowMs: 60 * 60 * 1000, max: 5 });
+  const contactStore = deps?.contactStore ?? createContactStore();
+
+  /** Invio email best-effort del messaggio (fuori dal path critico, §2.4). */
+  async function deliverContactEmail(
+    id: string | null,
+    data: { nome: string; email: string; oggetto: string; messaggio: string },
+  ): Promise<void> {
+    try {
+      // Senza destinatario configurato non si tenta: la riga resta 'skippato'.
+      if (!env.mail.contactTo) {
+        if (id) await contactStore.markSendStatus(id, "skippato");
+        return;
+      }
+      // Oggetto GENERATO dal server; i campi utente sono sanificati (anti-injection).
+      const subject = `[Contatti] ${stripHeaderInjection(data.oggetto)}`;
+      const text = `Da: ${stripHeaderInjection(data.nome)} <${data.email}>\n\n${data.messaggio}`;
+      const result = await sendEmail({
+        to: { email: env.mail.contactTo },
+        subject,
+        text,
+        // L'email utente in reply-to SOLO dopo validazione formato (zod) + strip CTL.
+        replyTo: { email: data.email, name: stripHeaderInjection(data.nome) },
+        tags: ["contact"],
+      });
+      const status =
+        result.status === "sent" ? "inviato" : result.status === "skipped" ? "skippato" : "errore_invio";
+      if (id) await contactStore.markSendStatus(id, status);
+      void logAppEvent("info", "contact", `messaggio contatti esito=${result.status}`);
+    } catch (err) {
+      console.error("[contact] invio email fallito:", (err as Error).message);
+      if (id) await contactStore.markSendStatus(id, "errore_invio").catch(() => {});
+    }
+  }
+
+  app.post(
+    "/api/contact",
+    contactLimiter,
+    handler(async (req, res) => {
+      const parsed = contactBody.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_BODY", message: "Dati del messaggio non validi." });
+        return;
+      }
+      const { nome, email, oggetto, messaggio, website, renderedAt } = parsed.data;
+
+      // Honeypot: campo nascosto valorizzato → bot → 200 generico, nessun salvataggio.
+      if (website && website.trim().length > 0) {
+        res.status(200).json({ ok: true });
+        return;
+      }
+      // Soglia di tempo: submit troppo rapido → bot → 200 generico, silenzioso.
+      if (typeof renderedAt === "number") {
+        const elapsed = Date.now() - renderedAt;
+        if (elapsed >= 0 && elapsed < CONTACT_MIN_FILL_MS) {
+          res.status(200).json({ ok: true });
+          return;
+        }
+      }
+
+      // Utente autenticato (best-effort): se c'è un Bearer valido, associa la riga.
+      const principal = await auth.getPrincipalByToken(bearer(req));
+
+      // INSERT SEMPRE (non deve fallire silenziosamente): su errore DB si logga e si
+      // prosegue col fallback email, ma la risposta all'utente resta generica.
+      let id: string | null = null;
+      try {
+        id = await contactStore.save({
+          nome: stripHeaderInjection(nome),
+          email,
+          oggetto: stripHeaderInjection(oggetto),
+          messaggio, // corpo testuale: nessun rischio di header injection
+          userId: principal?.userId ?? null,
+          ipHash: hashIp(req.ip ?? ""),
+        });
+      } catch (err) {
+        console.error("[contact] salvataggio fallito:", (err as Error).message);
+        void logAppEvent("error", "contact", "salvataggio messaggio contatti fallito");
+      }
+
+      // Risposta generica SUBITO; l'email parte dopo, fuori dal path critico.
+      res.status(200).json({ ok: true });
+      void deliverContactEmail(id, { nome, email, oggetto, messaggio });
     }),
   );
 
