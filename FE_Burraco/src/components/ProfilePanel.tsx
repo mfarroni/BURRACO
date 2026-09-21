@@ -14,6 +14,8 @@ import type {
 import { fetchStats, fetchMatches, fetchMatchDetail } from "@/lib/profile";
 import { AuthClientError } from "@/lib/auth";
 import { DonationButton } from "@/components/DonationButton";
+import { SideFlank } from "@/components/SideFlanks";
+import { VetrinaBrandHeader } from "@/components/VetrinaBrandHeader";
 
 /**
  * SCHERMATA PROFILO (macro-ciclo storico) — SOLA LETTURA.
@@ -154,21 +156,22 @@ export function ProfilePanel({ user, onBack }: Props) {
     );
   }
 
+  const displayName = user.displayName?.trim() || user.email?.split("@")[0] || "Utente";
+
   /* ── Vista RIEPILOGO + LISTA ──────────────────────────────────────────── */
   return (
-    <div className="lobby profile-panel">
-      <div className="brand">
-        <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
-        <h1>Profilo</h1>
-      </div>
+    <div className="page-3col-wrapper profile-3col-wrapper">
+      <SideFlank side="left" />
+      <main className="central-column-card profile-panel">
+        <VetrinaBrandHeader title="Burraco" subtitle="Profilo Giocatore — Circolo Nettuno" />
 
-      <div className="profile-identity">
-        <span className="profile-name">{user.displayName}</span>
-        <span className="profile-badge" data-guest={isGuest ? "true" : "false"}>
-          <span className="profile-badge-icon" aria-hidden="true">{isGuest ? "○" : "✓"}</span>
-          {isGuest ? "Ospite" : "Registrato"}
-        </span>
-      </div>
+        <div className="profile-identity">
+          <span className="profile-name">{displayName}</span>
+          <span className="profile-badge" data-guest={isGuest ? "true" : "false"}>
+            <span className="profile-badge-icon" aria-hidden="true">{isGuest ? "○" : "✓"}</span>
+            {isGuest ? "Ospite" : "Registrato"}
+          </span>
+        </div>
 
       {isGuest ? (
         <div className="profile-guest-note" role="status">
@@ -430,6 +433,8 @@ export function ProfilePanel({ user, onBack }: Props) {
           Torna al tavolo
         </button>
       </div>
+      </main>
+      <SideFlank side="right" />
     </div>
   );
 }
@@ -461,11 +466,10 @@ function MatchDetailView({
   const yourSeat = detail?.yourSeat ?? 0;
 
   return (
-    <div className="lobby profile-panel">
-      <div className="brand">
-        <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
-        <h1>Dettaglio partita</h1>
-      </div>
+    <div className="page-3col-wrapper profile-3col-wrapper">
+      <SideFlank side="left" />
+      <main className="central-column-card profile-panel">
+        <VetrinaBrandHeader title="Burraco" subtitle="Dettaglio Partita — Circolo Nettuno" />
 
       <button type="button" className="btn-ghost detail-back" onClick={onBack}>
         ‹ Torna allo storico
@@ -532,6 +536,8 @@ function MatchDetailView({
           Torna allo storico
         </button>
       </div>
+      </main>
+      <SideFlank side="right" />
     </div>
   );
 }
