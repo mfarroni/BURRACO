@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import type { UseAuth } from "@/lib/useAuth";
+import { SideFlank } from "@/components/SideFlanks";
+import { VetrinaBrandHeader } from "@/components/VetrinaBrandHeader";
 
 /**
  * SCHERMATA D'INGRESSO — tre percorsi FUNZIONALI: Accedi / Registrati / Ospite.
@@ -100,17 +102,18 @@ export function AuthPanel({ auth, initialMode = "login", onBack, onRequestTable 
         : "Hai già un account? Torna ad Accedi.";
 
   return (
-    <div className="lobby auth-panel">
-      {onBack && (
-        <button type="button" className="btn-ghost auth-back" onClick={onBack} disabled={busy}>
-          <span aria-hidden="true">&larr;</span> Torna alla vetrina
-        </button>
-      )}
-      <div className="brand">
-        <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
-        <h1>Burraco</h1>
-        <p className="tagline">Il circolo del Burraco. Siediti al tavolo in pochi secondi.</p>
-      </div>
+    <div className="page-3col-wrapper auth-3col-wrapper">
+      <SideFlank side="left" />
+      <main className="central-column-card lobby auth-panel">
+        {onBack && (
+          <button type="button" className="btn-ghost auth-back" onClick={onBack} disabled={busy}>
+            <span aria-hidden="true">&larr;</span> Torna alla vetrina
+          </button>
+        )}
+        <VetrinaBrandHeader
+          title="Burraco"
+          subtitle="Circolo Nettuno — Siediti al tavolo in pochi secondi."
+        />
 
       {/* Selettore di percorso: segmented control a tre voci di pari peso. */}
       <div className="auth-tabs" role="group" aria-label="Come vuoi entrare">
@@ -246,6 +249,8 @@ export function AuthPanel({ auth, initialMode = "login", onBack, onRequestTable 
       </form>
 
       <p className="muted auth-hint">{hint}</p>
+      </main>
+      <SideFlank side="right" />
     </div>
   );
 }

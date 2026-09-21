@@ -34,6 +34,8 @@ import {
   TurnBanner,
 } from "@/components/StateBanners";
 import { ConnectionScreen } from "@/components/ConnectionScreen";
+import { SideFlank } from "@/components/SideFlanks";
+import { VetrinaBrandHeader } from "@/components/VetrinaBrandHeader";
 
 export default function Page() {
   const g = useGameSocket();
@@ -238,28 +240,27 @@ export default function Page() {
   /* ── Autenticato ma non ancora al tavolo → LOBBY (lista + azioni) ────── */
   if (!g.joined) {
     const connecting = g.connPhase === "connecting" || g.connPhase === "reconnecting";
-    const name = auth.user?.displayName ?? "";
+    const displayName = auth.user?.displayName?.trim() || auth.user?.email?.split("@")[0] || "Utente";
+    const name = displayName;
     return (
-      <div className="lobby lobby-wide">
-        <div className="brand">
-          <div className="suits" aria-hidden="true">♠ ♥ ♦ ♣</div>
-          <h1>Burraco</h1>
-          <p className="tagline">Il tavolo del circolo, uno contro uno.</p>
-        </div>
+      <div className="page-3col-wrapper lobby-3col-wrapper">
+        <SideFlank side="left" />
+        <main className="central-column-card lobby lobby-wide">
+          <VetrinaBrandHeader title="Burraco" subtitle="Il tavolo del circolo, uno contro uno." />
 
-        {/* Identità corrente + logout. */}
-        <div className="whoami">
-          <span className="muted">
-            Sei entrato come <strong>{auth.user?.displayName}</strong>
-            {auth.user?.isGuest ? " (ospite)" : ""}
-          </span>
-          <button type="button" className="btn-ghost" onClick={() => setShowProfile(true)}>
-            Profilo
-          </button>
-          <button type="button" className="btn-ghost" onClick={() => auth.logout()} disabled={auth.busy}>
-            Esci
-          </button>
-        </div>
+          {/* Identità corrente + logout. */}
+          <div className="whoami">
+            <span className="muted">
+              Sei entrato come <strong>{displayName}</strong>
+              {auth.user?.isGuest ? " (ospite)" : ""}
+            </span>
+            <button type="button" className="btn-ghost" onClick={() => setShowProfile(true)}>
+              Profilo
+            </button>
+            <button type="button" className="btn-ghost" onClick={() => auth.logout()} disabled={auth.busy}>
+              Esci
+            </button>
+          </div>
 
         {/* Avviso NON bloccante di partita annullata (§5.4): tono neutro, scartabile. */}
         {g.abortedNotice && (
@@ -352,6 +353,8 @@ export default function Page() {
             }}
           />
         )}
+        </main>
+        <SideFlank side="right" />
       </div>
     );
   }
