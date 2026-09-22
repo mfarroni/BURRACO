@@ -46,7 +46,9 @@ export default function Page() {
   const health = useServiceHealth();
   // CICLO Pannello Admin — voce di menu admin via PROBE (D2): true solo se
   // GET /admin/ping risponde 200 (admin). Puro UX; l'autorità resta il 404 server-side.
-  const isAdmin = useIsAdmin();
+  // Passiamo l'id utente come chiave: il probe si ri-esegue DOPO il login (senza, girerebbe
+  // solo al mount, quando non c'è ancora un token, e il menu non comparirebbe mai).
+  const isAdmin = useIsAdmin(auth.user?.id ?? null);
   // C'è un token salvato? (returning player). Letto client-side dopo il mount per
   // non toccare il render SSR. Solo per un token esistente ha senso bloccare
   // l'ingresso in attesa del backend: un visitatore nuovo vede subito la vetrina.

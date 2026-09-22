@@ -228,11 +228,16 @@ export const admin = {
 
 /**
  * CICLO Pannello Admin — hook di PROBE per la voce di menu admin (D2). Chiama
- * `GET /admin/ping` una sola volta quando esiste un token: 200 → true (admin),
- * 404/errore → false. Puro UX: nasconderla non è sicurezza, l'autorità resta il 404
- * server-side su ogni endpoint. Non tocca il contratto auth.
+ * `GET /admin/ping`: 200 → true (admin), 404/errore → false. Puro UX: nasconderla
+ * non è sicurezza, l'autorità resta il 404 server-side su ogni endpoint. Non tocca
+ * il contratto auth.
+ *
+ * `authKey` è un valore che CAMBIA a ogni variazione dello stato di autenticazione
+ * (es. `auth.user?.id`): serve come dipendenza dell'effetto così il probe si RI-esegue
+ * dopo il login. Senza, l'effetto girerebbe una sola volta al mount (quando di norma
+ * non c'è ancora un token) e il menu non comparirebbe mai dopo l'accesso.
  */
-export function useIsAdmin(): boolean {
+export function useIsAdmin(authKey?: string | null): boolean {
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -251,6 +256,6 @@ export function useIsAdmin(): boolean {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [authKey]);
   return isAdmin;
 }
