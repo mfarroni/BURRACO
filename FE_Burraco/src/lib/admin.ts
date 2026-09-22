@@ -195,7 +195,17 @@ export const admin = {
     return adminFetch<AdminUsersResponse>(`/admin/users?${q.toString()}`);
   },
   logLinks: () => adminFetch<LogLinksResponse>("/admin/logs/links"),
-  statusCheck: () => adminFetch<StatusCheckResponse>("/admin/status/check", { method: "POST", body: "{}" }),
+  // Semaforo (§2.2): timeout 60s via AbortController. Se il BE non risponde entro il
+  // limite, la fetch viene abortita → il chiamante marca BE/DB rossi.
+  statusCheck: () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60_000);
+    return adminFetch<StatusCheckResponse>("/admin/status/check", {
+      method: "POST",
+      body: "{}",
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer));
+  },
   listEvents: () => adminFetch<{ items: EventRow[] }>("/admin/events"),
   createEvent: (payload: {
     titolo: string;
