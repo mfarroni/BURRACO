@@ -107,5 +107,13 @@ non-regressione) → `agente_security` (verifica chiusura SEC-ADM-01/02/03) → 
 
 ---
 
-*In attesa di approvazione DIRETTA dell'utente: (1) via libera a R1; (2) scelta su R2 (a/b);
-(3) scelta su R3 (a/b); (4) R4 solo documentazione.*
+## DECISIONI DEL LEAD (2026-09-22) — APPROVATO
+- **R1 — APPROVATO:** fix re-entrancy del dispatcher (+ UPDATE guardate di stato). Da implementare.
+- **R2 — ACCETTATO (rischio residuo):** nessuna modifica. Coerente con "welcome = solo notifica,
+  nessuna verifica" e con SEC-A2. Da documentare come accettato.
+- **R3 — ACCETTATO (rischio residuo):** nessuna modifica. Impatto marginale (solo admin, `SELECT 1`).
+  Da documentare come accettato.
+- **R4 — documentazione:** nota di deploy single-instance.
+
+**Ciclo di remediation:** `agente_develop` (R1 + doc R2/R3/R4) → `agente_test` → `agente_security` →
+ritorno al lead. **Senza** `agente_ui_ux`.
