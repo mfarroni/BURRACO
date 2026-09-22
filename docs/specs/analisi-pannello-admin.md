@@ -339,6 +339,28 @@ scelta di sicurezza). Due vie:
   + copia FE) → più invasivo. Solo se il lead preferisce evitare il probe.
 La voce di menu è **puro UX**: nasconderla non è sicurezza; l'autorità resta il 404 server-side.
 
+### 2.6 Predisposizione Eventi (Tornei del circolo) e Shop (§1 del prompt)
+
+Richiesta esplicita del lead: *"Nella pagina admin devo poter inserire anche gli eventi (Tornei del
+circolo) e inserire eventuali prodotti per la parte shop. Trovami una soluzione e fai solo una
+**predisposizione**, sia per la pagina admin che per il database."*
+
+**Soluzione — scaffold completo ma non pubblico (questo ciclo):**
+- **DB (pronto):** tabelle `events` e `shop_products` (§1.2, migrazione `0011`; SQL nel WP Neon).
+- **API admin (minimale):** `POST /admin/events`, `GET /admin/events`, `POST /admin/shop/products`,
+  `GET /admin/shop/products` — dietro `requireAdmin`, per creare/elencare. Niente update/delete in
+  questo ciclo (predisposizione): si aggiungono quando la feature verrà attivata.
+- **UI admin (predisposizione):** una scheda/sezione con **elenco + form di inserimento** minimale
+  per entrambi, coerente col resto del pannello (scopata `.webmaster-root`).
+- **Cosa NON si fa ora (esplicitamente fuori scope):** nessuna vetrina pubblica di tornei sul sito,
+  nessun carrello/pagamento/immagini caricate per lo shop, nessuna iscrizione ai tornei. Il dato è
+  inseribile e conservato; l'esposizione al pubblico è un ciclo futuro.
+- **Perché così:** rispetta "solo predisposizione" (niente sovra-ingegnerizzazione), lascia il DB e
+  l'admin pronti, e non introduce superfici pubbliche non richieste né rischi di sicurezza nuovi.
+
+> Se invece vuoi già ORA lo shop/tornei **pienamente funzionanti e pubblici**, è un ampliamento di
+> scope: da dichiarare come ciclo a sé (non è "una predisposizione"). → chiedere al lead.
+
 ---
 
 ## ITERAZIONE 3 — Flow diagram e piano di test
@@ -555,9 +577,12 @@ CREATE INDEX IF NOT EXISTS shop_products_disponibile_idx ON shop_products (dispo
 ## CANCELLI PER IL LEAD (approvazione prima di `agente_develop`)
 
 - **Gate 1 (piano):** approvazione di schema, endpoint, UI e delle decisioni A1 (riuso `role`;
-  prefisso `/admin/*`; log solo-link).
-- **Decisione D1:** broadcast oltre quota → **coda carry-over (consigliato)** o **blocco**.
-- **Decisione D2:** voce di menu admin → **probe `/admin/ping` (consigliato)** o `isAdmin` in `/auth/me`.
+  prefisso `/admin/*`; log solo-link). → *in attesa*.
+- **Decisione D1 — DECISA dal lead (2026-09-22): CODA con carry-over.** Il broadcast oltre quota si
+  accoda interamente; il dispatcher invia quanti ne consente la quota oggi e il resto nei giorni
+  successivi. L'UI avvisa che l'invio si completerà in più giorni. Nessun destinatario perso.
+- **Decisione D2 — DECISA dal lead (2026-09-22): PROBE `GET /admin/ping`.** Il FE mostra la voce di
+  menu solo su 200; il contratto auth (`AuthUser`) NON viene toccato.
 - **Da verificare in console (non assumere):** tetto reale Brevo (decisione 300; confermare il piano),
   URL esatti delle dashboard Render/Neon, `trust proxy` per l'IP reale.
 
