@@ -27,6 +27,11 @@ const TRACKED: { name: string; table: PgTable }[] = [
   { name: "broadcasts", table: schema.broadcasts },
   { name: "broadcast_recipients", table: schema.broadcastRecipients },
   { name: "app_events", table: schema.appEvents },
+  // CICLO Pannello Admin (mig 0010/0011): concorrono al budget 10k; volumi bassi.
+  { name: "email_quota_daily", table: schema.emailQuotaDaily },
+  { name: "email_queue", table: schema.emailQueue },
+  { name: "events", table: schema.events },
+  { name: "shop_products", table: schema.shopProducts },
 ];
 
 export async function getOccupancy(): Promise<AdminOccupancy> {

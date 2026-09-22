@@ -37,10 +37,14 @@ export interface BroadcastCriterio {
 export type BroadcastTipo = "servizio" | "promozionale";
 
 export interface BroadcastCreateResponse {
-  id: string;
+  id: string | null; // null in dry-run (nessuna persistenza)
   count: number;
   sample?: string[]; // nomi (mai email) di un campione di destinatari
   dryRun: boolean;
+  // CICLO Pannello Admin — stato quota giornaliera al momento della creazione/dry-run.
+  quotaCap: number; // tetto giornaliero (BREVO_DAILY_CAP)
+  quotaRemaining: number; // residuo di oggi (mai negativo)
+  quotaSufficiente: boolean; // count ≤ quotaRemaining (con carry-over l'invio non è bloccato)
 }
 
 export interface BroadcastRow {
@@ -80,4 +84,63 @@ export interface DbStatusResponse {
   slowQueries: { query: string; calls: number; meanMs: number }[] | null;
   slowQueriesAvailable: boolean;
   note?: string;
+}
+
+/* ── CICLO Pannello Admin: Utenti registrati (§2.1) ──────────────────────── */
+
+/**
+ * Riga utente per la tab Utenti. Whitelist in POSITIVO: SOLO i campi qui elencati.
+ * MAI password_hash, token_hash, ip_hash, ruolo o altri campi interni.
+ */
+export interface AdminUserRow {
+  id: string;
+  displayName: string;
+  email: string | null;
+  createdAt: number; // epoch ms
+}
+
+export interface AdminUsersResponse {
+  items: AdminUserRow[];
+  /** Cursore keyset per la pagina successiva (null = ultima pagina). */
+  nextCursor: string | null;
+  limit: number;
+}
+
+/* ── CICLO Pannello Admin: Link log (§2, tab Log) ─────────────────────────── */
+
+/** Solo i link alle dashboard (mai i log): decisione lead "log = link". */
+export interface LogLinksResponse {
+  renderUrl: string | null;
+  neonUrl: string | null;
+}
+
+/* ── CICLO Pannello Admin: Semaforo di monitoraggio (§2.2) ────────────────── */
+
+/** Semaforo binario: solo verde o rosso, mai stato intermedio. */
+export type Light = "green" | "red";
+
+export interface StatusCheckResponse {
+  fe: Light; // 'green' per definizione (il pannello è caricato)
+  be: Light; // 'green' se questo endpoint risponde entro il timeout
+  db: Light; // 'green' se SELECT 1 torna entro il timeout
+  checkedAt: number; // epoch ms dell'ultimo controllo
+  detail: { be: string; db: string }; // testo che accompagna SEMPRE il colore
+}
+
+/* ── CICLO Pannello Admin: Predisposizione Eventi/Shop (§2.6) ─────────────── */
+
+export interface EventRow {
+  id: string;
+  titolo: string;
+  inizioAt: number; // epoch ms
+  luogo: string | null;
+  pubblicato: boolean;
+}
+
+export interface ShopProductRow {
+  id: string;
+  nome: string;
+  prezzoCent: number;
+  valuta: string;
+  disponibile: boolean;
 }
