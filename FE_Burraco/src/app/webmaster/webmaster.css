@@ -1,27 +1,53 @@
 /*
- * FASE 5.1 — Stili dell'area webmaster, TOTALMENTE SCOPATI sotto `.webmaster-root`.
- * Nessuna regola su `body`/`html` (il layout radice resta intatto e nessuna regola
- * contamina lobby/tavolo/profilo). Variabili prefissate `--wm-`. Stile funzionale e
- * sobrio: la rifinitura visiva è di agente_ui_ux.
+ * AREA WEBMASTER — stili TOTALMENTE SCOPATI sotto `.webmaster-root`.
+ * Nessuna regola su `body`/`html`: il layout radice e la grafica di
+ * lobby/tavolo/profilo restano intatti.
+ *
+ * COERENZA COL PRODOTTO: `globals.css` è importato dal root layout, quindi i suoi
+ * token (`--felt-*`, `--brass-*`, `--text*`, `--danger-*`, `--success-*`, `--warn-*`,
+ * `--font-serif/-sans`, ombre, spaziature) cascano fin qui. Le variabili `--wm-*`
+ * li RIUSANO con un fallback letterale: il pannello eredita palette e contrasti già
+ * verificati AA/AAA della direzione visiva senza modificare il file globale, e regge
+ * anche se un token mancasse.
  */
 
 .webmaster-root {
-  --wm-bg: #0e1a16;
-  --wm-panel: #14241d;
-  --wm-border: rgba(212, 175, 55, 0.28);
-  --wm-text: #eae6da;
-  --wm-muted: #a9b3ac;
-  --wm-gold: #d4af37;
-  --wm-alert: #ffb4a2;
+  /* Superfici (dal design system, con fallback) */
+  --wm-bg: var(--felt-900, #0e2a22);
+  --wm-panel: var(--felt-800, #123a2c);
+  --wm-panel-2: var(--surface-sunken, #0b241d);
+  --wm-border: var(--border, #2c5445);
+  --wm-border-gold: var(--brass-600, #a9853a);
+
+  /* Testo */
+  --wm-text: var(--text, #e6e2d3);
+  --wm-text-strong: var(--text-strong, #f3eedf);
+  --wm-muted: var(--text-muted, #b9c6bc);
+  --wm-faint: var(--text-faint, #8ea295);
+
+  /* Accenti / ruoli semantici */
+  --wm-gold: var(--brass-500, #c8a24a);
+  --wm-gold-soft: var(--brass-300, #e7d097);
+  --wm-focus: var(--focus, #e7d097);
+  --wm-ok: var(--success-500, #3ea46b);
+  --wm-ok-text: var(--success-300, #7fd6a4);
+  --wm-ko: var(--danger-500, #e0574b);
+  --wm-ko-text: var(--danger-300, #f0a79b);
+  --wm-warn: var(--warn-500, #e0a93a);
+  --wm-warn-text: var(--warn-300, #f0d08a);
+
+  --wm-r: var(--r-md, 10px);
+  --wm-r-sm: var(--r-sm, 6px);
 
   box-sizing: border-box;
   min-height: 100vh;
   max-width: 1000px;
   margin: 0 auto;
-  padding: 28px 20px 64px;
+  padding: var(--sp-6, 32px) var(--sp-5, 24px) var(--sp-7, 48px);
   color: var(--wm-text);
   background: var(--wm-bg);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+  line-height: 1.5;
 }
 
 .webmaster-root * {
@@ -29,112 +55,254 @@
 }
 
 .webmaster-root .wm-title {
-  font-size: 1.8rem;
-  color: var(--wm-gold);
-  margin: 0 0 20px;
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: var(--fs-h1, 1.5rem);
+  color: var(--wm-gold-soft);
+  letter-spacing: 0.01em;
+  margin: 0 0 var(--sp-5, 24px);
 }
 
 .webmaster-root .wm-status {
   color: var(--wm-muted);
 }
 
+/* ─── Card / titoli ───────────────────────────────────────────────────────── */
+
 .webmaster-root .wm-card {
   background: var(--wm-panel);
   border: 1px solid var(--wm-border);
-  border-radius: 12px;
-  padding: 18px;
-  margin-bottom: 20px;
+  border-radius: var(--r-lg, 16px);
+  padding: var(--sp-4, 16px) var(--sp-5, 24px);
+  margin-bottom: var(--sp-5, 24px);
+  box-shadow: var(--sh-panel, 0 6px 18px rgba(0, 0, 0, 0.35));
 }
 
 .webmaster-root .wm-h2 {
-  font-size: 1.25rem;
-  color: var(--wm-gold);
-  margin: 0 0 10px;
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: var(--fs-h2, 1.25rem);
+  color: var(--wm-gold-soft);
+  margin: 0 0 var(--sp-2, 8px);
+  letter-spacing: 0.01em;
 }
 
 .webmaster-root .wm-h3 {
+  font-family: var(--font-serif, Georgia, serif);
   font-size: 1.05rem;
-  margin: 18px 0 8px;
+  color: var(--wm-text-strong);
+  margin: var(--sp-5, 24px) 0 var(--sp-2, 8px);
 }
 
 .webmaster-root .wm-muted {
   color: var(--wm-muted);
 }
 
+/* ─── Messaggi di stato (vuoto / errore / avviso / successo) ───────────────── */
+
 .webmaster-root .wm-alert {
-  color: var(--wm-alert);
+  color: var(--wm-ko-text);
   font-weight: 600;
+  border-left: 3px solid var(--wm-ko);
+  padding: var(--sp-2, 8px) var(--sp-3, 12px);
+  background: rgba(224, 87, 75, 0.1);
+  border-radius: 0 var(--wm-r-sm) var(--wm-r-sm) 0;
+  margin: var(--sp-3, 12px) 0;
 }
+
+.webmaster-root .wm-warn {
+  color: var(--wm-warn-text);
+  border-left: 3px solid var(--wm-warn);
+  padding: var(--sp-2, 8px) var(--sp-3, 12px);
+  background: rgba(224, 169, 58, 0.1);
+  border-radius: 0 var(--wm-r-sm) var(--wm-r-sm) 0;
+  margin: var(--sp-3, 12px) 0;
+}
+
+.webmaster-root .wm-success {
+  color: var(--wm-ok-text);
+  border-left: 3px solid var(--wm-ok);
+  padding: var(--sp-2, 8px) var(--sp-3, 12px);
+  background: rgba(62, 164, 107, 0.1);
+  border-radius: 0 var(--wm-r-sm) var(--wm-r-sm) 0;
+  margin: var(--sp-3, 12px) 0;
+}
+
+.webmaster-root .wm-empty {
+  color: var(--wm-muted);
+  font-style: italic;
+  padding: var(--sp-4, 16px);
+  text-align: center;
+  border: 1px dashed var(--wm-border);
+  border-radius: var(--wm-r);
+  margin: var(--sp-3, 12px) 0;
+}
+
+.webmaster-root .wm-loading {
+  color: var(--wm-muted);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2, 8px);
+  margin: var(--sp-3, 12px) 0;
+}
+
+.webmaster-root .wm-spinner {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border: 2px solid var(--wm-border);
+  border-top-color: var(--wm-gold);
+  border-radius: 50%;
+  animation: wm-spin 0.8s linear infinite;
+}
+
+@keyframes wm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─── Note (predisposizione) ──────────────────────────────────────────────── */
+
+.webmaster-root .wm-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2, 8px);
+  color: var(--wm-muted);
+  background: var(--wm-panel);
+  border: 1px solid var(--wm-border);
+  border-radius: var(--wm-r);
+  padding: var(--sp-3, 12px) var(--sp-4, 16px);
+  margin: 0 0 var(--sp-5, 24px);
+}
+
+.webmaster-root .wm-note-badge {
+  font-size: var(--fs-xs, 0.75rem);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: var(--wm-bg);
+  background: var(--wm-gold-soft);
+  padding: 2px 8px;
+  border-radius: var(--r-pill, 999px);
+}
+
+/* ─── Tabelle ─────────────────────────────────────────────────────────────── */
 
 .webmaster-root .wm-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 10px;
+  margin-top: var(--sp-2, 8px);
 }
 
 .webmaster-root .wm-table th,
 .webmaster-root .wm-table td {
   text-align: left;
-  padding: 6px 10px;
+  padding: var(--sp-2, 8px) var(--sp-3, 12px);
   border-bottom: 1px solid var(--wm-border);
+}
+
+.webmaster-root .wm-table th {
+  color: var(--wm-muted);
+  font-weight: 600;
+  font-size: var(--fs-sm, 0.875rem);
+}
+
+.webmaster-root .wm-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .webmaster-root .wm-num {
   text-align: right;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
 }
+
+/* ─── Form ────────────────────────────────────────────────────────────────── */
 
 .webmaster-root .wm-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin: 10px 0;
+  gap: var(--sp-1, 4px);
+  margin: var(--sp-3, 12px) 0;
   border: none;
+  padding: 0;
 }
 
 .webmaster-root .wm-field label,
 .webmaster-root .wm-field legend {
   color: var(--wm-muted);
-  font-size: 0.95rem;
+  font-size: var(--fs-sm, 0.875rem);
+  font-weight: 600;
 }
 
 .webmaster-root .wm-field input,
 .webmaster-root .wm-field textarea,
 .webmaster-root .wm-field select {
   font: inherit;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: var(--sp-2, 8px) var(--sp-3, 12px);
+  border-radius: var(--wm-r-sm);
   border: 1px solid var(--wm-border);
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--wm-panel-2);
   color: var(--wm-text);
+}
+
+.webmaster-root .wm-field input:focus-visible,
+.webmaster-root .wm-field textarea:focus-visible,
+.webmaster-root .wm-field select:focus-visible {
+  outline: 2px solid var(--wm-focus);
+  outline-offset: 1px;
+  border-color: var(--wm-gold);
+}
+
+.webmaster-root .wm-field textarea {
+  resize: vertical;
+  min-height: 96px;
 }
 
 .webmaster-root .wm-check {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2, 8px);
   display: flex;
+  font-weight: 400;
+  color: var(--wm-text);
 }
+
+.webmaster-root .wm-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--wm-gold);
+}
+
+/* ─── Bottoni ─────────────────────────────────────────────────────────────── */
 
 .webmaster-root .wm-actions {
   display: flex;
-  gap: 10px;
+  gap: var(--sp-3, 12px);
   flex-wrap: wrap;
-  margin: 12px 0;
+  align-items: center;
+  margin: var(--sp-3, 12px) 0;
 }
 
 .webmaster-root .wm-btn {
   font: inherit;
+  font-weight: 600;
   cursor: pointer;
-  padding: 9px 16px;
-  border-radius: 8px;
+  padding: var(--sp-2, 8px) var(--sp-4, 16px);
+  border-radius: var(--wm-r-sm);
   border: 1px solid var(--wm-gold);
   background: transparent;
   color: var(--wm-gold);
+  transition: background-color var(--dur-base, 200ms) var(--ease-out, ease),
+    border-color var(--dur-base, 200ms) var(--ease-out, ease);
 }
 
 .webmaster-root .wm-btn:hover:not(:disabled) {
-  background: rgba(212, 175, 55, 0.12);
+  background: rgba(200, 162, 74, 0.14);
+}
+
+.webmaster-root .wm-btn:focus-visible {
+  outline: 2px solid var(--wm-focus);
+  outline-offset: 2px;
 }
 
 .webmaster-root .wm-btn:disabled {
@@ -142,31 +310,113 @@
   cursor: default;
 }
 
-.webmaster-root .wm-btn-small {
-  padding: 5px 10px;
-  font-size: 0.85rem;
+/* Primaria: azione principale della scheda (semaforo "Aggiorna adesso"). */
+.webmaster-root .wm-btn-primary {
+  background: var(--wm-gold);
+  color: var(--wm-bg);
+  border-color: var(--wm-gold);
 }
+
+.webmaster-root .wm-btn-primary:hover:not(:disabled) {
+  background: var(--wm-gold-soft);
+  border-color: var(--wm-gold-soft);
+}
+
+/* Distruttiva/irreversibile: conferma invio broadcast. */
+.webmaster-root .wm-btn-danger {
+  border-color: var(--wm-ko);
+  color: var(--wm-ko-text);
+}
+
+.webmaster-root .wm-btn-danger:hover:not(:disabled) {
+  background: rgba(224, 87, 75, 0.16);
+}
+
+.webmaster-root .wm-btn-small {
+  padding: var(--sp-1, 4px) var(--sp-3, 12px);
+  font-size: var(--fs-sm, 0.875rem);
+}
+
+/* Pulsante-link verso dashboard esterne. */
+.webmaster-root .wm-linkbar {
+  display: flex;
+  gap: var(--sp-3, 12px);
+  flex-wrap: wrap;
+  margin: var(--sp-3, 12px) 0;
+}
+
+.webmaster-root .wm-btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2, 8px);
+  text-decoration: none;
+}
+
+.webmaster-root .wm-ext-icon {
+  flex: 0 0 auto;
+}
+
+.webmaster-root .wm-link-off {
+  color: var(--wm-faint);
+  font-style: italic;
+  align-self: center;
+  padding: var(--sp-2, 8px) 0;
+}
+
+/* ─── Elenchi ─────────────────────────────────────────────────────────────── */
 
 .webmaster-root .wm-list {
   list-style: none;
   padding: 0;
-  margin: 8px 0 0;
+  margin: var(--sp-2, 8px) 0 0;
 }
 
 .webmaster-root .wm-list-row {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--sp-3, 12px);
   align-items: center;
-  padding: 8px 0;
+  padding: var(--sp-3, 12px) 0;
   border-bottom: 1px solid var(--wm-border);
 }
 
-.webmaster-root .wm-log {
-  background: #0a1512;
+.webmaster-root .wm-list-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1, 4px);
+  min-width: 0;
+}
+
+.webmaster-root .wm-list-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2, 8px);
+  font-size: var(--fs-sm, 0.875rem);
+}
+
+.webmaster-root .wm-tag {
+  font-size: var(--fs-xs, 0.75rem);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--wm-muted);
   border: 1px solid var(--wm-border);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: var(--r-pill, 999px);
+  padding: 1px 8px;
+}
+
+.webmaster-root .wm-tag-live {
+  color: var(--wm-ok-text);
+  border-color: var(--wm-ok);
+}
+
+/* ─── Log (monospazio) ────────────────────────────────────────────────────── */
+
+.webmaster-root .wm-log {
+  background: var(--wm-panel-2);
+  border: 1px solid var(--wm-border);
+  border-radius: var(--wm-r-sm);
+  padding: var(--sp-3, 12px);
   max-height: 320px;
   overflow: auto;
   white-space: pre-wrap;
@@ -176,54 +426,67 @@
   color: var(--wm-text);
 }
 
-/* ─── Ciclo Pannello Admin: schede responsive-first ───────────────────────── */
+/* ─── Barra schede (WCAG tablist, responsive) ─────────────────────────────── */
 
-/* Barra tab: a viewport largo si dispone in riga; a viewport stretto (mobile) diventa
-   uno scroll orizzontale, senza mai andare a capo in modo disordinato. */
+/* Contenitore che gestisce lo scroll orizzontale a viewport stretti. L'affordance
+   di scorrimento è naturale: a 375px l'ultima linguetta resta parzialmente visibile
+   e la scrollbar sottile segnala che ci sono altre schede. Le frecce da tastiera
+   funzionano su tutte le schede a prescindere dalla visibilità (roving tabindex). */
+.webmaster-root .wm-tabs-scroll {
+  position: relative;
+  margin: 0 0 var(--sp-5, 24px);
+  border-bottom: 1px solid var(--wm-border);
+}
+
 .webmaster-root .wm-tabs {
   display: flex;
-  gap: 6px;
-  margin: 0 0 18px;
-  padding-bottom: 6px;
+  gap: var(--sp-1, 4px);
+  padding-bottom: var(--sp-1, 4px);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  border-bottom: 1px solid var(--wm-border);
 }
 
 .webmaster-root .wm-tab {
   font: inherit;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
   flex: 0 0 auto;
-  padding: 9px 14px;
+  padding: var(--sp-2, 8px) var(--sp-4, 16px);
   border: 1px solid transparent;
-  border-radius: 8px 8px 0 0;
+  border-bottom: none;
+  border-radius: var(--wm-r-sm) var(--wm-r-sm) 0 0;
   background: transparent;
   color: var(--wm-muted);
+  transition: color var(--dur-base, 200ms) var(--ease-out, ease),
+    background-color var(--dur-base, 200ms) var(--ease-out, ease);
 }
 
 .webmaster-root .wm-tab:hover {
-  color: var(--wm-text);
+  color: var(--wm-text-strong);
 }
 
 .webmaster-root .wm-tab-active {
-  color: var(--wm-gold);
+  color: var(--wm-gold-soft);
   border-color: var(--wm-border);
-  border-bottom-color: transparent;
   background: var(--wm-panel);
+  /* copre il bordo inferiore del contenitore per l'effetto "linguetta". */
+  margin-bottom: -1px;
+  padding-bottom: calc(var(--sp-2, 8px) + 1px);
 }
 
 .webmaster-root .wm-tab:focus-visible {
-  outline: 2px solid var(--wm-gold);
-  outline-offset: 2px;
+  outline: 2px solid var(--wm-focus);
+  outline-offset: -2px;
 }
 
 .webmaster-root .wm-tabpanel {
   animation: none;
 }
 
-/* Tabelle: contenitore con overflow-x controllato (mobile 375px non "spinge" la pagina). */
+/* ─── Tabelle: overflow-x contenuto (mobile 375px non "spinge" la pagina) ──── */
+
 .webmaster-root .wm-table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -232,17 +495,32 @@
 
 /* ─── Semaforo di monitoraggio (SVG/CSS, nessuna libreria) ────────────────── */
 
+.webmaster-root .wm-lights-live {
+  margin-top: var(--sp-3, 12px);
+}
+
 .webmaster-root .wm-lights {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
+  gap: var(--sp-3, 12px);
 }
 
 .webmaster-root .wm-light {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: var(--sp-3, 12px);
+  padding: var(--sp-2, 8px) var(--sp-3, 12px);
+  border: 1px solid var(--wm-border);
+  border-radius: var(--wm-r-sm);
+  background: var(--wm-panel-2);
+}
+
+.webmaster-root .wm-light-ok {
+  border-left: 4px solid var(--wm-ok);
+}
+
+.webmaster-root .wm-light-ko {
+  border-left: 4px solid var(--wm-ko);
 }
 
 .webmaster-root .wm-light-dot {
@@ -250,35 +528,238 @@
   margin-top: 1px;
 }
 
+.webmaster-root .wm-light-ok .wm-light-shape {
+  fill: var(--wm-ok);
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 1.5;
+}
+
+.webmaster-root .wm-light-ko .wm-light-shape {
+  fill: var(--wm-ko);
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 1.5;
+}
+
+/* Glifo scuro (spunta/croce) ad alto contrasto sul fanale colorato. */
+.webmaster-root .wm-light-glyph {
+  stroke: #0e2a22;
+}
+
 .webmaster-root .wm-light-text {
   line-height: 1.35;
+}
+
+.webmaster-root .wm-light-verdict {
+  font-weight: 700;
+}
+
+.webmaster-root .wm-light-ok .wm-light-verdict {
+  color: var(--wm-ok-text);
+}
+
+.webmaster-root .wm-light-ko .wm-light-verdict {
+  color: var(--wm-ko-text);
+}
+
+.webmaster-root .wm-timestamp {
+  color: var(--wm-muted);
+  font-size: var(--fs-sm, 0.875rem);
+  margin: var(--sp-1, 4px) 0 0;
+}
+
+/* ─── Occupazione: barra a livello ────────────────────────────────────────── */
+
+.webmaster-root .wm-gauge {
+  margin: var(--sp-3, 12px) 0;
+}
+
+.webmaster-root .wm-gauge-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3, 12px);
+  margin-bottom: var(--sp-2, 8px);
+}
+
+.webmaster-root .wm-gauge-value {
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--wm-text);
+}
+
+.webmaster-root .wm-gauge-track {
+  height: 10px;
+  border-radius: var(--r-pill, 999px);
+  background: var(--wm-panel-2);
+  border: 1px solid var(--wm-border);
+  overflow: hidden;
+}
+
+.webmaster-root .wm-gauge-fill {
+  height: 100%;
+  background: var(--wm-ok);
+  border-radius: inherit;
+  transition: width var(--dur-base, 200ms) var(--ease-out, ease);
+}
+
+.webmaster-root .wm-gauge-alert .wm-gauge-fill {
+  background: var(--wm-warn);
+}
+
+.webmaster-root .wm-gauge-note {
+  margin-top: var(--sp-2, 8px);
+}
+
+.webmaster-root .wm-badge {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-weight: 700;
+  color: var(--wm-bg);
+  background: var(--wm-gold-soft);
+  border-radius: var(--r-pill, 999px);
+  padding: 2px 10px;
+}
+
+.webmaster-root .wm-badge-alert {
+  color: var(--wm-bg);
+  background: var(--wm-warn-text);
 }
 
 /* ─── Comunicazioni: box quota + conferma inline ──────────────────────────── */
 
 .webmaster-root .wm-quota {
-  margin-top: 10px;
-  padding: 10px 12px;
+  margin-top: var(--sp-3, 12px);
+  padding: var(--sp-3, 12px) var(--sp-4, 16px);
   border: 1px solid var(--wm-border);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--wm-r);
+  background: var(--wm-panel-2);
 }
 
-.webmaster-root .wm-quota p {
-  margin: 4px 0;
+.webmaster-root .wm-quota-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3, 12px);
+  padding: var(--sp-1, 4px) 0;
+}
+
+.webmaster-root .wm-quota-label {
+  color: var(--wm-muted);
+}
+
+.webmaster-root .wm-quota-value {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-weight: 700;
+  color: var(--wm-text-strong);
+}
+
+.webmaster-root .wm-quota-sample {
+  font-size: var(--fs-sm, 0.875rem);
+  margin: 0 0 var(--sp-2, 8px);
 }
 
 .webmaster-root .wm-confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sp-2, 8px);
+  padding: var(--sp-2, 8px) var(--sp-3, 12px);
+  border: 1px solid var(--wm-ko);
+  border-radius: var(--wm-r-sm);
+  background: rgba(224, 87, 75, 0.08);
+}
+
+.webmaster-root .wm-confirm-text {
+  color: var(--wm-warn-text);
+  font-weight: 600;
+  font-size: var(--fs-sm, 0.875rem);
+  text-align: right;
+}
+
+.webmaster-root .wm-confirm-actions {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  gap: var(--sp-2, 8px);
   flex-wrap: wrap;
 }
 
-/* A viewport stretto le righe elenco impilano testo e azioni. */
+/* ─── Eventi & Shop: due colonne su desktop ───────────────────────────────── */
+
+.webmaster-root .wm-catalog-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+@media (min-width: 720px) {
+  .webmaster-root .wm-catalog-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-5, 24px);
+    align-items: start;
+  }
+
+  .webmaster-root .wm-catalog-grid .wm-card {
+    margin-bottom: 0;
+  }
+}
+
+/* ─── Utility ─────────────────────────────────────────────────────────────── */
+
+.webmaster-root .wm-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─── Responsive: viewport stretti (375px) ────────────────────────────────── */
+
 @media (max-width: 560px) {
+  .webmaster-root {
+    padding: var(--sp-5, 24px) var(--sp-3, 12px) var(--sp-6, 32px);
+  }
+
+  .webmaster-root .wm-card {
+    padding: var(--sp-3, 12px) var(--sp-4, 16px);
+  }
+
   .webmaster-root .wm-list-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .webmaster-root .wm-confirm {
+    align-items: stretch;
+  }
+
+  .webmaster-root .wm-confirm-text {
+    text-align: left;
+  }
+
+  .webmaster-root .wm-confirm-actions {
+    justify-content: flex-start;
+  }
+
+  .webmaster-root .wm-linkbar,
+  .webmaster-root .wm-actions {
+    gap: var(--sp-2, 8px);
+  }
+}
+
+/* ─── Rispetto di prefers-reduced-motion ──────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .webmaster-root .wm-spinner {
+    animation: none;
+    border-top-color: var(--wm-border);
+    /* niente rotazione: il testo accanto ("Caricamento…") porta il significato. */
+  }
+
+  .webmaster-root .wm-btn,
+  .webmaster-root .wm-tab,
+  .webmaster-root .wm-gauge-fill {
+    transition: none;
   }
 }

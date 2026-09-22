@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import {
   admin,
   AdminError,
@@ -46,6 +46,41 @@ const TABS: { id: Tab; label: string }[] = [
 export default function WebmasterPage() {
   const [gate, setGate] = useState<Gate>("checking");
   const [tab, setTab] = useState<Tab>("utenti");
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  // WCAG Tabs pattern con ATTIVAZIONE MANUALE (APG): le frecce spostano solo il
+  // focus (roving tabindex), l'attivazione avviene con Invio/Spazio o click. Scelta
+  // deliberata perché cambiare scheda innesca fetch di rete: con l'attivazione
+  // automatica lo "sfogliare" con le frecce farebbe partire richieste inutili.
+  const onTabKeyDown = useCallback((e: KeyboardEvent<HTMLButtonElement>, idx: number) => {
+    let next = -1;
+    switch (e.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+        next = (idx + 1) % TABS.length;
+        break;
+      case "ArrowLeft":
+      case "ArrowUp":
+        next = (idx - 1 + TABS.length) % TABS.length;
+        break;
+      case "Home":
+        next = 0;
+        break;
+      case "End":
+        next = TABS.length - 1;
+        break;
+      default:
+        return; // Invio/Spazio: gestiti dal click nativo del <button>
+    }
+    e.preventDefault();
+    tabRefs.current[next]?.focus();
+  }, []);
+
+  // La scheda attiva resta sempre visibile nella barra scrollabile (viewport stretti).
+  useEffect(() => {
+    const idx = TABS.findIndex((t) => t.id === tab);
+    tabRefs.current[idx]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [tab]);
 
   useEffect(() => {
     // D2 — gate via probe: 200 → admin, 404/errore → nega senza rivelare l'area.
@@ -76,21 +111,28 @@ export default function WebmasterPage() {
     <main className="webmaster-root">
       <h1 className="wm-title">Area webmaster</h1>
 
-      <div className="wm-tabs" role="tablist" aria-label="Sezioni del pannello">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            id={`wm-tab-${t.id}`}
-            aria-selected={tab === t.id}
-            aria-controls={`wm-panel-${t.id}`}
-            className={tab === t.id ? "wm-tab wm-tab-active" : "wm-tab"}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="wm-tabs-scroll">
+        <div className="wm-tabs" role="tablist" aria-label="Sezioni del pannello">
+          {TABS.map((t, idx) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              ref={(el) => {
+                tabRefs.current[idx] = el;
+              }}
+              id={`wm-tab-${t.id}`}
+              aria-selected={tab === t.id}
+              aria-controls={`wm-panel-${t.id}`}
+              tabIndex={tab === t.id ? 0 : -1}
+              className={tab === t.id ? "wm-tab wm-tab-active" : "wm-tab"}
+              onClick={() => setTab(t.id)}
+              onKeyDown={(e) => onTabKeyDown(e, idx)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Ogni pannello resta montato solo quando attivo: le fetch partono all'apertura. */}
@@ -147,10 +189,13 @@ function UsersTab() {
     <section className="wm-card" aria-label="Utenti registrati">
       <h2 className="wm-h2">Utenti registrati</h2>
       {error && <p className="wm-alert" role="alert">{error}</p>}
-      {!loadedOnce && busy && <p className="wm-muted" role="status">Caricamento…</p>}
-      {loadedOnce && items.length === 0 ? (
-        <p className="wm-muted">Nessun utente registrato.</p>
-      ) : (
+      {!loadedOnce && busy && (
+        <p className="wm-loading" role="status">
+          <span className="wm-spinner" aria-hidden="true" /> Caricamento utenti…
+        </p>
+      )}
+      {loadedOnce && items.length === 0 && <p className="wm-empty">Nessun utente registrato.</p>}
+      {items.length > 0 && (
         <div className="wm-table-wrap">
           <table className="wm-table">
             <thead>
@@ -221,28 +266,21 @@ function LogTab() {
     <section className="wm-card" aria-label="Log e dashboard">
       <h2 className="wm-h2">Log di sistema</h2>
       <p className="wm-muted">
-        I log completi di infrastruttura vivono sulle dashboard di Render e Neon: apri i link qui sotto in una nuova scheda.
+        I log completi di infrastruttura vivono sulle dashboard di Render e Neon: i link qui sotto si aprono in una
+        nuova scheda.
       </p>
-      <div className="wm-actions">
-        {links?.renderUrl ? (
-          <a className="wm-btn" href={links.renderUrl} target="_blank" rel="noopener noreferrer">
-            Apri log Render
-          </a>
-        ) : (
-          <span className="wm-muted">Link Render non configurato</span>
-        )}
-        {links?.neonUrl ? (
-          <a className="wm-btn" href={links.neonUrl} target="_blank" rel="noopener noreferrer">
-            Apri console Neon
-          </a>
-        ) : (
-          <span className="wm-muted">Link Neon non configurato</span>
-        )}
+      <div className="wm-linkbar">
+        <ExternalLink href={links?.renderUrl ?? null} label="Apri log Render" fallback="Link Render non configurato" />
+        <ExternalLink href={links?.neonUrl ?? null} label="Apri console Neon" fallback="Link Neon non configurato" />
       </div>
 
       <h3 className="wm-h3">Eventi applicativi (ultime 24h)</h3>
       {error && <p className="wm-alert" role="alert">{error}</p>}
-      {busy && !appLogs && <p className="wm-muted" role="status">Caricamento…</p>}
+      {busy && !appLogs && (
+        <p className="wm-loading" role="status">
+          <span className="wm-spinner" aria-hidden="true" /> Caricamento…
+        </p>
+      )}
       {appLogs && appLogs.length > 0 ? (
         <pre className="wm-log">
           {appLogs
@@ -255,30 +293,85 @@ function LogTab() {
             .join("\n")}
         </pre>
       ) : (
-        appLogs && <p className="wm-muted">Nessun evento nella finestra.</p>
+        appLogs && <p className="wm-empty">Nessun evento applicativo nelle ultime 24 ore.</p>
       )}
       <div className="wm-actions">
-        <button type="button" className="wm-btn wm-btn-small" onClick={() => void load()} disabled={busy}>
-          Aggiorna eventi
+        <button type="button" className="wm-btn wm-btn-small" onClick={() => void load()} disabled={busy} aria-busy={busy}>
+          {busy ? "Aggiorno…" : "Aggiorna eventi"}
         </button>
       </div>
     </section>
   );
 }
 
+/** Pulsante-link verso una dashboard esterna: apre in nuova scheda con rel sicuro. */
+function ExternalLink({ href, label, fallback }: { href: string | null; label: string; fallback: string }) {
+  if (!href) return <span className="wm-link-off">{fallback}</span>;
+  return (
+    <a className="wm-btn wm-btn-link" href={href} target="_blank" rel="noopener noreferrer">
+      <span>{label}</span>
+      <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true" className="wm-ext-icon">
+        <path
+          d="M5.5 2.5h-3v10h10v-3M9 2.5h3.5V6M12 3l-5.5 5.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <span className="wm-sr-only"> (si apre in una nuova scheda)</span>
+    </a>
+  );
+}
+
 /* ═══════════════════════════ Tab MONITORAGGIO ═══════════════════════════ */
 
-/** Un fanale del semaforo: cerchio SVG (verde/rosso) SEMPRE accompagnato da testo. */
+/**
+ * Un fanale del semaforo. Il colore NON è mai l'unico canale: si distinguono per
+ * (1) FORMA — cerchio (OK) vs ottagono da "stop" (KO); (2) ICONA — spunta vs croce;
+ * (3) TESTO — "OK"/"KO" ed etichetta. Così resta leggibile anche in daltonismo o in
+ * bianco/nero. Il dettaglio testuale accompagna sempre l'esito.
+ */
 function TrafficLight({ label, state, detail }: { label: string; state: Light; detail?: string }) {
-  const color = state === "green" ? "#3fbf6f" : "#e5534b";
-  const testo = state === "green" ? "OK" : "KO";
+  const ok = state === "green";
+  const testo = ok ? "OK" : "KO";
+  // Nessun aria-label sul contenitore: sovrascriverebbe il testo di dettaglio nella
+  // live region. Il testo visibile (etichetta + esito + dettaglio) è già completo;
+  // l'icona è puramente decorativa (aria-hidden).
   return (
-    <div className="wm-light" role="group" aria-label={`${label}: ${testo}`}>
-      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true" className="wm-light-dot">
-        <circle cx="11" cy="11" r="8" fill={color} stroke="rgba(0,0,0,0.35)" strokeWidth="1.5" />
+    <div className={ok ? "wm-light wm-light-ok" : "wm-light wm-light-ko"}>
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true" className="wm-light-dot">
+        {ok ? (
+          <>
+            <circle cx="13" cy="13" r="10" className="wm-light-shape" />
+            <path
+              d="M8 13.5l3.2 3.2L18 9.5"
+              fill="none"
+              className="wm-light-glyph"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </>
+        ) : (
+          <>
+            <polygon
+              points="9,3 17,3 23,9 23,17 17,23 9,23 3,17 3,9"
+              className="wm-light-shape"
+            />
+            <path
+              d="M9.2 9.2l7.6 7.6M16.8 9.2l-7.6 7.6"
+              fill="none"
+              className="wm-light-glyph"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+            />
+          </>
+        )}
       </svg>
       <span className="wm-light-text">
-        <strong>{label}</strong>: {testo}
+        <strong>{label}</strong>: <span className="wm-light-verdict">{testo}</span>
         {detail ? <span className="wm-muted"> — {detail}</span> : null}
       </span>
     </div>
@@ -289,6 +382,8 @@ function MonitoraggioTab() {
   const [status, setStatus] = useState<StatusCheckResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [occ, setOcc] = useState<AdminOccupancy | null>(null);
+  const [occErr, setOccErr] = useState<string | null>(null);
+  const [occBusy, setOccBusy] = useState(false);
 
   const check = useCallback(async () => {
     setBusy(true);
@@ -313,10 +408,14 @@ function MonitoraggioTab() {
   }, []);
 
   const loadOcc = useCallback(async () => {
+    setOccBusy(true);
+    setOccErr(null);
     try {
       setOcc(await admin.occupancy());
-    } catch {
-      /* occupazione best-effort */
+    } catch (err) {
+      setOccErr(err instanceof AdminError ? err.message : "Impossibile leggere l'occupazione del database.");
+    } finally {
+      setOccBusy(false);
     }
   }, []);
 
@@ -335,31 +434,53 @@ function MonitoraggioTab() {
           DB = SELECT 1 entro 60 secondi.
         </p>
         <div className="wm-actions">
-          <button type="button" className="wm-btn" onClick={() => void check()} disabled={busy} aria-busy={busy}>
-            {busy ? "Controllo…" : "Aggiorna adesso"}
+          <button type="button" className="wm-btn wm-btn-primary" onClick={() => void check()} disabled={busy} aria-busy={busy}>
+            {busy ? "Controllo in corso…" : "Aggiorna adesso"}
           </button>
         </div>
-        {status ? (
-          <div className="wm-lights">
-            <TrafficLight label="Frontend" state={status.fe} detail="Pannello caricato" />
-            <TrafficLight label="Backend" state={status.be} detail={status.detail.be} />
-            <TrafficLight label="Database" state={status.db} detail={status.detail.db} />
-            <p className="wm-muted" role="status">
-              Ultimo controllo: {new Date(status.checkedAt).toLocaleString()}
+        {/* L'esito è annunciato agli screen reader (aria-live) dopo il controllo. */}
+        <div className="wm-lights-live" role="status" aria-live="polite">
+          {busy && !status ? (
+            <p className="wm-loading">
+              <span className="wm-spinner" aria-hidden="true" /> Controllo di FE, BE e DB in corso…
             </p>
-          </div>
-        ) : (
-          <p className="wm-muted" role="status">Nessun controllo eseguito — premi &quot;Aggiorna adesso&quot;.</p>
-        )}
+          ) : status ? (
+            <div className="wm-lights">
+              <TrafficLight label="Frontend" state={status.fe} detail="Pannello caricato" />
+              <TrafficLight label="Backend" state={status.be} detail={status.detail.be} />
+              <TrafficLight label="Database" state={status.db} detail={status.detail.db} />
+              <p className="wm-timestamp">
+                Ultimo controllo: {new Date(status.checkedAt).toLocaleString()}
+              </p>
+            </div>
+          ) : (
+            <p className="wm-empty">Nessun controllo eseguito. Premi &quot;Aggiorna adesso&quot; per verificare lo stato.</p>
+          )}
+        </div>
       </section>
 
       <section className="wm-card" aria-label="Occupazione del database">
         <h2 className="wm-h2">Occupazione del database</h2>
-        {occ ? (
+        {occErr ? (
+          <p className="wm-alert" role="alert">{occErr}</p>
+        ) : occ ? (
           <>
-            <p className={occ.alert ? "wm-alert" : "wm-muted"} role={occ.alert ? "alert" : undefined}>
-              {occ.total} / {occ.budget} righe ({pct}%){occ.alert ? " — soglia d'allarme superata" : ""}
-            </p>
+            <div
+              className={occ.alert ? "wm-gauge wm-gauge-alert" : "wm-gauge"}
+              role={occ.alert ? "alert" : "img"}
+              aria-label={`Occupazione: ${occ.total} righe su ${occ.budget} (${pct}%)${occ.alert ? ", soglia d'allarme superata" : ""}`}
+            >
+              <div className="wm-gauge-head">
+                <span className="wm-gauge-value">
+                  {occ.total.toLocaleString()} / {occ.budget.toLocaleString()} righe
+                </span>
+                <span className={occ.alert ? "wm-badge wm-badge-alert" : "wm-badge"}>{pct}%</span>
+              </div>
+              <div className="wm-gauge-track" aria-hidden="true">
+                <div className="wm-gauge-fill" style={{ width: `${Math.min(100, pct)}%` }} />
+              </div>
+              {occ.alert && <p className="wm-alert wm-gauge-note">Soglia d&apos;allarme superata.</p>}
+            </div>
             <div className="wm-table-wrap">
               <table className="wm-table">
                 <thead>
@@ -372,7 +493,7 @@ function MonitoraggioTab() {
                   {occ.tables.map((t) => (
                     <tr key={t.table}>
                       <td>{t.table}</td>
-                      <td className="wm-num">{t.rows}</td>
+                      <td className="wm-num">{t.rows.toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -380,11 +501,13 @@ function MonitoraggioTab() {
             </div>
           </>
         ) : (
-          <p className="wm-muted" role="status">Caricamento occupazione…</p>
+          <p className="wm-loading" role="status">
+            <span className="wm-spinner" aria-hidden="true" /> Caricamento occupazione…
+          </p>
         )}
         <div className="wm-actions">
-          <button type="button" className="wm-btn wm-btn-small" onClick={() => void loadOcc()}>
-            Aggiorna occupazione
+          <button type="button" className="wm-btn wm-btn-small" onClick={() => void loadOcc()} disabled={occBusy} aria-busy={occBusy}>
+            {occBusy ? "Aggiorno…" : "Aggiorna occupazione"}
           </button>
         </div>
       </section>
@@ -424,7 +547,10 @@ function RetentionSection() {
         </button>
       </div>
       {error && <p className="wm-alert" role="alert">{error}</p>}
-      {reports && (
+      {reports && reports.length === 0 && (
+        <p className="wm-empty">Nessuna riga candidata alla rimozione.</p>
+      )}
+      {reports && reports.length > 0 && (
         <div className="wm-table-wrap">
           <table className="wm-table">
             <thead>
@@ -437,7 +563,7 @@ function RetentionSection() {
               {reports.map((r) => (
                 <tr key={r.step}>
                   <td>{r.step}</td>
-                  <td className="wm-num">{r.matched}</td>
+                  <td className="wm-num">{r.matched.toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -460,7 +586,16 @@ function ComunicazioniTab() {
   const [preview, setPreview] = useState<BroadcastCreateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<BroadcastRow[]>([]);
+  const [listBusy, setListBusy] = useState(true);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [sentNotice, setSentNotice] = useState<string | null>(null);
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Quando compare la conferma inline il focus va sul pulsante di conferma (una sola
+  // volta, alla comparsa): l'admin conferma o annulla senza cercare col mouse.
+  useEffect(() => {
+    if (confirmId) confirmBtnRef.current?.focus();
+  }, [confirmId]);
 
   const criterio = useCallback((): BroadcastCriterio => {
     const c: BroadcastCriterio = {};
@@ -470,11 +605,14 @@ function ComunicazioniTab() {
   }, [tuttiRegistrati, minPartite]);
 
   const refresh = useCallback(async () => {
+    setListBusy(true);
     try {
       const r = await admin.listBroadcasts();
       setItems(r.items);
     } catch {
       /* elenco best-effort */
+    } finally {
+      setListBusy(false);
     }
   }, []);
 
@@ -503,9 +641,14 @@ function ComunicazioniTab() {
     async (id: string) => {
       setBusy(true);
       setError(null);
+      setSentNotice(null);
       try {
-        await admin.sendBroadcast(id);
+        const res = await admin.sendBroadcast(id);
         setConfirmId(null);
+        setSentNotice(
+          `Invio avviato: ${res.queued} destinatari in coda. Le email partono in automatico ` +
+            "rispettando la quota giornaliera; se la superano, l'invio si completerà in più giorni.",
+        );
         await refresh();
       } catch (err) {
         setError(err instanceof AdminError ? err.message : "Errore.");
@@ -554,49 +697,90 @@ function ComunicazioniTab() {
       </div>
 
       {error && <p className="wm-alert" role="alert">{error}</p>}
+      {sentNotice && (
+        <p className="wm-success" role="status" aria-live="polite">{sentNotice}</p>
+      )}
       {preview && (
-        <div className="wm-quota" role="status">
-          <p className="wm-muted">
-            Destinatari stimati: <strong>{preview.count}</strong>
-            {preview.sample && preview.sample.length > 0 ? ` (es. ${preview.sample.join(", ")})` : ""}
-            {preview.id ? " — bozza creata." : ""}
-          </p>
-          <p className="wm-muted">
-            Quota di oggi: <strong>{preview.quotaRemaining}</strong> / {preview.quotaCap} disponibili.
-          </p>
-          {!preview.quotaSufficiente && (
-            <p className="wm-alert" role="alert">
-              I destinatari superano la quota di oggi: l&apos;invio partirà entro la quota e si completerà
-              automaticamente nei giorni successivi (nessun destinatario perso).
+        <div className="wm-quota" role="status" aria-live="polite">
+          <div className="wm-quota-row">
+            <span className="wm-quota-label">Destinatari stimati</span>
+            <span className="wm-quota-value">{preview.count.toLocaleString()}</span>
+          </div>
+          {preview.sample && preview.sample.length > 0 && (
+            <p className="wm-muted wm-quota-sample">Esempi: {preview.sample.join(", ")}</p>
+          )}
+          <div className="wm-quota-row">
+            <span className="wm-quota-label">Quota di oggi</span>
+            <span className={preview.quotaSufficiente ? "wm-badge" : "wm-badge wm-badge-alert"}>
+              {preview.quotaRemaining.toLocaleString()}/{preview.quotaCap.toLocaleString()}
+            </span>
+          </div>
+          {preview.id && <p className="wm-muted">Bozza creata: pronta per l&apos;invio dall&apos;elenco qui sotto.</p>}
+          {preview.quotaSufficiente ? (
+            <p className="wm-muted">La quota di oggi copre tutti i destinatari.</p>
+          ) : (
+            <p className="wm-warn" role="alert">
+              I destinatari superano la quota di oggi: nessuno andrà perso. L&apos;invio partirà entro la quota
+              odierna e si completerà automaticamente in più giorni.
             </p>
           )}
         </div>
       )}
 
       <h3 className="wm-h3">Comunicazioni recenti</h3>
-      {items.length === 0 ? (
-        <p className="wm-muted">Nessuna comunicazione.</p>
+      {listBusy ? (
+        <p className="wm-loading" role="status">
+          <span className="wm-spinner" aria-hidden="true" /> Caricamento comunicazioni…
+        </p>
+      ) : items.length === 0 ? (
+        <p className="wm-empty">Nessuna comunicazione creata finora.</p>
       ) : (
         <ul className="wm-list">
           {items.map((b) => (
             <li key={b.id} className="wm-list-row">
-              <span>
-                <strong>{b.oggetto}</strong> · {b.tipo} · {b.stato} · in coda {b.recipients.inCoda}, inviati{" "}
-                {b.recipients.inviato}, errori {b.recipients.errore}, saltati {b.recipients.saltato}
+              <span className="wm-list-main">
+                <strong>{b.oggetto}</strong>
+                <span className="wm-list-meta">
+                  <span className="wm-tag">{b.tipo}</span>
+                  <span className="wm-tag">{b.stato}</span>
+                  <span className="wm-muted">
+                    in coda {b.recipients.inCoda}, inviati {b.recipients.inviato}, errori {b.recipients.errore},
+                    saltati {b.recipients.saltato}
+                  </span>
+                </span>
               </span>
               {(b.stato === "bozza" || b.recipients.inCoda > 0) &&
                 (confirmId === b.id ? (
-                  <span className="wm-confirm">
-                    <span className="wm-muted">Confermi l&apos;invio?</span>
-                    <button type="button" className="wm-btn wm-btn-small" onClick={() => void send(b.id)} disabled={busy}>
-                      Conferma
-                    </button>
-                    <button type="button" className="wm-btn wm-btn-small" onClick={() => setConfirmId(null)} disabled={busy}>
-                      Annulla
-                    </button>
+                  <span className="wm-confirm" role="group" aria-label={`Conferma invio di ${b.oggetto}`}>
+                    <span className="wm-confirm-text">
+                      Invio irreversibile a {b.recipients.inCoda || b.recipients.inviato || "molti"} destinatari. Confermi?
+                    </span>
+                    <span className="wm-confirm-actions">
+                      <button
+                        type="button"
+                        className="wm-btn wm-btn-small wm-btn-danger"
+                        onClick={() => void send(b.id)}
+                        disabled={busy}
+                        aria-busy={busy}
+                        ref={confirmBtnRef}
+                      >
+                        {busy ? "Invio…" : "Sì, invia ora"}
+                      </button>
+                      <button type="button" className="wm-btn wm-btn-small" onClick={() => setConfirmId(null)} disabled={busy}>
+                        Annulla
+                      </button>
+                    </span>
                   </span>
                 ) : (
-                  <button type="button" className="wm-btn wm-btn-small" onClick={() => setConfirmId(b.id)} disabled={busy}>
+                  <button
+                    type="button"
+                    className="wm-btn wm-btn-small"
+                    onClick={() => {
+                      setSentNotice(null);
+                      setConfirmId(b.id);
+                    }}
+                    disabled={busy}
+                  >
                     Avvia invio
                   </button>
                 ))}
@@ -613,12 +797,15 @@ function ComunicazioniTab() {
 function CatalogoTab() {
   return (
     <>
-      <p className="wm-muted">
-        Predisposizione: è possibile inserire ed elencare eventi e prodotti. La vetrina pubblica, le iscrizioni ai
-        tornei e il carrello/pagamento dello shop NON sono attivi in questo ciclo.
+      <p className="wm-note">
+        <span className="wm-note-badge">Predisposizione</span>
+        È possibile inserire ed elencare eventi e prodotti. La vetrina pubblica, le iscrizioni ai tornei e il
+        carrello/pagamento dello shop non sono attivi in questo ciclo.
       </p>
-      <EventiSection />
-      <ShopSection />
+      <div className="wm-catalog-grid">
+        <EventiSection />
+        <ShopSection />
+      </div>
     </>
   );
 }
@@ -630,13 +817,17 @@ function EventiSection() {
   const [inizio, setInizio] = useState(""); // datetime-local
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [listBusy, setListBusy] = useState(true);
 
   const refresh = useCallback(async () => {
+    setListBusy(true);
     try {
       const r = await admin.listEvents();
       setItems(r.items);
     } catch {
       /* best-effort */
+    } finally {
+      setListBusy(false);
     }
   }, []);
 
@@ -688,16 +879,25 @@ function EventiSection() {
       {error && <p className="wm-alert" role="alert">{error}</p>}
 
       <h3 className="wm-h3">Eventi inseriti</h3>
-      {items.length === 0 ? (
-        <p className="wm-muted">Nessun evento.</p>
+      {listBusy ? (
+        <p className="wm-loading" role="status">
+          <span className="wm-spinner" aria-hidden="true" /> Caricamento eventi…
+        </p>
+      ) : items.length === 0 ? (
+        <p className="wm-empty">Nessun evento inserito. Compila il form qui sopra per aggiungerne uno.</p>
       ) : (
         <ul className="wm-list">
           {items.map((ev) => (
             <li key={ev.id} className="wm-list-row">
-              <span>
+              <span className="wm-list-main">
                 <strong>{ev.titolo}</strong>
-                {ev.luogo ? ` · ${ev.luogo}` : ""} · {new Date(ev.inizioAt).toLocaleString()} ·{" "}
-                {ev.pubblicato ? "pubblicato" : "bozza"}
+                <span className="wm-list-meta">
+                  {ev.luogo && <span className="wm-muted">{ev.luogo}</span>}
+                  <span className="wm-muted">{new Date(ev.inizioAt).toLocaleString()}</span>
+                  <span className={ev.pubblicato ? "wm-tag wm-tag-live" : "wm-tag"}>
+                    {ev.pubblicato ? "pubblicato" : "bozza"}
+                  </span>
+                </span>
               </span>
             </li>
           ))}
@@ -713,13 +913,17 @@ function ShopSection() {
   const [prezzo, setPrezzo] = useState(""); // in euro, convertito in centesimi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [listBusy, setListBusy] = useState(true);
 
   const refresh = useCallback(async () => {
+    setListBusy(true);
     try {
       const r = await admin.listShopProducts();
       setItems(r.items);
     } catch {
       /* best-effort */
+    } finally {
+      setListBusy(false);
     }
   }, []);
 
@@ -770,15 +974,24 @@ function ShopSection() {
       {error && <p className="wm-alert" role="alert">{error}</p>}
 
       <h3 className="wm-h3">Prodotti inseriti</h3>
-      {items.length === 0 ? (
-        <p className="wm-muted">Nessun prodotto.</p>
+      {listBusy ? (
+        <p className="wm-loading" role="status">
+          <span className="wm-spinner" aria-hidden="true" /> Caricamento prodotti…
+        </p>
+      ) : items.length === 0 ? (
+        <p className="wm-empty">Nessun prodotto inserito. Compila il form qui sopra per aggiungerne uno.</p>
       ) : (
         <ul className="wm-list">
           {items.map((p) => (
             <li key={p.id} className="wm-list-row">
-              <span>
-                <strong>{p.nome}</strong> · {fmtPrezzo(p.prezzoCent, p.valuta)} ·{" "}
-                {p.disponibile ? "disponibile" : "non disponibile"}
+              <span className="wm-list-main">
+                <strong>{p.nome}</strong>
+                <span className="wm-list-meta">
+                  <span className="wm-muted">{fmtPrezzo(p.prezzoCent, p.valuta)}</span>
+                  <span className={p.disponibile ? "wm-tag wm-tag-live" : "wm-tag"}>
+                    {p.disponibile ? "disponibile" : "non disponibile"}
+                  </span>
+                </span>
               </span>
             </li>
           ))}
