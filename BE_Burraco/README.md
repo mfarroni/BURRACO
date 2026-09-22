@@ -69,3 +69,17 @@ npm run db:migrate     # applica su Neon
 - Attenzione al piano free (sleep): chiude le connessioni WS. La logica NON
   dipende dallo sleep, ma per partite live usare un piano always-on.
 - Nessuna dipendenza dal frontend: il repository BE è deployabile da solo.
+
+### ⚠️ Deploy single-instance (SEC-ADM-04 / R4)
+Il backend assume **una sola istanza attiva**. Ne dipendono:
+- il **rate-limit in RAM** (nessuno store condiviso tra processi);
+- lo **scheduler per-processo** (heartbeat, retention e il **dispatcher email** in
+  `ws/server.ts`): la non-sovrapposizione dei tick del dispatcher è garantita da una
+  **guardia di re-entrancy per-processo** in `src/mail/dispatcher.ts` (SEC-ADM-01).
+
+Tieni il servizio Render a **1 istanza**: **non** attivare autoscaling / più repliche.
+Prima di scalare a `>1` istanza servono un **rate-limit condiviso** (es. Redis) e un
+**lock distribuito** oppure `SELECT … FOR UPDATE SKIP LOCKED` con claim-prima-dell'invio
+sul dispatcher email; senza questi, il rate-limit è aggirabile e le email possono
+duplicarsi / sforare il cap giornaliero. Finché resta single-instance, le guardie
+attuali sono sufficienti.
