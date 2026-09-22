@@ -217,9 +217,22 @@ export async function processPendingBroadcasts(
       });
 
       if (result.status === "sent") {
-        await incrementSentToday(1);
-        await db.update(schema.broadcastRecipients).set({ stato: "inviato", updatedAt: new Date() }).where(eq(schema.broadcastRecipients.id, r.rid));
-        sent += 1;
+        // SEC-ADM-01 (difesa in profondità): l'UPDATE 'inviato' è guardato dallo stato
+        // 'in_coda'; l'invio è "contato" (quota + sent) SOLO se questo tick ha davvero
+        // transizionato la riga (`claimed.length === 1`). La guardia di re-entrancy del
+        // dispatcher assicura un solo runner (claim sempre riuscito); il claim resta la
+        // rete di sicurezza contro il doppio conteggio in caso di sovrapposizione.
+        // Non altera i conteggi di `listBroadcasts` (esito finale 'inviato' identico)
+        // né il carry-over (quota/disabled continuano a lasciare la riga 'in_coda').
+        const claimed = await db
+          .update(schema.broadcastRecipients)
+          .set({ stato: "inviato", updatedAt: new Date() })
+          .where(and(eq(schema.broadcastRecipients.id, r.rid), eq(schema.broadcastRecipients.stato, "in_coda")))
+          .returning({ id: schema.broadcastRecipients.id });
+        if (claimed.length > 0) {
+          await incrementSentToday(1);
+          sent += 1;
+        }
         continue;
       }
       if (result.status === "skipped" && result.reason === "quota") {

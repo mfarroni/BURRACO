@@ -82,6 +82,15 @@ export async function getQuotaStatus(): Promise<{ cap: number; sent: number; rem
  * a valle di `POST /auth/register` non deve mai attendere o fallire per l'email. Il
  * corpo è testo semplice, GIÀ composto qui (nessun HTML). Se manca `PUBLIC_SITE_URL`
  * la welcome viene comunque accodata, senza il link.
+ *
+ * SEC-ADM-02 — RISCHIO ACCETTATO (decisione lead 2026-09-22, R2). Registrando l'email
+ * di una vittima non ancora iscritta, questa riceve la welcome col saluto "Ciao <name>,"
+ * dove `<name>` (≤40 char) è scelto dall'attaccante: possibile amplificazione phishing.
+ * Non è mitigabile con un doppio opt-in senza contraddire la decisione "welcome = solo
+ * notifica, nessuna verifica/attivazione, login mai bloccato" (coerente con SEC-A2).
+ * Header injection NON applicabile (email validata, `stripCtl`, corpo `text` puro):
+ * iniettabile solo il breve saluto. Vettore ridotto da rate-limit (50/15min per IP) e
+ * cap giornaliero (BREVO_DAILY_CAP). Nessuna modifica funzionale in questo ciclo.
  */
 export async function enqueueWelcome(input: { toEmail: string; displayName: string }): Promise<void> {
   if (!db) return;
@@ -152,12 +161,21 @@ export async function processEmailQueue(limit: number): Promise<{ sent: number; 
     });
 
     if (result.status === "sent") {
-      await incrementSentToday(1);
-      await db
+      // SEC-ADM-01 (difesa in profondità): l'UPDATE 'inviata' è guardato dallo stato
+      // 'in_attesa'; l'invio è "contato" (quota + sent) SOLO se questo tick ha davvero
+      // transizionato la riga (`claimed.length === 1`). Su singola istanza la guardia
+      // di re-entrancy garantisce un solo runner, quindi il claim va sempre a buon fine;
+      // il claim è la rete di sicurezza che evita doppio conteggio se due tick si
+      // sovrapponessero comunque. `.returning()` (node-postgres) espone le righe incise.
+      const claimed = await db
         .update(schema.emailQueue)
         .set({ stato: "inviata", sentAt: new Date(), updatedAt: new Date() })
-        .where(eq(schema.emailQueue.id, item.id));
-      sent += 1;
+        .where(and(eq(schema.emailQueue.id, item.id), eq(schema.emailQueue.stato, "in_attesa")))
+        .returning({ id: schema.emailQueue.id });
+      if (claimed.length > 0) {
+        await incrementSentToday(1);
+        sent += 1;
+      }
       continue;
     }
     if (result.status === "skipped" && result.reason === "quota") {
