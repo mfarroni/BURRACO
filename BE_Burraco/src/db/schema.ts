@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -360,5 +362,104 @@ export const appEvents = pgTable(
   },
   (t) => ({
     createdAtIdx: index("app_events_created_at_idx").on(t.createdAt.desc()),
+  }),
+);
+
+/* ══════════════════ CICLO Pannello Admin + Notifiche Email ══════════════════ */
+
+/**
+ * Migrazione 0010 — CONTATORE giornaliero degli invii ACCETTATI da Brevo, per
+ * giorno-solare nel fuso `EMAIL_QUOTA_TZ` (default Europe/Rome). Fonte di verità di
+ * "quanto inviato oggi": una UPSERT locale, preferita all'interrogazione dell'API
+ * Brevo a ogni invio. La chiave è la data (`YYYY-MM-DD`): il cambio di giorno crea una
+ * nuova riga a `sent=0` (nessun job di reset a mezzanotte). Si contano SOLO gli esiti
+ * 'sent' (skipped/error non consumano quota reale). `mode: "string"` mantiene la data
+ * come stringa allineata al valore calcolato via Intl (nessun fuso implicito lato JS).
+ */
+export const emailQuotaDaily = pgTable("email_quota_daily", {
+  day: date("day", { mode: "string" }).primaryKey(),
+  sent: integer("sent").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Migrazione 0010 — CODA delle email TRANSAZIONALI (oggi 'benvenuto'; predisposta ad
+ * altri tipi one-off). I broadcast NON entrano qui: hanno già `broadcast_recipients`.
+ * `body` è SOLO testo semplice, GIÀ composto alla scrittura (nessun HTML). `priorita`
+ * 0 = massima (benvenuto): è il canale d'ordine benvenuto>broadcast quando competono
+ * sulla quota. Indice PARZIALE sui soli `in_attesa`: la coda resta piccola per il
+ * dispatcher anche con storico grande.
+ */
+export const emailQueue = pgTable(
+  "email_queue",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tipo: text("tipo").notNull(), // 'benvenuto' (estendibile)
+    toEmail: text("to_email").notNull(),
+    toName: text("to_name"),
+    subject: text("subject").notNull(),
+    body: text("body").notNull(), // solo testo semplice, già composto
+    priorita: integer("priorita").notNull().default(0),
+    stato: text("stato").notNull().default("in_attesa"), // 'in_attesa'|'inviata'|'fallita'|'saltata'
+    tentativi: integer("tentativi").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (t) => ({
+    // Indice parziale: rispecchia `WHERE stato = 'in_attesa'` della migrazione SQL.
+    pendingIdx: index("email_queue_pending_idx")
+      .on(t.stato, t.priorita, t.createdAt)
+      .where(sql`${t.stato} = 'in_attesa'`),
+  }),
+);
+
+/**
+ * Migrazione 0011 — PREDISPOSIZIONE Eventi/Tornei del circolo. Solo scaffolding:
+ * CRUD admin minimale (create/list), nessuna vetrina pubblica in questo ciclo.
+ * `pubblicato` separa bozza e pubblicazione senza cancellare. `created_by` nullable
+ * (audit soft) con FK a users senza cascade.
+ */
+export const events = pgTable(
+  "events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    titolo: text("titolo").notNull(),
+    descrizione: text("descrizione"),
+    luogo: text("luogo"),
+    inizioAt: timestamp("inizio_at", { withTimezone: true }).notNull(),
+    fineAt: timestamp("fine_at", { withTimezone: true }),
+    pubblicato: boolean("pubblicato").notNull().default(false),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    inizioIdx: index("events_inizio_idx").on(t.inizioAt.desc()),
+  }),
+);
+
+/**
+ * Migrazione 0011 — PREDISPOSIZIONE prodotti Shop. Solo scaffolding: CRUD admin
+ * minimale (create/list), nessun carrello/pagamento in questo ciclo. `prezzo_cent`
+ * è un intero in CENTESIMI (mai float sul denaro); `immagine_url` è un URL, non un
+ * blob (il DB non è un CDN). `disponibile` è l'interruttore di visibilità futura.
+ */
+export const shopProducts = pgTable(
+  "shop_products",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nome: text("nome").notNull(),
+    descrizione: text("descrizione"),
+    prezzoCent: integer("prezzo_cent").notNull().default(0),
+    valuta: text("valuta").notNull().default("EUR"),
+    immagineUrl: text("immagine_url"),
+    disponibile: boolean("disponibile").notNull().default(true),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    disponibileIdx: index("shop_products_disponibile_idx").on(t.disponibile),
   }),
 );

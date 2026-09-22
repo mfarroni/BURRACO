@@ -12,7 +12,7 @@ import type { StatsStore } from "../stats/types.js";
 import { db } from "../db/client.js";
 import { reconcileTotals } from "../stats/totals.js";
 import { runRetentionSweep } from "../retention/service.js";
-import { processPendingBroadcasts } from "../broadcast/service.js";
+import { runEmailDispatch } from "../mail/dispatcher.js";
 
 /**
  * Layer di trasporto WebSocket (lib `ws`). NESSUNA logica di regole qui: solo
@@ -38,12 +38,13 @@ const AUTH_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const DATA_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /**
- * FASE 5.3 — cadenza del worker broadcast. Processa UN lotto per tick (mai in linea
- * con la risposta HTTP). L'intervallo tiene l'invio sotto il tetto giornaliero Brevo
- * (dimensione lotto × frequenza): valore di lavoro, da confermare col tetto reale
- * (Gate 2). Con code vuote il tick è un no-op leggero.
+ * FASE 5.3 / Ciclo Pannello Admin — cadenza del DISPATCHER email quota-aware. Un tick
+ * svuota PRIMA la coda transazionale (email_queue, priorità benvenuto) e POI i
+ * broadcast (broadcast_recipients), entrambi entro la quota giornaliera residua Brevo
+ * (BREVO_DAILY_CAP). Mai in linea con la risposta HTTP. Con code vuote è un no-op
+ * leggero; con quota esaurita esce subito (carry-over: gli item restano in coda).
  */
-const BROADCAST_WORKER_INTERVAL_MS = 60 * 1000;
+const EMAIL_DISPATCH_INTERVAL_MS = 60 * 1000;
 
 /** SEC-02: tetto massimo di un singolo frame WS (payload oversize → 1009). */
 const MAX_PAYLOAD_BYTES = 16 * 1024;
@@ -225,16 +226,19 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
   }, DATA_MAINTENANCE_INTERVAL_MS);
   dataMaintenance.unref?.();
 
-  // FASE 5.3: worker broadcast (solo con DB). Un lotto per tick, best-effort.
-  const broadcastWorker = setInterval(() => {
+  // Ciclo Pannello Admin: DISPATCHER email quota-aware (solo con DB). Un tick per
+  // volta, best-effort: transazionali (benvenuto) prima, broadcast poi, entro la quota.
+  const emailDispatcher = setInterval(() => {
     if (!db) return;
-    processPendingBroadcasts()
-      .then(({ processed }) => {
-        if (processed > 0) console.log(`[broadcast] inviati/aggiornati ${processed} destinatari`);
+    runEmailDispatch()
+      .then(({ welcomeSent, broadcastSent }) => {
+        if (welcomeSent > 0 || broadcastSent > 0) {
+          console.log(`[mail] dispatch: benvenuto=${welcomeSent}, broadcast=${broadcastSent}`);
+        }
       })
-      .catch((err) => console.error("[broadcast] worker fallito:", (err as Error).message));
-  }, BROADCAST_WORKER_INTERVAL_MS);
-  broadcastWorker.unref?.();
+      .catch((err) => console.error("[mail] dispatch fallito:", (err as Error).message));
+  }, EMAIL_DISPATCH_INTERVAL_MS);
+  emailDispatcher.unref?.();
 
   // A4: ferma gli intervalli sia alla chiusura del WSS sia dell'http server, così
   // lo shutdown termina pulito senza handle attivi che impediscano l'uscita.
@@ -242,7 +246,7 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
     clearInterval(heartbeat);
     clearInterval(authSweep);
     clearInterval(dataMaintenance);
-    clearInterval(broadcastWorker);
+    clearInterval(emailDispatcher);
   };
   wss.on("close", stopTimers);
   httpServer.on("close", stopTimers);

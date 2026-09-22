@@ -3,7 +3,7 @@ import cors, { type CorsOptions } from "cors";
 import { z } from "zod";
 import { AuthService, AuthError, type AuthErrorCode } from "../auth/service.js";
 import { isOriginAllowed } from "../net/originPolicy.js";
-import { rateLimit } from "./rateLimit.js";
+import { rateLimit, createKeyedRateLimiter } from "./rateLimit.js";
 import { env } from "../config.js";
 import type { StatsStore } from "../stats/types.js";
 import type { RoomManager } from "../room/RoomManager.js";
@@ -13,12 +13,18 @@ import { createContactStore } from "../contact/store.js";
 import type { ContactStore } from "../contact/types.js";
 import { hashIp, stripHeaderInjection } from "../contact/util.js";
 import { sendEmail } from "../mail/index.js";
+import { enqueueWelcome } from "../mail/queue.js";
 import { logAppEvent } from "../events/log.js";
 import { createRequireAdmin } from "../admin/requireAdmin.js";
+import { recordAdminAudit } from "../admin/audit.js";
 import { getOccupancy } from "../admin/occupancy.js";
 import { runRetentionSweep } from "../retention/service.js";
 import { createBroadcast, enqueueSend, listBroadcasts, unsubscribeByToken } from "../broadcast/service.js";
 import { getAppLogs, getDbStatus, getRenderLogs } from "../admin/logs.js";
+import { listUsers } from "../admin/users.js";
+import { runStatusCheck } from "../admin/status.js";
+import { createEvent, listEvents, createShopProduct, listShopProducts } from "../admin/catalog.js";
+import type { LogLinksResponse } from "../admin/types.js";
 
 /**
  * APP HTTP del backend auth (Express) montata sullo STESSO http.Server del WS
@@ -121,6 +127,35 @@ const logsQuery = z.object({
   to: z.coerce.number().int().nonnegative(),
   limit: z.coerce.number().int().min(1).max(200).default(100),
   level: z.enum(["info", "warn", "error"]).optional(),
+});
+
+// CICLO Pannello Admin — elenco utenti: limit ∈ [1,100] (default 20, coerente con lo
+// storico), cursore keyset opaco (stringa base64url) cappato per lunghezza.
+const adminUsersQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursor: z.string().max(200).optional(),
+});
+
+// CICLO Pannello Admin — predisposizione Eventi: create minimale. `inizioAt`/`fineAt`
+// sono epoch ms; i testi hanno tetti anti-abuso; `pubblicato` opzionale (default false).
+const eventCreateBody = z.object({
+  titolo: z.string().trim().min(1).max(150),
+  descrizione: z.string().trim().max(2000).optional(),
+  luogo: z.string().trim().max(150).optional(),
+  inizioAt: z.coerce.number().int().nonnegative(),
+  fineAt: z.coerce.number().int().nonnegative().optional(),
+  pubblicato: z.boolean().optional(),
+});
+
+// CICLO Pannello Admin — predisposizione Shop: create minimale. `prezzoCent` è un
+// intero in CENTESIMI (mai float sul denaro); `immagineUrl` è un URL valido opzionale.
+const shopProductCreateBody = z.object({
+  nome: z.string().trim().min(1).max(150),
+  descrizione: z.string().trim().max(2000).optional(),
+  prezzoCent: z.coerce.number().int().min(0).max(100_000_000).optional(),
+  valuta: z.string().trim().min(1).max(8).optional(),
+  immagineUrl: z.string().trim().url().max(500).optional(),
+  disponibile: z.boolean().optional(),
 });
 
 /* ─────────────────────────────── helper ──────────────────────────────────── */
@@ -265,6 +300,11 @@ export function createHttpApp(
       // l'enumerazione di MASSA. Da rivalutare in una versione successiva.
       const result = await auth.register(email, password, displayName ?? "");
       res.status(201).json({ token: result.sessionToken, user: result.user });
+      // CICLO Pannello Admin — WELCOME EMAIL: SOLO accodamento (INSERT in email_queue),
+      // fuori dal path critico e DOPO la risposta. La registrazione non attende né
+      // fallisce mai per l'email (§2.4). L'invio è differito nel dispatcher quota-aware
+      // (mail/dispatcher.ts); con BREVO_ENABLED=false la riga resta in coda, nessun errore.
+      void enqueueWelcome({ toEmail: email, displayName: result.user.displayName }).catch(() => {});
     }),
   );
 
@@ -620,6 +660,10 @@ export function createHttpApp(
    */
   const requireAdmin = createRequireAdmin(auth);
   const adminLimiter = rateLimit({ name: "admin", windowMs: 60_000, max: 60 });
+  // CICLO Pannello Admin — rate-limit DEDICATO all'invio broadcast: 10/30s keyed
+  // sull'admin autenticato (non l'IP), verificato DENTRO l'handler dopo requireAdmin
+  // (l'id è noto solo allora). Azione irreversibile e ad ampio impatto (§2.3).
+  const broadcastSendLimiter = createKeyedRateLimiter({ windowMs: 30_000, max: 10 });
 
   // Contatore di occupazione del DB (§4.4): righe per tabella, totale, % sul budget.
   app.get(
@@ -678,6 +722,13 @@ export function createHttpApp(
     handler(async (req, res) => {
       const principal = await requireAdmin(req, res);
       if (!principal) return;
+      // Rate-limit per ADMIN (10/30s): chiave = id autenticato, non l'IP (§2.3).
+      const rl = broadcastSendLimiter.hit(principal.userId);
+      if (rl.limited) {
+        res.setHeader("Retry-After", String(rl.retryAfterSec));
+        res.status(429).json({ error: "RATE_LIMITED", message: "Troppi invii ravvicinati, riprova tra qualche secondo." });
+        return;
+      }
       const idParsed = matchIdSchema.safeParse(req.params.id);
       if (!idParsed.success) {
         res.status(400).json({ error: "INVALID_ID", message: "Identificativo non valido." });
@@ -688,6 +739,14 @@ export function createHttpApp(
         res.status(404).json({ error: "NOT_FOUND", message: "Comunicazione non trovata." });
         return;
       }
+      // Audit best-effort dell'invio. L'IP è INDICATIVO e nullable (§4): mai base di
+      // decisioni di sicurezza, solo tracciabilità. Non blocca la risposta.
+      void recordAdminAudit({
+        actorId: principal.userId,
+        action: "broadcast.send",
+        target: { broadcastId: idParsed.data, queued: result.queued, ip: req.ip ?? null },
+        outcome: "ok",
+      });
       res.json({ accepted: true, queued: result.queued });
     }),
   );
@@ -746,6 +805,128 @@ export function createHttpApp(
       const principal = await requireAdmin(req, res);
       if (!principal) return;
       res.json(await getDbStatus());
+    }),
+  );
+
+  /* ─────────────── CICLO Pannello Admin — nuovi endpoint (/admin/*) ────────────
+   * Tutti dietro requireAdmin (404 ai non-admin). Rate-limit condiviso adminLimiter. */
+
+  // D2 — PROBE della voce di menu admin: 200 all'admin, 404 a tutti gli altri (via
+  // requireAdmin). Il FE mostra la voce SOLO su 200. Non tocca il contratto auth.
+  app.get(
+    "/admin/ping",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      res.json({ ok: true });
+    }),
+  );
+
+  // Utenti registrati (§2.1): elenco keyset paginato (createdAt desc, id). Whitelist
+  // POSITIVA: SOLO nome/email/iscrizione, mai hash/token/ip/ruolo.
+  app.get(
+    "/admin/users",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const parsed = adminUsersQuery.safeParse(req.query);
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_QUERY", message: "Parametri di paginazione non validi." });
+        return;
+      }
+      res.json(await listUsers({ limit: parsed.data.limit, cursor: parsed.data.cursor }));
+    }),
+  );
+
+  // Link dashboard (§2, tab Log): SOLO i link (mai i log). Gli URL restano dietro
+  // requireAdmin: non finiscono nel bundle FE (nessuna NEXT_PUBLIC_).
+  app.get(
+    "/admin/logs/links",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const body: LogLinksResponse = {
+        renderUrl: env.dashboards.renderUrl || null,
+        neonUrl: env.dashboards.neonUrl || null,
+      };
+      res.json(body);
+    }),
+  );
+
+  // Semaforo di monitoraggio ON-DEMAND (§2.2): SELECT 1 leggero, timeout 60s. Binario
+  // verde/rosso, sempre con testo. Nessun polling: parte solo al click "Aggiorna adesso".
+  app.post(
+    "/admin/status/check",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      res.json(await runStatusCheck());
+    }),
+  );
+
+  /* ── Predisposizione Eventi (Tornei) e Shop (§2.6) — CRUD MINIMALE create/list ──
+   * Niente update/delete, niente vetrina pubblica, niente carrello/pagamento. */
+  app.get(
+    "/admin/events",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      res.json({ items: await listEvents() });
+    }),
+  );
+
+  app.post(
+    "/admin/events",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const parsed = eventCreateBody.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_BODY", message: "Dati dell'evento non validi." });
+        return;
+      }
+      const row = await createEvent(principal.userId, parsed.data);
+      if (!row) {
+        res.status(503).json({ error: "NO_DB", message: "Persistenza non disponibile." });
+        return;
+      }
+      res.status(201).json(row);
+    }),
+  );
+
+  app.get(
+    "/admin/shop/products",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      res.json({ items: await listShopProducts() });
+    }),
+  );
+
+  app.post(
+    "/admin/shop/products",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const parsed = shopProductCreateBody.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_BODY", message: "Dati del prodotto non validi." });
+        return;
+      }
+      const row = await createShopProduct(principal.userId, parsed.data);
+      if (!row) {
+        res.status(503).json({ error: "NO_DB", message: "Persistenza non disponibile." });
+        return;
+      }
+      res.status(201).json(row);
     }),
   );
 

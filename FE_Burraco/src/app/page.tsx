@@ -6,6 +6,7 @@ import { useGameSocket, type TableMode } from "@/lib/useGameSocket";
 import { useAuth } from "@/lib/useAuth";
 import { useServiceHealth } from "@/lib/useServiceHealth";
 import { getAuthToken } from "@/lib/auth";
+import { useIsAdmin } from "@/lib/admin";
 import { useLobbyList, useLeaveOnPageHide } from "@/lib/lobby";
 import { AuthPanel, type AuthMode } from "@/components/AuthPanel";
 import { Landing } from "@/components/Landing";
@@ -43,6 +44,11 @@ export default function Page() {
   // FASE 3 — disponibilità del backend: sonda /health con backoff. Serve a coprire
   // il cold start di Render e ogni deploy (= un riavvio).
   const health = useServiceHealth();
+  // CICLO Pannello Admin — voce di menu admin via PROBE (D2): true solo se
+  // GET /admin/ping risponde 200 (admin). Puro UX; l'autorità resta il 404 server-side.
+  // Passiamo l'id utente come chiave: il probe si ri-esegue DOPO il login (senza, girerebbe
+  // solo al mount, quando non c'è ancora un token, e il menu non comparirebbe mai).
+  const isAdmin = useIsAdmin(auth.user?.id ?? null);
   // C'è un token salvato? (returning player). Letto client-side dopo il mount per
   // non toccare il render SSR. Solo per un token esistente ha senso bloccare
   // l'ingresso in attesa del backend: un visitatore nuovo vede subito la vetrina.
@@ -257,6 +263,13 @@ export default function Page() {
             <button type="button" className="btn-ghost" onClick={() => setShowProfile(true)}>
               Profilo
             </button>
+            {/* CICLO Pannello Admin — voce di menu SOLO per admin (probe /admin/ping).
+                Additiva e condizionale: non altera il layout per i non-admin. */}
+            {isAdmin && (
+              <a className="btn-ghost" href="/webmaster">
+                Admin
+              </a>
+            )}
             <button type="button" className="btn-ghost" onClick={() => auth.logout()} disabled={auth.busy}>
               Esci
             </button>

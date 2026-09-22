@@ -79,3 +79,44 @@ export function rateLimit(opts: RateLimitOptions) {
     next();
   };
 }
+
+/**
+ * CICLO Pannello Admin — rate limiter a FINESTRA FISSA con CHIAVE ESPLICITA (non l'IP).
+ * Serve dove la chiave dev'essere l'identità già autenticata (es. l'id dell'admin per
+ * `POST /admin/broadcasts/:id/send`, 10/30s), che è nota SOLO dopo `requireAdmin`, cioè
+ * dentro l'handler e non in un middleware pre-routing. Stessa struttura in-RAM del
+ * `rateLimit()` classico (v1 single-instance, nessun Redis). Nessun segreto memorizzato:
+ * la chiave è un id opaco fornito dal chiamante.
+ */
+export function createKeyedRateLimiter(opts: { windowMs: number; max: number }) {
+  const buckets = new Map<string, Bucket>();
+
+  const sweep = setInterval(() => {
+    const now = Date.now();
+    for (const [key, b] of buckets) {
+      if (b.resetAt <= now) buckets.delete(key);
+    }
+  }, opts.windowMs);
+  sweep.unref?.();
+
+  return {
+    /**
+     * Registra un tentativo per `key`. Ritorna `{ limited:false }` se ammesso, oppure
+     * `{ limited:true, retryAfterSec }` se la finestra è satura (nessun incremento in
+     * quel caso: la finestra non si estende oltre `resetAt`).
+     */
+    hit(key: string): { limited: boolean; retryAfterSec: number } {
+      const now = Date.now();
+      const bucket = buckets.get(key);
+      if (!bucket || bucket.resetAt <= now) {
+        buckets.set(key, { count: 1, resetAt: now + opts.windowMs });
+        return { limited: false, retryAfterSec: 0 };
+      }
+      if (bucket.count >= opts.max) {
+        return { limited: true, retryAfterSec: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)) };
+      }
+      bucket.count += 1;
+      return { limited: false, retryAfterSec: 0 };
+    },
+  };
+}

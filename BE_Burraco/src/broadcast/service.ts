@@ -3,8 +3,9 @@ import { and, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { db, schema } from "../db/client.js";
 import { env } from "../config.js";
 import { sendEmail } from "../mail/index.js";
+import { getQuotaStatus, incrementSentToday } from "../mail/queue.js";
 import { logAppEvent } from "../events/log.js";
-import type { BroadcastCriterio, BroadcastRow, BroadcastTipo } from "../admin/types.js";
+import type { BroadcastCreateResponse, BroadcastCriterio, BroadcastRow, BroadcastTipo } from "../admin/types.js";
 
 /**
  * FASE 5.3 — Comunicazioni ai registrati (Blocco B). Invio ASINCRONO a lotti, mai
@@ -71,15 +72,23 @@ export async function resolveRecipients(criterio: BroadcastCriterio, tipo: Broad
   return rows.filter((r): r is Recipient => r.email !== null);
 }
 
-/** Crea la comunicazione (stato 'bozza'); in dry-run non persiste, solo conta+campione. */
+/**
+ * Crea la comunicazione (stato 'bozza'); in dry-run non persiste, solo conta+campione.
+ * In entrambi i casi allega lo stato della QUOTA giornaliera (§2.3): `quotaCap`,
+ * `quotaRemaining` e `quotaSufficiente` (destinatari ≤ residuo). Con carry-over (D1)
+ * l'invio oltre quota non è bloccato: l'UI usa `quotaSufficiente=false` per avvisare
+ * che l'invio si completerà in più giorni.
+ */
 export async function createBroadcast(
   authorId: string,
   input: { oggetto: string; corpo: string; tipo: BroadcastTipo; criterio: BroadcastCriterio; dryRun: boolean },
-): Promise<{ id: string | null; count: number; sample: string[]; dryRun: boolean }> {
+): Promise<BroadcastCreateResponse> {
   const recipients = await resolveRecipients(input.criterio, input.tipo);
   const sample = recipients.slice(0, 5).map((r) => r.displayName);
+  const { cap, remaining } = await getQuotaStatus();
+  const quota = { quotaCap: cap, quotaRemaining: remaining, quotaSufficiente: recipients.length <= remaining };
   if (input.dryRun || !db) {
-    return { id: null, count: recipients.length, sample, dryRun: true };
+    return { id: null, count: recipients.length, sample, dryRun: true, ...quota };
   }
   const [row] = await db
     .insert(schema.broadcasts)
@@ -92,7 +101,7 @@ export async function createBroadcast(
       stato: "bozza",
     })
     .returning({ id: schema.broadcasts.id });
-  return { id: row?.id ?? null, count: recipients.length, sample, dryRun: false };
+  return { id: row?.id ?? null, count: recipients.length, sample, dryRun: false, ...quota };
 }
 
 /**
@@ -129,13 +138,25 @@ function unsubLine(token: string): string {
 }
 
 /**
- * Processa UN lotto di destinatari in coda (al più BROADCAST_BATCH_SIZE, i più
- * vecchi). Un'email per destinatario. Ri-verifica il consenso al momento dell'invio
- * per le promozionali. Alla fine marca 'completato' i broadcast senza più code.
- * Best-effort: senza DB o su errore non solleva.
+ * Processa i destinatari in coda entro un budget di quota (`maxSends`, ≤
+ * BROADCAST_BATCH_SIZE per tick), i più vecchi per primi. Un'email per destinatario.
+ * Ri-verifica il consenso promozionale al momento dell'invio. Alla fine marca
+ * 'completato' i broadcast senza più code. Best-effort: senza DB o su errore non solleva.
+ *
+ * Quota-aware (§1.3): ogni invio 'sent' incrementa il contatore giornaliero condiviso.
+ *  - `sent`      → 'inviato' + contatore++;
+ *  - `quota`     → STOP per oggi, l'item resta 'in_coda' (carry-over, D1), quotaHit=true;
+ *  - `disabled`  → STOP senza errore, l'item resta 'in_coda';
+ *  - errore/consenso/ospite/email assente → 'errore'/'saltato' (nessun carry-over).
+ *
+ * `maxSends` limita gli INVII, non le righe esaminate: i 'saltato' (consenso/validità)
+ * non consumano quota. Default = BROADCAST_BATCH_SIZE (retro-compatibile).
  */
-export async function processPendingBroadcasts(): Promise<{ processed: number }> {
-  if (!db) return { processed: 0 };
+export async function processPendingBroadcasts(
+  maxSends: number = BROADCAST_BATCH_SIZE,
+): Promise<{ processed: number; sent: number; quotaHit: boolean }> {
+  if (!db) return { processed: 0, sent: 0, quotaHit: false };
+  if (maxSends <= 0) return { processed: 0, sent: 0, quotaHit: false };
   try {
     const pending = await db
       .select({
@@ -156,7 +177,7 @@ export async function processPendingBroadcasts(): Promise<{ processed: number }>
       .leftJoin(schema.users, eq(schema.users.id, schema.broadcastRecipients.userId))
       .where(eq(schema.broadcastRecipients.stato, "in_coda"))
       .orderBy(schema.broadcastRecipients.updatedAt)
-      .limit(BROADCAST_BATCH_SIZE);
+      .limit(Math.min(maxSends, BROADCAST_BATCH_SIZE));
 
     if (pending.length === 0) {
       // Nessuna coda: promuovi a 'completato' i broadcast 'in_invio' senza pendenti.
@@ -167,10 +188,14 @@ export async function processPendingBroadcasts(): Promise<{ processed: number }>
             select 1 from ${schema.broadcastRecipients} r
             where r.broadcast_id = ${schema.broadcasts.id} and r.stato = 'in_coda'
           )`);
-      return { processed: 0 };
+      return { processed: 0, sent: 0, quotaHit: false };
     }
 
+    let processed = 0;
+    let sent = 0;
     for (const r of pending) {
+      if (sent >= maxSends) break;
+      processed += 1;
       // Destinatario non valido / ospite / consenso promozionale revocato → saltato.
       const promoBlocked = r.tipo === "promozionale" && !r.promoOptIn;
       if (!r.email || r.isGuest || promoBlocked) {
@@ -190,16 +215,45 @@ export async function processPendingBroadcasts(): Promise<{ processed: number }>
         text,
         tags: [`broadcast:${r.broadcastId}`],
       });
-      const stato = result.status === "sent" ? "inviato" : result.status === "skipped" ? "saltato" : "errore";
-      await db.update(schema.broadcastRecipients).set({ stato, updatedAt: new Date() }).where(eq(schema.broadcastRecipients.id, r.rid));
+
+      if (result.status === "sent") {
+        // SEC-ADM-01 (difesa in profondità): l'UPDATE 'inviato' è guardato dallo stato
+        // 'in_coda'; l'invio è "contato" (quota + sent) SOLO se questo tick ha davvero
+        // transizionato la riga (`claimed.length === 1`). La guardia di re-entrancy del
+        // dispatcher assicura un solo runner (claim sempre riuscito); il claim resta la
+        // rete di sicurezza contro il doppio conteggio in caso di sovrapposizione.
+        // Non altera i conteggi di `listBroadcasts` (esito finale 'inviato' identico)
+        // né il carry-over (quota/disabled continuano a lasciare la riga 'in_coda').
+        const claimed = await db
+          .update(schema.broadcastRecipients)
+          .set({ stato: "inviato", updatedAt: new Date() })
+          .where(and(eq(schema.broadcastRecipients.id, r.rid), eq(schema.broadcastRecipients.stato, "in_coda")))
+          .returning({ id: schema.broadcastRecipients.id });
+        if (claimed.length > 0) {
+          await incrementSentToday(1);
+          sent += 1;
+        }
+        continue;
+      }
+      if (result.status === "skipped" && result.reason === "quota") {
+        // Carry-over: l'item resta 'in_coda' e riparte l'indomani. Stop per oggi.
+        void logAppEvent("info", "broadcast", `quota esaurita: invio ripreso domani (inviati oggi ${sent})`);
+        return { processed, sent, quotaHit: true };
+      }
+      if (result.status === "skipped" && result.reason === "disabled") {
+        // Interruttore spento: l'item resta 'in_coda', nessun errore.
+        return { processed, sent, quotaHit: false };
+      }
+      // Errore transitorio/provider: marca 'errore' (nessun carry-over automatico).
+      await db.update(schema.broadcastRecipients).set({ stato: "errore", updatedAt: new Date() }).where(eq(schema.broadcastRecipients.id, r.rid));
     }
 
-    void logAppEvent("info", "broadcast", `lotto broadcast processato: ${pending.length}`);
-    return { processed: pending.length };
+    void logAppEvent("info", "broadcast", `lotto broadcast processato: ${processed} (inviati ${sent})`);
+    return { processed, sent, quotaHit: false };
   } catch (err) {
     console.error("[broadcast] worker fallito:", (err as Error).message);
     void logAppEvent("error", "broadcast", "worker broadcast fallito", { message: (err as Error).message });
-    return { processed: 0 };
+    return { processed: 0, sent: 0, quotaHit: false };
   }
 }
 
