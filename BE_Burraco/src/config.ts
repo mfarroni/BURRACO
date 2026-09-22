@@ -99,6 +99,37 @@ export const env = {
     /** Destinatario dei messaggi del form contatti (§2). */
     contactTo: (process.env.CONTACT_TO_EMAIL ?? "").trim(),
     enabled: process.env.BREVO_ENABLED === "true",
+    /**
+     * CICLO Pannello Admin — TETTO giornaliero condiviso (benvenuto + broadcast) di
+     * invii ACCETTATI da Brevo (decisione lead: 300). Rete di sicurezza per il picco:
+     * il contatore locale `email_quota_daily` è la fonte di verità del "già inviato
+     * oggi"; il 429 di Brevo resta il backstop finale. `Math.max(0, …)` evita valori
+     * negativi da una env malformata. Un valore non numerico ricade sul default.
+     */
+    dailyCap: Math.max(0, Number(process.env.BREVO_DAILY_CAP ?? 300) || 300),
+    /**
+     * CICLO Pannello Admin — FUSO del giorno-solare del contatore giornaliero
+     * (default Europe/Rome). Il giorno-chiave è calcolato con Intl in questo fuso, così
+     * "azzerato a mezzanotte" segue l'ora locale del circolo, non l'UTC del server.
+     */
+    quotaTz: (process.env.EMAIL_QUOTA_TZ ?? "Europe/Rome").trim(),
+  },
+
+  /**
+   * CICLO Pannello Admin — URL PUBBLICO del SITO (frontend), per il link nella email
+   * di benvenuto. Distinto da `PUBLIC_BASE_URL` (che è il backend, per la
+   * disiscrizione). Se assente, la welcome non include il link (testo senza URL).
+   */
+  publicSiteUrl: (process.env.PUBLIC_SITE_URL ?? "").trim().replace(/\/+$/, ""),
+
+  /**
+   * CICLO Pannello Admin — LINK diretti alle dashboard Render/Neon mostrati nella tab
+   * "Log" (decisione lead: solo link, non proxy). Restano dietro `requireAdmin`
+   * (nessuna `NEXT_PUBLIC_`, mai nel bundle pubblico). Nullable se non configurati.
+   */
+  dashboards: {
+    renderUrl: (process.env.RENDER_DASHBOARD_URL ?? "").trim(),
+    neonUrl: (process.env.NEON_DASHBOARD_URL ?? "").trim(),
   },
 
   /**
