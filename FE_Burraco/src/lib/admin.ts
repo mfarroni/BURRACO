@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { getAuthToken } from "./auth";
 
 /**
@@ -76,6 +77,10 @@ export interface BroadcastCreateResponse {
   count: number;
   sample?: string[];
   dryRun: boolean;
+  // CICLO Pannello Admin — stato quota giornaliera (dry-run e creazione).
+  quotaCap: number;
+  quotaRemaining: number;
+  quotaSufficiente: boolean;
 }
 export interface BroadcastRow {
   id: string;
@@ -107,6 +112,50 @@ export interface DbStatusResponse {
   note?: string;
 }
 
+/* ── CICLO Pannello Admin — nuovi DTO (copia manuale di admin/types.ts) ────── */
+
+export interface AdminUserRow {
+  id: string;
+  displayName: string;
+  email: string | null;
+  createdAt: number;
+}
+export interface AdminUsersResponse {
+  items: AdminUserRow[];
+  nextCursor: string | null;
+  limit: number;
+}
+
+export interface LogLinksResponse {
+  renderUrl: string | null;
+  neonUrl: string | null;
+}
+
+/** Semaforo binario: solo verde o rosso, mai stato intermedio. */
+export type Light = "green" | "red";
+export interface StatusCheckResponse {
+  fe: Light;
+  be: Light;
+  db: Light;
+  checkedAt: number;
+  detail: { be: string; db: string };
+}
+
+export interface EventRow {
+  id: string;
+  titolo: string;
+  inizioAt: number;
+  luogo: string | null;
+  pubblicato: boolean;
+}
+export interface ShopProductRow {
+  id: string;
+  nome: string;
+  prezzoCent: number;
+  valuta: string;
+  disponibile: boolean;
+}
+
 /* ── Chiamate ────────────────────────────────────────────────────────────── */
 
 export const admin = {
@@ -136,4 +185,62 @@ export const admin = {
     return adminFetch<RenderLogResponse>(`/admin/logs/render?${q.toString()}`);
   },
   dbStatus: () => adminFetch<DbStatusResponse>("/admin/logs/db"),
+
+  /* ── CICLO Pannello Admin — nuove chiamate ─────────────────────────────── */
+  // Probe della voce di menu admin (D2): 200 admin / 404 altrimenti.
+  ping: () => adminFetch<{ ok: boolean }>("/admin/ping"),
+  users: (limit = 20, cursor?: string) => {
+    const q = new URLSearchParams({ limit: String(limit) });
+    if (cursor) q.set("cursor", cursor);
+    return adminFetch<AdminUsersResponse>(`/admin/users?${q.toString()}`);
+  },
+  logLinks: () => adminFetch<LogLinksResponse>("/admin/logs/links"),
+  statusCheck: () => adminFetch<StatusCheckResponse>("/admin/status/check", { method: "POST", body: "{}" }),
+  listEvents: () => adminFetch<{ items: EventRow[] }>("/admin/events"),
+  createEvent: (payload: {
+    titolo: string;
+    descrizione?: string;
+    luogo?: string;
+    inizioAt: number;
+    fineAt?: number;
+    pubblicato?: boolean;
+  }) => adminFetch<EventRow>("/admin/events", { method: "POST", body: JSON.stringify(payload) }),
+  listShopProducts: () => adminFetch<{ items: ShopProductRow[] }>("/admin/shop/products"),
+  createShopProduct: (payload: {
+    nome: string;
+    descrizione?: string;
+    prezzoCent?: number;
+    valuta?: string;
+    immagineUrl?: string;
+    disponibile?: boolean;
+  }) => adminFetch<ShopProductRow>("/admin/shop/products", { method: "POST", body: JSON.stringify(payload) }),
 };
+
+/**
+ * CICLO Pannello Admin — hook di PROBE per la voce di menu admin (D2). Chiama
+ * `GET /admin/ping` una sola volta quando esiste un token: 200 → true (admin),
+ * 404/errore → false. Puro UX: nasconderla non è sicurezza, l'autorità resta il 404
+ * server-side su ogni endpoint. Non tocca il contratto auth.
+ */
+export function useIsAdmin(): boolean {
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    if (!getAuthToken()) {
+      setIsAdmin(false);
+      return;
+    }
+    admin
+      .ping()
+      .then(() => {
+        if (alive) setIsAdmin(true);
+      })
+      .catch(() => {
+        if (alive) setIsAdmin(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return isAdmin;
+}
