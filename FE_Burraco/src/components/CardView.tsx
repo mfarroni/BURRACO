@@ -1,6 +1,7 @@
 "use client";
 
 import type { Card, Suit } from "@/lib/contract";
+import { jollyColor } from "@/lib/jollyColor";
 import "./CardFace.css";
 
 /**
@@ -107,6 +108,8 @@ export function CardView({
   const clickable = Boolean(onClick);
   const symbol = card.suit ? SUIT_SYMBOL[card.suit] : "";
   const rankLabel = card.rank === "JOKER" ? "JLY" : card.rank;
+  // Colore grafico stabile del jolly SCOPERTO (mai sui dorsi: return sopra).
+  const jolly = jollyColor(card);
 
   const index = (
     <span className="index" aria-hidden="true">
@@ -160,6 +163,13 @@ export function CardView({
         <span className="r">{rankLabel}</span>
         {symbol && <span className="s">{symbol}</span>}
       </span>
+      {/* Jolly illustrato: strato SOPRA la faccia stilizzata (che resta nel DOM).
+          Visibile solo su desktop e con carta ≥ 72 px: vedi globals.css. */}
+      {jolly && (
+        <span className="jolly-art" aria-hidden="true">
+          <span className="jolly-art-img" />
+        </span>
+      )}
     </>
   );
 
@@ -171,6 +181,7 @@ export function CardView({
     "data-small": small ? "true" : "false",
     "data-pending": pending ? "true" : "false",
     "data-wildkind": kind ?? undefined,
+    "data-jolly": jolly ?? undefined,
     "data-wildrole": wildRole ? "true" : undefined,
     title: cardLabel(card),
     "aria-label": `${cardLabel(card)}${kind ? ` (${kind === "joker" ? "jolly" : "pinella"})` : ""}${
