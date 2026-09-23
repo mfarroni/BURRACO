@@ -1,7 +1,8 @@
 # Proposta — Donazione "Buy Me a Coffee" efficace + condivisione dell'app
 
 > **Stato:** DECISIONI DEL LEAD RACCOLTE (2026-09-23) — vedi §8. Nessun codice modificato.
-> **Ambito:** solo FE (`FE_Burraco`). Nessuna modifica a contratto, BE, DB o CSP.
+> **Ambito:** FE (`FE_Burraco`) + un piccolo endpoint BE per il contatore anonimo (§8.6).
+> Nessuna modifica al contratto WS né alla CSP.
 > **Richiesta del lead:** (1) rendere efficace il pulsante Buy Me a Coffee; (2) inserire una
 > frase che dica chiaramente che **il progetto può continuare solo se ci sono offerte**;
 > (3) uno studio sulla comunicazione perché l'esperienza sia ottima e porti l'utente a
@@ -97,7 +98,7 @@ Deve dire tre cose: **gratuito**, **costa tenerlo acceso**, **continua solo graz
 - *Con cifra reale (solo se il lead fornisce il dato):* "Tenere aperto il circolo costa circa
   **[X] € al mese**. Il progetto continua solo se le offerte li coprono."
 
-**Raccomandazione:** versione principale + versione breve. La cifra reale aumenta molto la
+**Decisione del lead:** versione breve ovunque (§8). ~~Raccomandazione: versione principale + versione breve.~~ La cifra reale aumenta molto la
 fiducia, ma va inserita solo con un numero vero e aggiornato (decisione del lead, §8).
 
 ---
@@ -113,9 +114,8 @@ In `GameEndedOverlay` (`Overlays.tsx:323`), sotto il punteggio finale, un blocco
 │  Punteggio finale …                              │
 │ ──────────────────────────────────────────────── │
 │  Ti è piaciuta la partita?                       │
-│  Il circolo è gratuito e senza pubblicità, ma    │
-│  può continuare solo grazie alle offerte di chi  │
-│  ci gioca.                                       │
+│  Il circolo va avanti solo grazie alle vostre    │
+│  offerte.                                        │
 │                                                  │
 │  [ Invita un amico a giocare ]   ← primario       │
 │  [ ☕ Offri un caffè al circolo ] ← secondario     │
