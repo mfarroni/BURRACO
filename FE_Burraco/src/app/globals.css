@@ -420,6 +420,27 @@ button:disabled {
     linear-gradient(180deg, var(--felt-800) 0%, var(--felt-900) 100%);
 }
 
+/* Accesso/registrazione/ospite e lobby: la colonna centrale parte in cima, allineata
+   alle colonne laterali (margine 0 al posto degli 8vh della base `.lobby`), e l'header
+   del brand scende di 1 cm dentro la card. Solo queste due card: profilo e splash
+   "Ripristino sessione" restano invariati. */
+.lobby.auth-panel,
+.lobby.lobby-wide {
+  margin: 0;
+}
+.lobby.auth-panel .vetrina-brand-header,
+.lobby.lobby-wide .vetrina-brand-header {
+  margin-top: 1cm;
+}
+
+/* Selettore modalità 1v1 / 2v2 in lobby: 8px di stacco fra i due pulsanti, anche
+   quando su schermi stretti vanno a capo. */
+.mode-select {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* ===================================================================
  * LAYOUT PARTITA
  * =================================================================== */
@@ -2098,6 +2119,102 @@ button:disabled {
 .profile-badge-icon {
   font-size: 0.9em;
   line-height: 1;
+}
+/* Identità: foto (o iniziale) + nome + account del giocatore. */
+.profile-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.profile-who-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  flex: 1 1 180px;
+  padding-top: var(--sp-2);
+}
+.profile-account {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.profile-account strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.profile-avatar-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: none;
+  max-width: 160px;
+}
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--brass-500);
+  background: var(--surface-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--sh-lift);
+}
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.profile-avatar-initial {
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  color: var(--brass-300);
+}
+.profile-avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-1);
+}
+/* Input file nascosto ma accessibile: lo attiva la <label> stilizzata. */
+.profile-avatar-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+.profile-avatar-file:focus-visible + .profile-avatar-btn {
+  outline: 2px solid var(--brass-300);
+  outline-offset: 2px;
+}
+.profile-avatar-btn {
+  font-size: var(--fs-xs);
+  padding: var(--sp-1) var(--sp-2);
+  cursor: pointer;
+}
+.profile-avatar-btn[aria-disabled="true"] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.profile-avatar-hint {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  text-align: center;
+}
+.profile-avatar-error {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--danger-300);
+  text-align: center;
 }
 .profile-badge[data-guest="false"] {
   background: linear-gradient(180deg, var(--brass-400), var(--brass-600));

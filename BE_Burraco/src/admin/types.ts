@@ -140,7 +140,20 @@ export interface EventRow {
 export interface ShopProductRow {
   id: string;
   nome: string;
+  /** CICLO Webmaster: testo della scheda prodotto (null = assente). */
+  descrizione: string | null;
   prezzoCent: number;
   valuta: string;
+  /** CICLO Webmaster: foto della scheda (data URL d'immagine o URL; null = assente). */
+  immagineUrl: string | null;
   disponibile: boolean;
+}
+
+/* ── CICLO Webmaster: operazioni sul singolo utente ───────────────────────── */
+
+/** Esito del reset: la password temporanea torna all'admin UNA volta sola. */
+export interface AdminResetPasswordResponse {
+  tempPassword: string;
+  /** true se l'email con la password temporanea è partita verso l'utente. */
+  emailed: boolean;
 }

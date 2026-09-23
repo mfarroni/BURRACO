@@ -463,3 +463,19 @@ export const shopProducts = pgTable(
     disponibileIdx: index("shop_products_disponibile_idx").on(t.disponibile),
   }),
 );
+
+/* ══════════════════ CICLO Profilo + Webmaster ══════════════════ */
+
+/**
+ * Migrazione 0012 — FOTO PROFILO dell'utente registrato, in tabella DEDICATA: la riga
+ * `users` è letta a ogni richiesta autenticata e non deve portarsi dietro decine di KB.
+ * `data` è un data URL (`data:image/jpeg|png|webp;base64,…`) già ridimensionato dal
+ * client, con tetto di dimensione lato server. Visibile solo al proprietario.
+ */
+export const userAvatars = pgTable("user_avatars", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  data: text("data").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});

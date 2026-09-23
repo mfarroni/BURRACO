@@ -78,3 +78,43 @@ export async function fetchMatches(limit = 10, offset = 0): Promise<MatchesPage>
 export async function fetchMatchDetail(matchId: string): Promise<MatchDetail> {
   return authedGet<MatchDetail>(`/users/me/matches/${encodeURIComponent(matchId)}`);
 }
+
+/** POST autenticato con corpo JSON: stesso trattamento errori di `authedGet`. */
+async function authedPost<T>(path: string, payload: unknown): Promise<T> {
+  assertSecureBase();
+  const token = getAuthToken();
+  if (!token) {
+    throw new AuthClientError("UNAUTHORIZED", "Sessione non valida: accedi di nuovo.", 401);
+  }
+  let res: Response;
+  try {
+    res = await fetch(API_URL + path, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new AuthClientError("NETWORK", "Impossibile contattare il server. Riprova.", 0);
+  }
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    throw new AuthClientError(
+      typeof body.error === "string" ? body.error : "ERROR",
+      typeof body.message === "string" ? body.message : "Operazione non riuscita.",
+      res.status,
+    );
+  }
+  return body as unknown as T;
+}
+
+/** Foto profilo del principale (data URL) o null se assente. Solo registrati. */
+export async function fetchAvatar(): Promise<string | null> {
+  const r = await authedGet<{ avatar: string | null }>("/users/me/avatar");
+  return r.avatar ?? null;
+}
+
+/** Imposta (data URL già ridimensionato) o rimuove (`null`) la foto profilo. */
+export async function saveAvatar(avatar: string | null): Promise<string | null> {
+  const r = await authedPost<{ avatar: string | null }>("/users/me/avatar", { avatar });
+  return r.avatar ?? null;
+}

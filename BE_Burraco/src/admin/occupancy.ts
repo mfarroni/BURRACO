@@ -32,6 +32,7 @@ const TRACKED: { name: string; table: PgTable }[] = [
   { name: "email_queue", table: schema.emailQueue },
   { name: "events", table: schema.events },
   { name: "shop_products", table: schema.shopProducts },
+  { name: "user_avatars", table: schema.userAvatars },
 ];
 
 export async function getOccupancy(): Promise<AdminOccupancy> {

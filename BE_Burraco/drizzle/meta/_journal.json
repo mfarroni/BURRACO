@@ -85,6 +85,13 @@
       "when": 1789060669000,
       "tag": "0011_events_shop",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789060670000,
+      "tag": "0012_user_avatar",
+      "breakpoints": true
     }
   ]
 }
