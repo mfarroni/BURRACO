@@ -13,7 +13,7 @@ import "./DonationButton.css";
  * (max-width:100% / height:auto), così a 375px il badge non sfora.
  */
 
-const BMC_URL = "https://www.buymeacoffee.com/granmasterchess";
+export const BMC_URL = "https://www.buymeacoffee.com/granmasterchess";
 
 interface DonationButtonProps {
   /** `compatto` riduce l'ingombro (es. lobby); default `normale`. Una sola prop. */

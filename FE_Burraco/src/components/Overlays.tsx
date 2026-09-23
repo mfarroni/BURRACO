@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { GameConfig, HandScoreDetail, PlayerPublic, Seat } from "@/lib/contract";
 import type { GameEndedInfo, HandEndedInfo, RejectionInfo, RoomClosedInfo } from "@/lib/useGameSocket";
 import { REJECT_TITLE, rejectText } from "@/lib/rejectMessages";
+import { SupportPrompt } from "@/components/SupportPrompt";
 
 /**
  * Overlay e feedback degli stati di gioco, in stile "Circolo Nettuno".
@@ -348,6 +349,9 @@ export function GameEndedOverlay({
           <strong className="num">{info.finalScores[0]}</strong> · {seatName(1, players, yourSeat)}:{" "}
           <strong className="num">{info.finalScores[1]}</strong>
         </p>
+        {/* Invito + caffè (proposta donazione §4.1): solo a partita conclusa normalmente,
+            mai dopo un forfait. Il tetto di frequenza è dentro il componente. */}
+        {info.reason !== "forfeit" && <SupportPrompt won={won} />}
       </div>
     </div>
   );

@@ -272,4 +272,13 @@ Flusso: `agente_develop` → `agente_ui_ux` (rifinitura tono e grafica) → `age
 (nessun leak nel testo condiviso: **mai** carte, punteggi altrui o dati di altri giocatori
 nei messaggi precompilati; nessuno script esterno).
 
-OUTPUT PER: agente_develop (Lotto A)
+## 10. Stato di avanzamento
+- **Lotto A — completato:** frase breve nel `DonationButton`, nome "Circolo Nettuno", Open Graph
+  (`app/opengraph-image.tsx`). `NEXT_PUBLIC_SITE_URL` su Vercel **in sospeso** (dominio da acquistare).
+- **Lotto B — completato:** `SupportPrompt` in `GameEndedOverlay` (non dopo un forfait), tetto di
+  frequenza in `lib/supportPrompt.ts` (2 partite / 1 al giorno / "Non ora" 14 giorni / mai alla
+  prima), `ShareButton` (Web Share → WhatsApp + Copia link). Messaggio di ringraziamento dopo il clic.
+  Limite noto: se il client si ricollega e riceve di nuovo `game_ended` per la stessa partita,
+  questa conta due volte (effetto trascurabile: al più anticipa la comparsa di una partita).
+
+OUTPUT PER: agente_develop (Lotto C)
