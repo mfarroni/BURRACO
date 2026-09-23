@@ -169,6 +169,11 @@ body {
 :root {
   --frame-inset: 24px;
 }
+@media (max-width: 600px) {
+  :root {
+    --frame-inset: 12px; /* cornice ridotta su mobile (SiteFrame.css) */
+  }
+}
 body {
   padding: var(--frame-inset);
   box-sizing: border-box;
@@ -1398,13 +1403,20 @@ button:disabled {
   inset: 0;
   background: var(--scrim);
   display: flex;
-  align-items: center;
+  /* Reflow (WCAG 1.4.10): se la card è più alta dello schermo (mobile, zoom) l'overlay
+     SCORRE invece di tagliarla. `flex-start` + `margin-block: auto` sulla card la
+     centrano quando entra e la ancorano in alto quando non entra. Il padding tiene
+     la card fuori dalla fascia della cornice. */
+  align-items: flex-start;
   justify-content: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: var(--z-overlay);
-  padding: var(--sp-4);
+  padding: calc(var(--frame-inset) + var(--sp-3)) var(--sp-4);
   animation: fade-in var(--dur-base) var(--ease-out);
 }
 .overlay-card {
+  margin-block: auto;
   background: linear-gradient(180deg, var(--surface-raised), var(--surface));
   border: 1px solid var(--border);
   border-top: 3px solid var(--brass-500);
@@ -4235,4 +4247,20 @@ button:disabled {
   margin: 0;
   max-width: 48ch;
   color: var(--text);
+}
+
+/* ── ACCESSIBILITÀ MOBILE — bersagli di tocco (verifica a11y mobile) ─────────────
+   Sotto i 600px ogni pulsante del gioco/lobby/profilo è alto almeno 44px (linea
+   guida del progetto e WCAG 2.5.5). Solo altezza minima: nessun cambio di colori,
+   testi o ordine. Su desktop (mouse) le misure restano quelle di prima. */
+@media (max-width: 600px) {
+  /* I pallini dello slider della vetrina hanno un'area di tocco propria (Landing.css). */
+  button:not(.hero-dot),
+  a.btn-ghost {
+    min-height: 44px;
+  }
+  a.btn-ghost {
+    display: inline-flex;
+    align-items: center;
+  }
 }

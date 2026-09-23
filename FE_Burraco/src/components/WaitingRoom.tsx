@@ -110,7 +110,10 @@ export function WaitingRoom({ code, isPrivate, connPhase, resumed, merged, onCan
       <div className="waiting-code" role="group" aria-label="Codice del tavolo">
         <span className="waiting-code-label">Codice tavolo</span>
         <div className="waiting-code-value">
-          <span className="waiting-code-text" aria-label={code ? `Codice: ${spelled}` : "Codice non disponibile"} aria-live="polite">
+          {/* Il testo per gli screen reader è un nodo reale (sr-only): `aria-label` non è
+              ammesso su uno <span> senza ruolo (axe: aria-prohibited-attr). */}
+          <span className="waiting-code-text" aria-live="polite">
+            <span className="sr-only">{code ? `Codice: ${spelled}` : "Codice non disponibile"}</span>
             {code
               ? code.split("").map((ch, i) => (
                   <span key={i} className="code-char" aria-hidden="true">

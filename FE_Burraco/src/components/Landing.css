@@ -420,6 +420,22 @@
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
 }
 
+/* Area di tocco ampliata (a11y mobile): il pallino resta di 11px, ma la zona
+   cliccabile trasparente è di 35px. Il gap tra i pallini evita sovrapposizioni. */
+.landing-root .hero-dot {
+  position: relative;
+}
+.landing-root .hero-dot::after {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+@media (max-width: 600px) {
+  .landing-root .hero-dots {
+    gap: 26px;
+  }
+}
+
 .landing-root .hero-dot:hover {
   background: rgba(212, 175, 55, 0.5);
 }
