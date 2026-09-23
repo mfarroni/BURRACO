@@ -368,9 +368,9 @@ function UsersTab({
                       type="checkbox"
                       className="wm-row-check"
                       checked={selection.all || Boolean(selection.users[u.id])}
-                      disabled={selection.all}
+                      disabled={selection.all || !u.email}
                       onChange={(e) => toggleUser(u, e.target.checked)}
-                      aria-label={`Seleziona ${u.displayName}`}
+                      aria-label={u.email ? `Seleziona ${u.displayName}` : `${u.displayName}: nessuna email, non selezionabile`}
                     />
                   </td>
                   <td>{u.displayName}</td>
@@ -838,6 +838,7 @@ function ComunicazioniTab({
     if (minPartite.trim() !== "") c.minPartite = Math.max(0, Number(minPartite) || 0);
     return c;
   }, [recipients, tuttiRegistrati, minPartite]);
+  const criterioVuoto = !recipients && !tuttiRegistrati && minPartite.trim() === "";
 
   const refresh = useCallback(async () => {
     setListBusy(true);
@@ -965,10 +966,15 @@ function ComunicazioniTab({
         <button type="button" className="wm-btn" onClick={() => void doPreview(true)} disabled={busy}>
           Anteprima (conta + quota)
         </button>
-        <button type="button" className="wm-btn" onClick={() => void doPreview(false)} disabled={busy || !oggetto || !corpo}>
+        <button type="button" className="wm-btn" onClick={() => void doPreview(false)} disabled={busy || !oggetto || !corpo || criterioVuoto}>
           Crea bozza
         </button>
       </div>
+      {criterioVuoto && (
+        <p className="wm-muted wm-hint">
+          Nessun destinatario scelto: seleziona gli utenti nella scheda Utenti oppure imposta un criterio.
+        </p>
+      )}
 
       {error && <p className="wm-alert" role="alert">{error}</p>}
       {sentNotice && (
@@ -980,6 +986,11 @@ function ComunicazioniTab({
             <span className="wm-quota-label">Destinatari stimati</span>
             <span className="wm-quota-value">{preview.count.toLocaleString()}</span>
           </div>
+          {preview.count === 0 && (
+            <p className="wm-warn" role="alert">
+              Nessun destinatario: gli utenti senza email (e, per le promozionali, senza consenso) sono esclusi.
+            </p>
+          )}
           {preview.sample && preview.sample.length > 0 && (
             <p className="wm-muted wm-quota-sample">Esempi: {preview.sample.join(", ")}</p>
           )}

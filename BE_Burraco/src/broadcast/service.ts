@@ -88,7 +88,7 @@ export async function resolveRecipients(criterio: BroadcastCriterio, tipo: Broad
 export async function createBroadcast(
   authorId: string,
   input: { oggetto: string; corpo: string; tipo: BroadcastTipo; criterio: BroadcastCriterio; dryRun: boolean },
-): Promise<BroadcastCreateResponse> {
+): Promise<BroadcastCreateResponse | { error: "no_recipients" }> {
   const recipients = await resolveRecipients(input.criterio, input.tipo);
   const sample = recipients.slice(0, 5).map((r) => r.displayName);
   const { cap, remaining } = await getQuotaStatus();
@@ -96,6 +96,9 @@ export async function createBroadcast(
   if (input.dryRun || !db) {
     return { id: null, count: recipients.length, sample, dryRun: true, ...quota };
   }
+  // Una bozza senza destinatari verrebbe "completata" subito con 0 invii, in silenzio
+  // (criterio vuoto, utenti senza email, promozionale senza consenso): la rifiutiamo.
+  if (recipients.length === 0) return { error: "no_recipients" };
   const [row] = await db
     .insert(schema.broadcasts)
     .values({
