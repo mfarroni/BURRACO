@@ -228,6 +228,12 @@ export class Room {
    * un solo posto: li elenca tutti e li sposta finché il tavolo di destinazione ha
    * capienza. In 1v1 l'array ha al più un elemento (comportamento invariato).
    */
+  seatUserIds(): { seat: Seat; userId: string | null }[] {
+    // CICLO Profilo — foto ai posti: SOLO posto → userId, per l'endpoint HTTP
+    // /tables/:code/avatars (mai token/clientId). Include anche i posti disconnessi.
+    return this.players.map((p) => ({ seat: p.seat, userId: p.userId }));
+  }
+
   liveSeatIdentities(): { ws: WebSocket; name: string; clientId?: string; userId: string | null }[] {
     const out: { ws: WebSocket; name: string; clientId?: string; userId: string | null }[] = [];
     for (const p of this.players) {

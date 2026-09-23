@@ -118,3 +118,16 @@ export async function saveAvatar(avatar: string | null): Promise<string | null> 
   const r = await authedPost<{ avatar: string | null }>("/users/me/avatar", { avatar });
   return r.avatar ?? null;
 }
+
+/**
+ * Foto dei giocatori seduti al tavolo `code` (posto → data URL, null se assente).
+ * Il backend risponde SOLO a chi siede a quel tavolo (altrimenti 404).
+ */
+export async function fetchTableAvatars(code: string): Promise<Record<number, string | null>> {
+  const r = await authedGet<{ avatars: { seat: number; avatar: string | null }[] }>(
+    `/tables/${encodeURIComponent(code)}/avatars`,
+  );
+  const out: Record<number, string | null> = {};
+  for (const a of r.avatars ?? []) out[a.seat] = a.avatar ?? null;
+  return out;
+}

@@ -738,6 +738,37 @@ export function createHttpApp(
       }),
     );
 
+    /* CICLO Profilo — FOTO dei giocatori ai POSTI del tavolo. Fuori dallo stato WS di
+     * proposito: lo stato viaggia a ogni mossa, le foto (decine di KB) si chiedono una
+     * volta. Autorizzazione per PARTECIPAZIONE: solo chi siede a quel tavolo le vede;
+     * tavolo inesistente o non proprio → 404 (l'esistenza non è osservabile). Risponde
+     * con posto → foto, mai id utente. Ospiti e utenti senza foto → null. */
+    const avatarsLimiter = rateLimit({ name: "table-avatars", windowMs: 60_000, max: 60 });
+    const tableCodeSchema = z.string().trim().min(1).max(12).regex(/^[A-Za-z0-9-]+$/);
+    app.get(
+      "/tables/:code/avatars",
+      avatarsLimiter,
+      handler(async (req, res) => {
+        const principal = await auth.getPrincipalByToken(bearer(req));
+        if (!principal) {
+          res.status(401).json({ error: "UNAUTHORIZED", message: "Sessione non valida." });
+          return;
+        }
+        const code = tableCodeSchema.safeParse(req.params.code);
+        const room = code.success ? manager.findByCode(code.data) : undefined;
+        const seats = room?.seatUserIds() ?? [];
+        if (!seats.some((s) => s.userId === principal.userId)) {
+          res.status(404).json({ error: "NOT_FOUND", message: "Tavolo non trovato." });
+          return;
+        }
+        const avatars = await Promise.all(
+          seats.map(async (s) => ({ seat: s.seat, avatar: s.userId ? await getAvatar(s.userId) : null })),
+        );
+        res.setHeader("Cache-Control", "private, no-store");
+        res.json({ avatars });
+      }),
+    );
+
     app.post(
       "/session/leave",
       leaveLimiter,
