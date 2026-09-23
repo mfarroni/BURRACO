@@ -1,0 +1,87 @@
+/*
+ * Blocco di fine partita "Ti è piaciuta la partita?" (proposta §4.1). Sobrio: un
+ * filetto d'ottone lo separa dal punteggio, nessun colore d'allarme, nessun banner.
+ * Classi prefissate `support-prompt-` (la landing usa già `.support-*`).
+ */
+
+.support-prompt {
+  margin-top: var(--sp-5, 20px);
+  padding-top: var(--sp-4, 16px);
+  border-top: 1px solid var(--border, rgba(224, 199, 137, 0.25));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2, 8px);
+  text-align: center;
+}
+
+.support-prompt-title {
+  margin: 0;
+  font-family: var(--font-serif, serif);
+  font-size: var(--fs-h2, 1.25rem);
+  color: var(--brass-300, #e0c789);
+}
+
+.support-prompt-body {
+  margin: 0 0 var(--sp-2, 8px);
+  max-width: 36ch;
+  color: var(--text, #e7e1cf);
+}
+
+.support-prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: var(--sp-3, 12px);
+}
+
+/* Azione secondaria: contorno d'ottone, mai più forte dell'invito. */
+.support-prompt-coffee {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  min-height: 44px;
+  padding: 0 var(--sp-4, 16px);
+  border: 1px solid var(--brass-600, #a07d3e);
+  border-radius: var(--r-md, 8px);
+  color: var(--brass-300, #e0c789);
+  font-weight: 600;
+  text-decoration: none;
+}
+.support-prompt-coffee:hover {
+  border-color: var(--brass-400, #d3b76a);
+  color: var(--text-strong, #f4efe2);
+}
+.support-prompt-coffee:focus-visible,
+.support-prompt-later:focus-visible {
+  outline: 2px solid var(--brass-400, #d3b76a);
+  outline-offset: 2px;
+}
+
+/* "Non ora": sempre visibile, discreto ma leggibile (text-muted su feltro ≥ 4.5:1). */
+.support-prompt-later {
+  min-height: 44px;
+  padding: 0 var(--sp-3, 12px);
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #bcc7bb);
+  text-decoration: underline;
+  font: inherit;
+  cursor: pointer;
+}
+
+.support-prompt-thanks {
+  margin: 0;
+  font-family: var(--font-serif, serif);
+  color: var(--brass-300, #e0c789);
+}
+
+@media (max-width: 420px) {
+  .support-prompt-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+}

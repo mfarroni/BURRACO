@@ -14,6 +14,8 @@ import type {
 import { fetchStats, fetchMatches, fetchMatchDetail } from "@/lib/profile";
 import { AuthClientError } from "@/lib/auth";
 import { DonationButton } from "@/components/DonationButton";
+import { ShareButton } from "@/components/ShareButton";
+import { trackClick } from "@/lib/metrics";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { SideFlank } from "@/components/SideFlanks";
@@ -438,7 +440,24 @@ export function ProfilePanel({ user, onBack }: Props) {
               {/* Donazione (Lotto 4 — R6): in fondo al pannello, dopo le sezioni
                   statistiche/andamento/partite. Solo utente REGISTRATO (ramo
                   non-ospite) e solo a dati caricati. Mai fissa/sticky/overlay. */}
-              <DonationButton />
+              {/* Legame personale (proposta donazione/condivisione §4.5): usa SOLO dati già
+                  caricati; il numero di partite solo sul periodo "Sempre" (sugli altri
+                  periodi sarebbe fuorviante). */}
+              <div className="profile-support">
+                <p className="profile-support-lede">
+                  {periodo === "all" && stats.matchesPlayed > 0 ? (
+                    <>
+                      Hai giocato <strong>{nfInt.format(stats.matchesPlayed)}</strong>{" "}
+                      {stats.matchesPlayed === 1 ? "partita" : "partite"} al circolo. Se vuoi che
+                      continui, offrici un caffè o invita qualcuno a giocare con te.
+                    </>
+                  ) : (
+                    "Se vuoi che il circolo continui, offrici un caffè o invita qualcuno a giocare con te."
+                  )}
+                </p>
+                <ShareButton className="btn-ghost" onShared={() => trackClick("invito", "profilo")} />
+              </div>
+              <DonationButton placement="profilo" />
             </>
           )}
         </>

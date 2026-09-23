@@ -6,6 +6,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -479,3 +480,23 @@ export const userAvatars = pgTable("user_avatars", {
   data: text("data").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+/* ══════════════════ Proposta donazione/condivisione — Lotto D ══════════════════ */
+
+/**
+ * Migrazione 0013 — CONTATORE ANONIMO dei clic su "caffè" e "invito". Aggregato per
+ * (giorno UTC, tipo, punto della UI): una riga incrementata, mai una riga per clic.
+ * Nessun dato personale (niente utente, IP, user agent).
+ */
+export const supportClicks = pgTable(
+  "support_clicks",
+  {
+    day: date("day").notNull(),
+    kind: text("kind").notNull(),
+    placement: text("placement").notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.day, t.kind, t.placement] }),
+  }),
+);

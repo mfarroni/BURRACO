@@ -3,6 +3,7 @@ import { db, schema } from "../db/client.js";
 import { logAppEvent } from "../events/log.js";
 import { recordAdminAudit } from "../admin/audit.js";
 import { RETENTION, scheduledRetentionMode, type RetentionMode } from "./constants.js";
+import { supportClicksExpiredCond } from "../metrics/supportClicks.js";
 
 /**
  * FASE 4 — Framework di RETENTION. Ogni processo:
@@ -23,6 +24,7 @@ export type RetentionStep =
   | "app_events_cap"
   | "admin_audit_log"
   | "broadcast_recipients"
+  | "support_clicks"
   | "detail"
   | "matches"
   | "referenced_guests"
@@ -128,6 +130,19 @@ async function pruneBroadcastRecipients(dryRun: boolean): Promise<RetentionStepR
     removed = rows.length;
   }
   return { step: "broadcast_recipients", matched, removed, dryRun };
+}
+
+/** Contatore anonimo dei clic caffè/invito: righe giornaliere oltre 180gg. */
+async function pruneSupportClicks(dryRun: boolean): Promise<RetentionStepReport> {
+  const cond = supportClicksExpiredCond();
+  const [row] = await db!.select({ n: sql<number>`count(*)` }).from(schema.supportClicks).where(cond);
+  const matched = Number(row?.n ?? 0);
+  let removed = 0;
+  if (!dryRun && matched > 0) {
+    const rows = await db!.delete(schema.supportClicks).where(cond).returning({ day: schema.supportClicks.day });
+    removed = rows.length;
+  }
+  return { step: "support_clicks", matched, removed, dryRun };
 }
 
 /**
@@ -276,6 +291,7 @@ export async function runRetentionSweep(
   try {
     reports.push(await pruneContactMessages(dryRun));
     reports.push(await pruneBroadcastRecipients(dryRun));
+    reports.push(await pruneSupportClicks(dryRun));
     reports.push(await pruneAdminAudit(dryRun));
     reports.push(await pruneDetail(dryRun));
     reports.push(await pruneOldMatches(dryRun));

@@ -45,6 +45,16 @@ async function adminFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 /* ── Tipi (copia manuale dei DTO di admin/types.ts) ──────────────────────── */
 
+/** Lotto D — riepilogo del contatore anonimo caffè/invito (copia di metrics/supportClicks.ts). */
+export type SupportClickKind = "caffe" | "invito";
+export interface SupportClickSummary {
+  days: number;
+  since: string;
+  totals: Record<SupportClickKind, number>;
+  byPlacement: { kind: SupportClickKind; placement: string; count: number }[];
+  daily: { day: string; caffe: number; invito: number }[];
+}
+
 export interface OccupancyTable {
   table: string;
   rows: number;
@@ -197,6 +207,7 @@ export const admin = {
     return adminFetch<RenderLogResponse>(`/admin/logs/render?${q.toString()}`);
   },
   dbStatus: () => adminFetch<DbStatusResponse>("/admin/logs/db"),
+  supportClicks: (days: number) => adminFetch<SupportClickSummary>(`/admin/metrics/clicks?days=${days}`),
 
   /* ── CICLO Pannello Admin — nuove chiamate ─────────────────────────────── */
   // Probe della voce di menu admin (D2): 200 admin / 404 altrimenti.

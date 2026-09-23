@@ -32,6 +32,15 @@ import {
   deleteShopProduct,
 } from "../admin/catalog.js";
 import type { AdminResetPasswordResponse, LogLinksResponse } from "../admin/types.js";
+import {
+  CLICK_KINDS,
+  CLICK_PLACEMENTS,
+  CLICKS_MAX_DAYS,
+  createSupportClickStore,
+  summarize,
+  utcDay,
+  type SupportClickStore,
+} from "../metrics/supportClicks.js";
 import { AVATAR_MAX_CHARS, IMAGE_DATA_URL_RE, getAvatar, setAvatar } from "../profile/avatar.js";
 
 /**
@@ -147,6 +156,15 @@ const logsQuery = z.object({
 
 // CICLO Pannello Admin — elenco utenti: limit ∈ [1,100] (default 20, coerente con lo
 // storico), cursore keyset opaco (stringa base64url) cappato per lunghezza.
+// Lotto D — contatore anonimo dei clic caffè/invito: enum CHIUSI, nessun campo libero,
+// `.strict()` rifiuta qualsiasi campo in più (niente dati personali per errore).
+const supportClickBody = z
+  .object({ kind: z.enum(CLICK_KINDS), placement: z.enum(CLICK_PLACEMENTS) })
+  .strict();
+const supportClicksQuery = z.object({
+  days: z.coerce.number().int().min(1).max(CLICKS_MAX_DAYS).default(30),
+});
+
 const adminUsersQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.string().max(200).optional(),
@@ -240,7 +258,7 @@ export function createHttpApp(
   auth: AuthService,
   stats?: StatsStore,
   manager?: RoomManager,
-  deps?: { contactStore?: ContactStore },
+  deps?: { contactStore?: ContactStore; clickStore?: SupportClickStore },
 ): Express {
   const app = express();
 
@@ -454,6 +472,31 @@ export function createHttpApp(
    *  - anti-injection di header (newline/CTL) su nome/oggetto/reply-to;
    *  - `ip_hash` = sha256(ip + salt): mai l'IP in chiaro.
    */
+  /* Lotto D — CONTATORE ANONIMO dei clic su "caffè" e "invito" (proposta donazione/
+   * condivisione §8.6). Pubblico (anche ospiti e visitatori della vetrina), ma:
+   *  - NESSUN dato personale: non legge il token, non salva IP/utente/user agent;
+   *  - body a enum chiusi, `.strict()`; rate-limit per IP (solo in RAM, anti-gonfiaggio);
+   *  - best-effort: risponde 204 anche se la scrittura fallisce (mai un errore al FE). */
+  const clickLimiter = rateLimit({ name: "metrics-click", windowMs: 60_000, max: 20 });
+  const clickStore = deps?.clickStore ?? createSupportClickStore();
+  app.post(
+    "/metrics/click",
+    clickLimiter,
+    handler(async (req, res) => {
+      const parsed = supportClickBody.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_BODY", message: "Evento non valido." });
+        return;
+      }
+      try {
+        await clickStore.record(parsed.data.kind, parsed.data.placement, utcDay(new Date()));
+      } catch (err) {
+        console.error("[metrics] scrittura clic fallita:", (err as Error).message);
+      }
+      res.status(204).end();
+    }),
+  );
+
   const contactLimiter = rateLimit({ name: "contact", windowMs: 60 * 60 * 1000, max: 5 });
   const contactStore = deps?.contactStore ?? createContactStore();
 
@@ -807,6 +850,25 @@ export function createHttpApp(
       const principal = await requireAdmin(req, res);
       if (!principal) return;
       res.json(await getOccupancy());
+    }),
+  );
+
+  // Lotto D — riepilogo del contatore anonimo caffè/invito sugli ultimi `days` giorni.
+  app.get(
+    "/admin/metrics/clicks",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const parsed = supportClicksQuery.safeParse(req.query);
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_QUERY", message: `Periodo non valido (1–${CLICKS_MAX_DAYS} giorni).` });
+        return;
+      }
+      const { days } = parsed.data;
+      // Giorno di partenza incluso: oggi + i (days-1) giorni precedenti (UTC).
+      const since = utcDay(new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000));
+      res.json(summarize(await clickStore.rowsSince(since), days, since));
     }),
   );
 

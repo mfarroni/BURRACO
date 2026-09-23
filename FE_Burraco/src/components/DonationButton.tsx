@@ -1,4 +1,5 @@
 import "./DonationButton.css";
+import { trackClick, type ClickPlacement } from "@/lib/metrics";
 
 /**
  * PULSANTE DONAZIONE "Buy Me a Coffee" (Lotto 4 — R6).
@@ -13,17 +14,25 @@ import "./DonationButton.css";
  * (max-width:100% / height:auto), così a 375px il badge non sfora.
  */
 
-const BMC_URL = "https://www.buymeacoffee.com/granmasterchess";
+export const BMC_URL = "https://www.buymeacoffee.com/granmasterchess";
 
 interface DonationButtonProps {
   /** `compatto` riduce l'ingombro (es. lobby); default `normale`. Una sola prop. */
   size?: "normale" | "compatto";
+  /** Punto della UI, per il contatore anonimo dei clic (Lotto D). */
+  placement: ClickPlacement;
 }
 
-export function DonationButton({ size = "normale" }: DonationButtonProps) {
+export function DonationButton({ size = "normale", placement }: DonationButtonProps) {
   return (
     <div className="bmc-wrap" data-size={size}>
-      <a className="bmc-link" href={BMC_URL} target="_blank" rel="noopener noreferrer">
+      <a
+        className="bmc-link"
+        href={BMC_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => trackClick("caffe", placement)}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           className="bmc-img"
@@ -34,7 +43,9 @@ export function DonationButton({ size = "normale" }: DonationButtonProps) {
           alt="Offrimi un caffè su Buy Me a Coffee"
         />
       </a>
-      <p className="bmc-note">Il circolo è gratuito. Se ti fa piacere, offrici un caffè.</p>
+      {/* Frase decisa dal lead (proposta-donazione-condivisione.md §3/§8): dice il BISOGNO,
+          non solo la gratuità. Nessuna cifra, nessun conteggio. */}
+      <p className="bmc-note">Il circolo va avanti solo grazie alle vostre offerte.</p>
     </div>
   );
 }

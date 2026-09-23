@@ -162,6 +162,23 @@ body {
   min-height: 100%;
 }
 
+/* Cornice d'ottone su tutte le pagine (components/SiteFrame): il body riserva ai
+   bordi lo spazio della fascia decorativa (20px + filo), così la cornice non copre
+   contenuti. Gli elementi ancorati ai bordi (sticky/fixed) la rispettano via la
+   stessa variabile. La vetrina (.landing-root, fixed) ha il suo padding interno. */
+:root {
+  --frame-inset: 24px;
+}
+@media (max-width: 600px) {
+  :root {
+    --frame-inset: 12px; /* cornice ridotta su mobile (SiteFrame.css) */
+  }
+}
+body {
+  padding: var(--frame-inset);
+  box-sizing: border-box;
+}
+
 body {
   font-family: var(--font-sans);
   font-size: var(--fs-body);
@@ -1205,7 +1222,7 @@ button:disabled {
   border-radius: var(--r-md) var(--r-md) 0 0;
   padding: var(--sp-3);
   position: sticky;
-  bottom: 0;
+  bottom: var(--frame-inset); /* sopra la fascia della cornice */
   z-index: var(--z-badges);
   box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.35);
 }
@@ -1355,7 +1372,7 @@ button:disabled {
    agganciato a una carta specifica). */
 .pending-badge {
   position: fixed;
-  bottom: 88px;
+  bottom: calc(88px + var(--frame-inset));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -1386,13 +1403,20 @@ button:disabled {
   inset: 0;
   background: var(--scrim);
   display: flex;
-  align-items: center;
+  /* Reflow (WCAG 1.4.10): se la card è più alta dello schermo (mobile, zoom) l'overlay
+     SCORRE invece di tagliarla. `flex-start` + `margin-block: auto` sulla card la
+     centrano quando entra e la ancorano in alto quando non entra. Il padding tiene
+     la card fuori dalla fascia della cornice. */
+  align-items: flex-start;
   justify-content: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: var(--z-overlay);
-  padding: var(--sp-4);
+  padding: calc(var(--frame-inset) + var(--sp-3)) var(--sp-4);
   animation: fade-in var(--dur-base) var(--ease-out);
 }
 .overlay-card {
+  margin-block: auto;
   background: linear-gradient(180deg, var(--surface-raised), var(--surface));
   border: 1px solid var(--border);
   border-top: 3px solid var(--brass-500);
@@ -1810,7 +1834,7 @@ button:disabled {
    DOMINano lo sguardo. */
 .bottom-hand {
   position: sticky;
-  bottom: 88px; /* sopra la action-bar sticky */
+  bottom: calc(88px + var(--frame-inset)); /* sopra la action-bar sticky (e la cornice) */
   margin-top: var(--sp-5);
   padding: var(--sp-3);
   /* Zona-mano FLOTTANTE: velo caldo sottile dal basso (luce del giocatore) su
@@ -3208,7 +3232,7 @@ button:disabled {
 }
 /* =====================================================================
  * MACRO-CICLO LOBBY — LISTA TAVOLI, AZIONI, MODALE APERTURA, ATTESA
- * Riusa il design system "Circolo Notturno": feltro sollevato + filo d'oro,
+ * Riusa il design system "Circolo Nettuno": feltro sollevato + filo d'oro,
  * azione primaria in oro, testo AA su feltro. Nessuna informazione affidata al
  * solo colore (stato sempre anche testo/icona). Responsive fino a 375px.
  * ===================================================================== */
@@ -4189,3 +4213,54 @@ button:disabled {
   }
 }
 
+
+/* Invito generico al circolo in lobby e invito al tavolo in sala d'attesa
+   (proposta donazione/condivisione §4.2, §4.4). Centrati, mai più forti delle azioni di gioco. */
+.lobby-share,
+.waiting-invite {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+  text-align: center;
+}
+.waiting-invite {
+  margin-bottom: var(--sp-4);
+}
+.waiting-invite-lede {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* Profilo: invito personale a sostenere il circolo (proposta §4.5). */
+.profile-support {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-6);
+  text-align: center;
+}
+.profile-support-lede {
+  margin: 0;
+  max-width: 48ch;
+  color: var(--text);
+}
+
+/* ── ACCESSIBILITÀ MOBILE — bersagli di tocco (verifica a11y mobile) ─────────────
+   Sotto i 600px ogni pulsante del gioco/lobby/profilo è alto almeno 44px (linea
+   guida del progetto e WCAG 2.5.5). Solo altezza minima: nessun cambio di colori,
+   testi o ordine. Su desktop (mouse) le misure restano quelle di prima. */
+@media (max-width: 600px) {
+  /* I pallini dello slider della vetrina hanno un'area di tocco propria (Landing.css). */
+  button:not(.hero-dot),
+  a.btn-ghost {
+    min-height: 44px;
+  }
+  a.btn-ghost {
+    display: inline-flex;
+    align-items: center;
+  }
+}

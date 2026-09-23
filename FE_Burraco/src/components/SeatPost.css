@@ -191,7 +191,7 @@
      tetto proprio più alto, così il feltro può arrivare a ~1032px. max-width:none
      annulla qualsiasi cap ereditato. Solo il tavolo si allarga: header, banner e
      barra delle azioni restano nella colonna .game. */
-  width: min(1180px, 100vw - 32px);
+  width: min(1180px, 100vw - 32px - 2 * var(--frame-inset, 0px));
   max-width: none;
   /* Il tavolo è più largo della colonna .game (max 1100px), quindi margin:auto NON
      lo centra (collasserebbe a 0, allineandolo a sinistra). Lo centro sul viewport

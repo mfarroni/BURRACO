@@ -101,48 +101,8 @@
   );
 }
 
-.landing-root .frame-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 100;
-  pointer-events: none;
-}
-
-.landing-root .frame-decorative {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border: 3px solid var(--lp-gold-primary);
-  box-shadow:
-    inset 0 0 0 1px rgba(212, 175, 55, 0.3),
-    inset 0 0 0 8px rgba(44, 24, 16, 0.8),
-    inset 0 0 0 10px var(--lp-gold-dark),
-    inset 0 0 0 18px rgba(44, 24, 16, 0.9),
-    inset 0 0 0 20px var(--lp-gold-primary),
-    0 0 0 3px var(--lp-gold-dark),
-    0 0 0 6px rgba(44, 24, 16, 0.9),
-    0 0 0 8px var(--lp-gold-primary);
-  pointer-events: none;
-}
-
-.landing-root .frame-corner {
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  background: var(--lp-gold-primary);
-  clip-path: polygon(0 0, 100% 0, 0 100%);
-  z-index: 101;
-}
-
-.landing-root .frame-corner.tl { top: 0; left: 0; }
-.landing-root .frame-corner.tr { top: 0; right: 0; transform: rotate(90deg); }
-.landing-root .frame-corner.bl { bottom: 0; left: 0; transform: rotate(-90deg); }
-.landing-root .frame-corner.br { bottom: 0; right: 0; transform: rotate(180deg); }
+/* La cornice d'ottone (ex .frame-overlay) è ora comune a tutte le pagine:
+   components/SiteFrame.css, montata in app/layout.tsx. */
 
 .landing-root .scroll-container {
   position: relative;
@@ -458,6 +418,22 @@
   padding: 0;
   transition: background 0.3s ease, border-color 0.3s ease;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+/* Area di tocco ampliata (a11y mobile): il pallino resta di 11px, ma la zona
+   cliccabile trasparente è di 35px. Il gap tra i pallini evita sovrapposizioni. */
+.landing-root .hero-dot {
+  position: relative;
+}
+.landing-root .hero-dot::after {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+@media (max-width: 600px) {
+  .landing-root .hero-dots {
+    gap: 26px;
+  }
 }
 
 .landing-root .hero-dot:hover {
@@ -953,7 +929,7 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────
-   SOSTIENI (Ko-fi)
+   SOSTIENI (Buy Me a Coffee + invito)
    ───────────────────────────────────────────────────────────────────── */
 
 .landing-root .support-section {
@@ -976,6 +952,34 @@
 .landing-root .support-body.muted {
   color: var(--lp-cream-dark);
   margin-bottom: 28px;
+}
+
+.landing-root .support-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.landing-root .support-actions .btn-icon {
+  margin-right: 0.5em;
+}
+
+.landing-root .support-actions .share-fallback-label {
+  color: var(--lp-cream);
+}
+
+/* Avviso d'invito nell'hero (link `/?tavolo=`): chiaro, non allarmante. */
+.landing-root .invite-notice {
+  margin: 0 auto 18px;
+  max-width: 52ch;
+  padding: 10px 16px;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-radius: 8px;
+  background: rgba(20, 53, 42, 0.85);
+  color: var(--lp-cream);
+  line-height: 1.5;
 }
 
 .landing-root .support-note {

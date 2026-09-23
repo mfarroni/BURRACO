@@ -4,7 +4,7 @@ import type { Card, Suit } from "@/lib/contract";
 import "./CardFace.css";
 
 /**
- * CARTA — componente firma del "Circolo Notturno".
+ * CARTA — componente firma del "Circolo Nettuno".
  * Faccia avorio ad alto contrasto con indici classici agli angoli (rank+seme)
  * e pip centrale grande: la LEGGIBILITÀ è il requisito non negoziabile.
  *

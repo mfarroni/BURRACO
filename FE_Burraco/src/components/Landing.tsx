@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { AuthMode } from "@/components/AuthPanel";
-import { DonationButton } from "@/components/DonationButton";
+import { BMC_URL, DonationButton } from "@/components/DonationButton";
+import { ShareButton } from "@/components/ShareButton";
+import { trackClick } from "@/lib/metrics";
 import { ContactForm } from "@/components/ContactForm";
 import "./Landing.css";
 
@@ -30,10 +32,10 @@ import "./Landing.css";
 interface Props {
   /** Apre AuthPanel sul percorso scelto (login, register, guest). */
   onOpenAuth: (mode: AuthMode) => void;
+  /** Codice di un link d'invito `/?tavolo=` ancora da usare: mostra un avviso nell'hero. */
+  inviteCode?: string | null;
 }
 
-/** Ko-fi da env: se manca, la sezione "Sostieni" non viene resa (vedi sotto). */
-const KOFI_URL = process.env.NEXT_PUBLIC_KOFI_URL ?? "";
 /** Mail contatti da env, con fallback neutro. */
 const CONTACT_MAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "";
 
@@ -131,7 +133,7 @@ const PROFILE_SAMPLE = [
   { value: "7", label: "Burraco puliti" },
 ] as const;
 
-export function Landing({ onOpenAuth }: Props) {
+export function Landing({ onOpenAuth, inviteCode = null }: Props) {
   // Slider hero: indice corrente + pausa su hover; l'avanzamento è governato da
   // un solo interval con cleanup (functional update → nessuna dipendenza sfuggente).
   const [slide, setSlide] = useState(0);
@@ -179,19 +181,13 @@ export function Landing({ onOpenAuth }: Props) {
   }, []);
 
   // La voce "Sostieni" esiste in nav solo se la sezione viene resa.
-  const navItems = KOFI_URL ? NAV_ITEMS : NAV_ITEMS.filter((i) => i.id !== "sostieni");
+  const navItems = NAV_ITEMS;
 
   return (
     <div className="landing-root">
       <div className="room-background" aria-hidden="true" />
 
-      <div className="frame-overlay" aria-hidden="true">
-        <div className="frame-decorative" />
-        <div className="frame-corner tl" />
-        <div className="frame-corner tr" />
-        <div className="frame-corner bl" />
-        <div className="frame-corner br" />
-      </div>
+      {/* La cornice d'ottone è comune a tutte le pagine: `SiteFrame` in app/layout.tsx. */}
 
       <div className="scroll-container" ref={scrollRef}>
         <div className="content-wrapper">
@@ -243,6 +239,12 @@ export function Landing({ onOpenAuth }: Props) {
             </div>
 
             <div className="hero-content">
+              {inviteCode && (
+                <p className="invite-notice" role="status">
+                  Un amico ti aspetta al tavolo <strong>{inviteCode}</strong>. Entra come ospite o
+                  accedi: in lobby troverai il codice già pronto.
+                </p>
+              )}
               <h2 className="hero-title">Siediti al tavolo. Adesso, senza registrarti.</h2>
               <p className="hero-sub">
                 Burraco a due giocatori nel browser. Carte grandi, regole del circolo,
@@ -431,31 +433,38 @@ export function Landing({ onOpenAuth }: Props) {
             </ul>
           </section>
 
-          {/* La sezione esiste solo con NEXT_PUBLIC_KOFI_URL configurata:
-              meglio nessuna sezione che un CTA che punta al vuoto. */}
-          {KOFI_URL ? (
-            <section className="section support-section" id="sostieni">
-              <p className="eyebrow">Sostieni il progetto</p>
-              <h2 className="section-title">Gratis, e resterà gratis</h2>
-              <p className="support-body">
-                Questo tavolo lo sviluppa una persona sola, nel tempo libero. Non c&apos;è un
-                abbonamento e non è previsto: chi vuole giocare, gioca.
-              </p>
-              <p className="support-body muted">
-                Se ti fa compagnia, puoi offrire un caffè su Ko-fi. Serve a tenere le luci
-                accese, niente di più.
-              </p>
+          {/* SOSTIENI (proposta donazione/condivisione §4.3): sezione vera, sempre
+              presente. Frase decisa dal lead + trasparenza sull'uso delle offerte +
+              due modi di aiutare (caffè / invito gratuito). */}
+          <section className="section support-section" id="sostieni">
+            <p className="eyebrow">Sostieni il circolo</p>
+            <h2 className="section-title">Il circolo va avanti solo grazie alle vostre offerte.</h2>
+            <p className="support-body">
+              È gratuito e senza pubblicità. Le offerte pagano server, database e dominio:
+              nessuno ci guadagna.
+            </p>
+            <p className="support-body muted">
+              Non puoi offrire? Aiuti lo stesso: fai conoscere il circolo a chi gioca a burraco.
+            </p>
+            <div className="support-actions">
               <a
                 className="btn btn-primary-gold"
-                href={KOFI_URL}
+                href={BMC_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => trackClick("caffe", "landing")}
               >
-                Offri un caffè su Ko-fi
+                <span className="btn-icon" aria-hidden="true">☕</span>Offri un caffè al circolo
               </a>
-              <p className="support-note">Nessuna donazione è richiesta per giocare.</p>
-            </section>
-          ) : null}
+              <ShareButton
+                label="Invita un amico a giocare"
+                className="btn btn-ghost-gold"
+                secondaryClassName="btn btn-ghost-gold"
+                onShared={() => trackClick("invito", "landing")}
+              />
+            </div>
+            <p className="support-note">Nessuna offerta è richiesta per giocare.</p>
+          </section>
 
           <section className="section" id="contatti">
             <div className="contact-content">
@@ -488,7 +497,7 @@ export function Landing({ onOpenAuth }: Props) {
               Si gioca senza denaro. Nessuna scommessa, nessun premio in denaro.
             </p>
             {/* Donazione (Lotto 4 — R6): nel piè, dopo Contatti. Mai fissa/overlay. */}
-            <DonationButton />
+            <DonationButton placement="footer" />
           </footer>
         </div>
       </div>
