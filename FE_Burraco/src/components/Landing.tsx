@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AuthMode } from "@/components/AuthPanel";
 import { BMC_URL, DonationButton } from "@/components/DonationButton";
 import { ShareButton } from "@/components/ShareButton";
+import { trackClick } from "@/lib/metrics";
 import { ContactForm } from "@/components/ContactForm";
 import "./Landing.css";
 
@@ -452,13 +453,20 @@ export function Landing({ onOpenAuth, inviteCode = null }: Props) {
               Non puoi offrire? Aiuti lo stesso: fai conoscere il circolo a chi gioca a burraco.
             </p>
             <div className="support-actions">
-              <a className="btn btn-primary-gold" href={BMC_URL} target="_blank" rel="noopener noreferrer">
+              <a
+                className="btn btn-primary-gold"
+                href={BMC_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => trackClick("caffe", "landing")}
+              >
                 <span className="btn-icon" aria-hidden="true">☕</span>Offri un caffè al circolo
               </a>
               <ShareButton
                 label="Invita un amico a giocare"
                 className="btn btn-ghost-gold"
                 secondaryClassName="btn btn-ghost-gold"
+                onShared={() => trackClick("invito", "landing")}
               />
             </div>
             <p className="support-note">Nessuna offerta è richiesta per giocare.</p>
@@ -495,7 +503,7 @@ export function Landing({ onOpenAuth, inviteCode = null }: Props) {
               Si gioca senza denaro. Nessuna scommessa, nessun premio in denaro.
             </p>
             {/* Donazione (Lotto 4 — R6): nel piè, dopo Contatti. Mai fissa/overlay. */}
-            <DonationButton />
+            <DonationButton placement="footer" />
           </footer>
         </div>
       </div>

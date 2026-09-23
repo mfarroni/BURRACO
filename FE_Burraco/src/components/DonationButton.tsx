@@ -1,4 +1,5 @@
 import "./DonationButton.css";
+import { trackClick, type ClickPlacement } from "@/lib/metrics";
 
 /**
  * PULSANTE DONAZIONE "Buy Me a Coffee" (Lotto 4 — R6).
@@ -18,12 +19,20 @@ export const BMC_URL = "https://www.buymeacoffee.com/granmasterchess";
 interface DonationButtonProps {
   /** `compatto` riduce l'ingombro (es. lobby); default `normale`. Una sola prop. */
   size?: "normale" | "compatto";
+  /** Punto della UI, per il contatore anonimo dei clic (Lotto D). */
+  placement: ClickPlacement;
 }
 
-export function DonationButton({ size = "normale" }: DonationButtonProps) {
+export function DonationButton({ size = "normale", placement }: DonationButtonProps) {
   return (
     <div className="bmc-wrap" data-size={size}>
-      <a className="bmc-link" href={BMC_URL} target="_blank" rel="noopener noreferrer">
+      <a
+        className="bmc-link"
+        href={BMC_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => trackClick("caffe", placement)}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           className="bmc-img"

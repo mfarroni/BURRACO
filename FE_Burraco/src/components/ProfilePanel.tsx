@@ -15,6 +15,7 @@ import { fetchStats, fetchMatches, fetchMatchDetail } from "@/lib/profile";
 import { AuthClientError } from "@/lib/auth";
 import { DonationButton } from "@/components/DonationButton";
 import { ShareButton } from "@/components/ShareButton";
+import { trackClick } from "@/lib/metrics";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { SideFlank } from "@/components/SideFlanks";
@@ -454,9 +455,9 @@ export function ProfilePanel({ user, onBack }: Props) {
                     "Se vuoi che il circolo continui, offrici un caffè o invita qualcuno a giocare con te."
                   )}
                 </p>
-                <ShareButton className="btn-ghost" />
+                <ShareButton className="btn-ghost" onShared={() => trackClick("invito", "profilo")} />
               </div>
-              <DonationButton />
+              <DonationButton placement="profilo" />
             </>
           )}
         </>

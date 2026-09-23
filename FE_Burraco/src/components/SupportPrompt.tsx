@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { BMC_URL } from "@/components/DonationButton";
 import { ShareButton } from "@/components/ShareButton";
 import { registerCompletedMatch, snoozeSupportPrompt } from "@/lib/supportPrompt";
+import { trackClick } from "@/lib/metrics";
 import "./SupportPrompt.css";
 
 /**
@@ -49,13 +50,21 @@ export function SupportPrompt({ won }: { won: boolean }) {
       </h3>
       <p className="support-prompt-body">Il circolo va avanti solo grazie alle vostre offerte.</p>
       <div className="support-prompt-actions">
-        <ShareButton onShared={() => setPhase("thanks")} />
+        <ShareButton
+          onShared={() => {
+            trackClick("invito", "fine_partita");
+            setPhase("thanks");
+          }}
+        />
         <a
           className="support-prompt-coffee"
           href={BMC_URL}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={() => setPhase("thanks")}
+          onClick={() => {
+            trackClick("caffe", "fine_partita");
+            setPhase("thanks");
+          }}
         >
           <span aria-hidden="true">☕</span>Offri un caffè al circolo
         </a>

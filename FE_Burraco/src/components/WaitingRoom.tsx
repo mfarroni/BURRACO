@@ -6,6 +6,7 @@ import type { PlayerPublic } from "@/lib/contract";
 import { ConnectionBanner } from "@/components/StateBanners";
 import { ShareButton } from "@/components/ShareButton";
 import { inviteLinkPath } from "@/lib/tableInvite";
+import { trackClick } from "@/lib/metrics";
 
 /**
  * SCHERMATA TAVOLO IN ATTESA (`waiting`, §6.4). Codice in grande evidenza con
@@ -162,6 +163,7 @@ export function WaitingRoom({ code, isPrivate, connPhase, resumed, merged, onCan
             label="Invita al tavolo"
             text={`Ti aspetto al tavolo per una partita a burraco al Circolo Nettuno! Codice: ${code} — entra da qui:`}
             path={inviteLinkPath(code)}
+            onShared={() => trackClick("invito", "sala_attesa")}
           />
         </div>
       )}

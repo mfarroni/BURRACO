@@ -6,6 +6,8 @@ import {
   admin,
   AdminError,
   type AdminOccupancy,
+  type SupportClickKind,
+  type SupportClickSummary,
   type AdminResetPasswordResponse,
   type AdminUserRow,
   type AppLogEntry,
@@ -746,8 +748,131 @@ function MonitoraggioTab() {
         </div>
       </section>
 
+      <SupportClicksSection />
       <RetentionSection />
     </>
+  );
+}
+
+/* ── Lotto D — Sostegno: contatore anonimo dei clic caffè/invito ──────────── */
+
+const PLACEMENT_LABELS: Record<string, string> = {
+  fine_partita: "Fine partita",
+  landing: "Vetrina — sezione Sostieni",
+  footer: "Vetrina — piè di pagina",
+  lobby: "Lobby",
+  sala_attesa: "Sala d'attesa",
+  profilo: "Profilo",
+};
+const KIND_LABELS: Record<SupportClickKind, string> = { caffe: "Caffè", invito: "Invito" };
+const CLICK_PERIODS = [7, 30, 90] as const;
+
+function SupportClicksSection() {
+  const [days, setDays] = useState<number>(30);
+  const [data, setData] = useState<SupportClickSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async (d: number) => {
+    setBusy(true);
+    setError(null);
+    try {
+      setData(await admin.supportClicks(d));
+    } catch (err) {
+      setError(err instanceof AdminError ? err.message : "Impossibile leggere il contatore dei clic.");
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(days);
+  }, [load, days]);
+
+  return (
+    <section className="wm-card" aria-label="Sostegno: clic su caffè e invito">
+      <h2 className="wm-h2">Sostegno del circolo</h2>
+      <p className="wm-muted">
+        Clic su «Offri un caffè» e «Invita un amico», contati in forma anonima (nessun utente, nessun IP). Un clic sul
+        caffè non è una donazione: le offerte reali sono sul cruscotto di Buy Me a Coffee.
+      </p>
+      <div className="wm-actions" role="group" aria-label="Periodo">
+        {CLICK_PERIODS.map((p) => (
+          <button
+            key={p}
+            type="button"
+            className={p === days ? "wm-btn wm-btn-small wm-btn-primary" : "wm-btn wm-btn-small"}
+            aria-pressed={p === days}
+            onClick={() => setDays(p)}
+            disabled={busy}
+          >
+            {p} giorni
+          </button>
+        ))}
+      </div>
+      {error ? (
+        <p className="wm-alert" role="alert">{error}</p>
+      ) : !data ? (
+        <p className="wm-loading" role="status">
+          <span className="wm-spinner" aria-hidden="true" /> Caricamento…
+        </p>
+      ) : (
+        <>
+          <p className="wm-gauge-value" role="status">
+            Ultimi {data.days} giorni: <strong>{data.totals.caffe.toLocaleString()}</strong> clic sul caffè ·{" "}
+            <strong>{data.totals.invito.toLocaleString()}</strong> inviti
+          </p>
+          {data.byPlacement.length === 0 ? (
+            <p className="wm-empty">Nessun clic nel periodo.</p>
+          ) : (
+            <>
+              <div className="wm-table-wrap">
+                <table className="wm-table">
+                  <caption className="wm-muted">Per punto dell&apos;app</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Punto</th>
+                      <th scope="col">Tipo</th>
+                      <th scope="col">Clic</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.byPlacement.map((r) => (
+                      <tr key={`${r.kind}-${r.placement}`}>
+                        <td>{PLACEMENT_LABELS[r.placement] ?? r.placement}</td>
+                        <td>{KIND_LABELS[r.kind]}</td>
+                        <td className="wm-num">{r.count.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="wm-table-wrap">
+                <table className="wm-table">
+                  <caption className="wm-muted">Per giorno (UTC)</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Giorno</th>
+                      <th scope="col">Caffè</th>
+                      <th scope="col">Inviti</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.daily.map((d) => (
+                      <tr key={d.day}>
+                        <td>{new Date(`${d.day}T00:00:00Z`).toLocaleDateString("it-IT", { timeZone: "UTC" })}</td>
+                        <td className="wm-num">{d.caffe.toLocaleString()}</td>
+                        <td className="wm-num">{d.invito.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

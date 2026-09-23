@@ -7,6 +7,7 @@ import type { LobbyStatus } from "@/lib/lobby";
 import type { SitRejectedInfo, TableMode } from "@/lib/useGameSocket";
 import { DonationButton } from "@/components/DonationButton";
 import { ShareButton } from "@/components/ShareButton";
+import { trackClick } from "@/lib/metrics";
 
 /** Un tavolo della lista è 2v2 se lo dichiara `modalita` o se ha 4 posti. */
 function isCouplesTable(t: WaitingTableView): boolean {
@@ -406,12 +407,16 @@ export function Lobby({
 
       {/* Invito generico al circolo (proposta donazione/condivisione §4.4): discreto. */}
       <div className="lobby-share">
-        <ShareButton label="Invita un amico al circolo" className="btn-ghost" />
+        <ShareButton
+          label="Invita un amico al circolo"
+          className="btn-ghost"
+          onShared={() => trackClick("invito", "lobby")}
+        />
       </div>
 
       {/* Donazione (Lotto 4 — R6): in fondo alla lobby, visibile anche agli ospiti.
           Variante compatta per ridurre l'ingombro. Mai fissa/sticky. */}
-      <DonationButton size="compatto" />
+      <DonationButton size="compatto" placement="lobby" />
     </div>
   );
 }

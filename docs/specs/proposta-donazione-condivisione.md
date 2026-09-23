@@ -291,4 +291,13 @@ nei messaggi precompilati; nessuno script esterno).
     "Invita un amico al circolo";
   - profilo: "Hai giocato N partite al circolo…" (N solo sul periodo "Sempre").
 
-OUTPUT PER: agente_develop (Lotto D — contatore anonimo dei clic)
+- **Lotto D — completato:**
+  - BE: migrazione additiva `0013_support_clicks` (aggregato per giorno UTC/tipo/punto, nessun
+    dato personale), `POST /metrics/click` pubblico (enum chiusi, `.strict()`, 20/min per IP,
+    sempre 204), `GET /admin/metrics/clicks?days=` dietro `requireAdmin`, tabella nel contatore
+    di occupazione, retention a 180 giorni. Test: `test/support.clicks.http.test.ts` (7).
+  - FE: `lib/metrics.ts` (`fetch` con `keepalive`, senza token) collegato a tutti i punti
+    caffè/invito; sezione "Sostegno del circolo" nella scheda Monitoraggio del pannello admin.
+  - **Da fare al deploy:** applicare la migrazione `0013` su Neon.
+
+OUTPUT PER: lead (fine della proposta donazione/condivisione)

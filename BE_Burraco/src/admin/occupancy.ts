@@ -33,6 +33,8 @@ const TRACKED: { name: string; table: PgTable }[] = [
   { name: "events", table: schema.events },
   { name: "shop_products", table: schema.shopProducts },
   { name: "user_avatars", table: schema.userAvatars },
+  // Lotto D (mig 0013): contatore anonimo aggregato per giorno; volumi minimi.
+  { name: "support_clicks", table: schema.supportClicks },
 ];
 
 export async function getOccupancy(): Promise<AdminOccupancy> {

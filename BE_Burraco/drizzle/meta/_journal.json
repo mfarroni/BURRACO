@@ -92,6 +92,13 @@
       "when": 1789060670000,
       "tag": "0012_user_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789060671000,
+      "tag": "0013_support_clicks",
+      "breakpoints": true
     }
   ]
 }
