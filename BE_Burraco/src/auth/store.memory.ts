@@ -79,6 +79,11 @@ export class MemoryAuthStore implements AuthStore {
     if (s && s.revokedAt === null) s.revokedAt = new Date();
   }
 
+  async setPasswordHash(userId: string, passwordHash: string): Promise<void> {
+    const u = this.usersById.get(userId);
+    if (u) u.passwordHash = passwordHash;
+  }
+
   async revokeAllForUser(userId: string): Promise<number> {
     const now = new Date();
     let revoked = 0;

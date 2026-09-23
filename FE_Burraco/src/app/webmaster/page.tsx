@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import {
   admin,
   AdminError,
   type AdminOccupancy,
+  type AdminResetPasswordResponse,
   type AdminUserRow,
   type AppLogEntry,
   type BroadcastCreateResponse,
@@ -18,6 +20,7 @@ import {
   type ShopProductRow,
   type StatusCheckResponse,
 } from "@/lib/admin";
+import { ACCEPTED_IMAGE_TYPES, ImageError, resizeImageToDataUrl } from "@/lib/image";
 import "./webmaster.css";
 
 /**
@@ -43,9 +46,23 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "catalogo", label: "Eventi & Shop" },
 ];
 
+/**
+ * Destinatari scelti nella tab Utenti (soluzione A): `all` = tutti i registrati (anche
+ * quelli non ancora caricati in tabella), altrimenti gli utenti spuntati (id → nome).
+ * Vive nella pagina così sopravvive al cambio di scheda.
+ */
+interface Selection {
+  all: boolean;
+  users: Record<string, string>;
+}
+const EMPTY_SELECTION: Selection = { all: false, users: {} };
+
 export default function WebmasterPage() {
   const [gate, setGate] = useState<Gate>("checking");
   const [tab, setTab] = useState<Tab>("utenti");
+  const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
+  // Destinatari passati a Comunicazioni da "Scrivi ai selezionati" (null = criteri liberi).
+  const [composeFor, setComposeFor] = useState<Selection | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   // WCAG Tabs pattern con ATTIVAZIONE MANUALE (APG): le frecce spostano solo il
@@ -109,7 +126,13 @@ export default function WebmasterPage() {
 
   return (
     <main className="webmaster-root">
-      <h1 className="wm-title">Area webmaster</h1>
+      <div className="wm-header">
+        <h1 className="wm-title">Area webmaster</h1>
+        {/* Ritorno alla lobby: la radice "/" mostra la lobby all'utente autenticato. */}
+        <Link className="wm-btn wm-btn-small" href="/">
+          <span aria-hidden="true">&larr;</span> Torna alla lobby
+        </Link>
+      </div>
 
       <div className="wm-tabs-scroll">
         <div className="wm-tabs" role="tablist" aria-label="Sezioni del pannello">
@@ -136,10 +159,29 @@ export default function WebmasterPage() {
       </div>
 
       {/* Ogni pannello resta montato solo quando attivo: le fetch partono all'apertura. */}
-      {tab === "utenti" && <TabPanel id="utenti"><UsersTab /></TabPanel>}
+      {tab === "utenti" && (
+        <TabPanel id="utenti">
+          <UsersTab
+            selection={selection}
+            onSelectionChange={setSelection}
+            onWrite={() => {
+              setComposeFor(selection);
+              setTab("comunicazioni");
+            }}
+          />
+        </TabPanel>
+      )}
       {tab === "log" && <TabPanel id="log"><LogTab /></TabPanel>}
       {tab === "monitoraggio" && <TabPanel id="monitoraggio"><MonitoraggioTab /></TabPanel>}
-      {tab === "comunicazioni" && <TabPanel id="comunicazioni"><ComunicazioniTab /></TabPanel>}
+      {tab === "comunicazioni" && (
+        <TabPanel id="comunicazioni">
+          <ComunicazioniTab
+            recipients={composeFor}
+            onClearRecipients={() => setComposeFor(null)}
+            onEditRecipients={() => setTab("utenti")}
+          />
+        </TabPanel>
+      )}
       {tab === "catalogo" && <TabPanel id="catalogo"><CatalogoTab /></TabPanel>}
     </main>
   );
@@ -155,12 +197,32 @@ function TabPanel({ id, children }: { id: Tab; children: ReactNode }) {
 
 /* ═══════════════════════════ Tab UTENTI ═══════════════════════════ */
 
-function UsersTab() {
+type UserAction = "delete" | "reset";
+
+function UsersTab({
+  selection,
+  onSelectionChange,
+  onWrite,
+}: {
+  selection: Selection;
+  onSelectionChange: (s: Selection) => void;
+  onWrite: () => void;
+}) {
   const [items, setItems] = useState<AdminUserRow[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadedOnce, setLoadedOnce] = useState(false);
+  // Conferma inline (stesso schema dell'invio broadcast): una riga alla volta.
+  const [confirm, setConfirm] = useState<{ id: string; action: UserAction } | null>(null);
+  const [opBusy, setOpBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [resetResult, setResetResult] = useState<(AdminResetPasswordResponse & { name: string }) | null>(null);
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (confirm) confirmBtnRef.current?.focus();
+  }, [confirm]);
 
   const loadMore = useCallback(
     async (reset: boolean) => {
@@ -185,10 +247,99 @@ function UsersTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const runAction = useCallback(async (u: AdminUserRow, action: UserAction) => {
+    setOpBusy(true);
+    setError(null);
+    setNotice(null);
+    setResetResult(null);
+    try {
+      if (action === "delete") {
+        await admin.deleteUser(u.id);
+        setItems((prev) => prev.filter((x) => x.id !== u.id));
+        if (selection.users[u.id]) {
+          const { [u.id]: _removed, ...rest } = selection.users;
+          onSelectionChange({ ...selection, users: rest });
+        }
+        setNotice(`Utente ${u.displayName} eliminato: i suoi dati sono stati cancellati.`);
+      } else {
+        const r = await admin.resetUserPassword(u.id);
+        setResetResult({ ...r, name: u.displayName });
+      }
+      setConfirm(null);
+    } catch (err) {
+      setError(err instanceof AdminError ? err.message : "Operazione non riuscita.");
+    } finally {
+      setOpBusy(false);
+    }
+  }, [selection, onSelectionChange]);
+
+  const selectedCount = Object.keys(selection.users).length;
+  const hasSelection = selection.all || selectedCount > 0;
+  const toggleUser = (u: AdminUserRow, checked: boolean) => {
+    const users = { ...selection.users };
+    if (checked) users[u.id] = u.displayName;
+    else delete users[u.id];
+    onSelectionChange({ all: false, users });
+  };
+
   return (
     <section className="wm-card" aria-label="Utenti registrati">
       <h2 className="wm-h2">Utenti registrati</h2>
+      {items.length > 0 && (
+        <div className="wm-select-bar" role="group" aria-label="Selezione destinatari email">
+          <label className="wm-check">
+            <input
+              type="checkbox"
+              checked={selection.all}
+              onChange={(e) => onSelectionChange(e.target.checked ? { all: true, users: {} } : EMPTY_SELECTION)}
+            />
+            Seleziona tutti i registrati
+          </label>
+          <span className="wm-muted" aria-live="polite">
+            {selection.all
+              ? "Tutti i registrati selezionati (anche quelli non ancora caricati)."
+              : selectedCount > 0
+                ? `${selectedCount} ${selectedCount === 1 ? "utente selezionato" : "utenti selezionati"}.`
+                : "Nessun utente selezionato."}
+          </span>
+          <span className="wm-row-actions">
+            <button type="button" className="wm-btn wm-btn-small wm-btn-primary" onClick={onWrite} disabled={!hasSelection}>
+              {selection.all ? "Scrivi a tutti i registrati" : `Scrivi ai selezionati (${selectedCount})`}
+            </button>
+            {hasSelection && (
+              <button type="button" className="wm-btn wm-btn-small" onClick={() => onSelectionChange(EMPTY_SELECTION)}>
+                Deseleziona
+              </button>
+            )}
+          </span>
+        </div>
+      )}
       {error && <p className="wm-alert" role="alert">{error}</p>}
+      {notice && <p className="wm-success" role="status" aria-live="polite">{notice}</p>}
+      {resetResult && (
+        <div className="wm-quota" role="status" aria-live="polite">
+          <p className="wm-muted">
+            Password di <strong>{resetResult.name}</strong> reimpostata; tutte le sue sessioni sono state chiuse.
+          </p>
+          <div className="wm-quota-row">
+            <span className="wm-quota-label">Password temporanea</span>
+            <code className="wm-quota-value wm-temp-pw">{resetResult.tempPassword}</code>
+          </div>
+          {resetResult.emailed ? (
+            <p className="wm-muted">Email con la password temporanea inviata all&apos;utente.</p>
+          ) : (
+            <p className="wm-warn" role="alert">
+              Email non inviata (servizio email spento o quota esaurita): comunica tu la password all&apos;utente.
+            </p>
+          )}
+          <p className="wm-muted">Viene mostrata solo ora: non sarà più visibile dopo aver lasciato la pagina.</p>
+          <div className="wm-actions">
+            <button type="button" className="wm-btn wm-btn-small" onClick={() => setResetResult(null)}>
+              Nascondi
+            </button>
+          </div>
+        </div>
+      )}
       {!loadedOnce && busy && (
         <p className="wm-loading" role="status">
           <span className="wm-spinner" aria-hidden="true" /> Caricamento utenti…
@@ -200,17 +351,91 @@ function UsersTab() {
           <table className="wm-table">
             <thead>
               <tr>
+                <th scope="col">
+                  <span className="wm-sr-only">Selezione</span>
+                </th>
                 <th scope="col">Nome</th>
                 <th scope="col">Email</th>
                 <th scope="col">Iscrizione</th>
+                <th scope="col">Azioni</th>
               </tr>
             </thead>
             <tbody>
               {items.map((u) => (
                 <tr key={u.id}>
+                  <td className="wm-select-cell">
+                    <input
+                      type="checkbox"
+                      className="wm-row-check"
+                      checked={selection.all || Boolean(selection.users[u.id])}
+                      disabled={selection.all}
+                      onChange={(e) => toggleUser(u, e.target.checked)}
+                      aria-label={`Seleziona ${u.displayName}`}
+                    />
+                  </td>
                   <td>{u.displayName}</td>
                   <td>{u.email ?? "—"}</td>
                   <td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}</td>
+                  <td>
+                    {confirm?.id === u.id ? (
+                      <span
+                        className="wm-confirm"
+                        role="group"
+                        aria-label={
+                          confirm.action === "delete"
+                            ? `Conferma eliminazione di ${u.displayName}`
+                            : `Conferma reset password di ${u.displayName}`
+                        }
+                      >
+                        <span className="wm-confirm-text">
+                          {confirm.action === "delete"
+                            ? "Eliminazione irreversibile di account e dati personali. Confermi?"
+                            : "Nuova password temporanea e chiusura di tutte le sessioni. Confermi?"}
+                        </span>
+                        <span className="wm-confirm-actions">
+                          <button
+                            type="button"
+                            className="wm-btn wm-btn-small wm-btn-danger"
+                            onClick={() => void runAction(u, confirm.action)}
+                            disabled={opBusy}
+                            aria-busy={opBusy}
+                            ref={confirmBtnRef}
+                          >
+                            {opBusy ? "Attendi…" : confirm.action === "delete" ? "Sì, elimina" : "Sì, reimposta"}
+                          </button>
+                          <button
+                            type="button"
+                            className="wm-btn wm-btn-small"
+                            onClick={() => setConfirm(null)}
+                            disabled={opBusy}
+                          >
+                            Annulla
+                          </button>
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="wm-row-actions">
+                        <button
+                          type="button"
+                          className="wm-btn wm-btn-small"
+                          onClick={() => setConfirm({ id: u.id, action: "reset" })}
+                          disabled={opBusy}
+                          aria-label={`Reimposta la password di ${u.displayName}`}
+                        >
+                          Reimposta password
+                        </button>
+                        <button
+                          type="button"
+                          className="wm-btn wm-btn-small wm-btn-danger"
+                          onClick={() => setConfirm({ id: u.id, action: "delete" })}
+                          disabled={opBusy}
+                          aria-label={`Elimina l'utente ${u.displayName}`}
+                        >
+                          Elimina
+                        </button>
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -576,7 +801,15 @@ function RetentionSection() {
 
 /* ═══════════════════════════ Tab COMUNICAZIONI ═══════════════════════════ */
 
-function ComunicazioniTab() {
+function ComunicazioniTab({
+  recipients,
+  onClearRecipients,
+  onEditRecipients,
+}: {
+  recipients: Selection | null;
+  onClearRecipients: () => void;
+  onEditRecipients: () => void;
+}) {
   const [oggetto, setOggetto] = useState("");
   const [corpo, setCorpo] = useState("");
   const [tipo, setTipo] = useState<BroadcastTipo>("servizio");
@@ -598,11 +831,13 @@ function ComunicazioniTab() {
   }, [confirmId]);
 
   const criterio = useCallback((): BroadcastCriterio => {
+    // Destinatari scelti nella tab Utenti: sostituiscono i criteri liberi.
+    if (recipients) return recipients.all ? { all: true } : { userIds: Object.keys(recipients.users) };
     const c: BroadcastCriterio = {};
     if (tuttiRegistrati) c.all = true;
     if (minPartite.trim() !== "") c.minPartite = Math.max(0, Number(minPartite) || 0);
     return c;
-  }, [tuttiRegistrati, minPartite]);
+  }, [recipients, tuttiRegistrati, minPartite]);
 
   const refresh = useCallback(async () => {
     setListBusy(true);
@@ -679,12 +914,51 @@ function ComunicazioniTab() {
       </div>
       <fieldset className="wm-field">
         <legend>Destinatari</legend>
-        <label className="wm-check">
-          <input type="checkbox" checked={tuttiRegistrati} onChange={(e) => setTuttiRegistrati(e.target.checked)} />
-          Tutti i registrati
-        </label>
-        <label htmlFor="wm-minp">Almeno N partite</label>
-        <input id="wm-minp" inputMode="numeric" value={minPartite} onChange={(e) => setMinPartite(e.target.value)} />
+        {recipients ? (
+          <div className="wm-recipients">
+            <p className="wm-muted">
+              {recipients.all ? (
+                <>
+                  Scelti dalla scheda Utenti: <strong>tutti i registrati</strong>.
+                </>
+              ) : (
+                <>
+                  Scelti dalla scheda Utenti: <strong>{Object.keys(recipients.users).length}</strong>{" "}
+                  {Object.keys(recipients.users).length === 1 ? "utente" : "utenti"} —{" "}
+                  {Object.values(recipients.users).slice(0, 5).join(", ")}
+                  {Object.keys(recipients.users).length > 5
+                    ? ` e altri ${Object.keys(recipients.users).length - 5}`
+                    : ""}
+                  .
+                </>
+              )}
+            </p>
+            <p className="wm-muted wm-hint">
+              Per le comunicazioni promozionali ricevono l&apos;email solo gli utenti che hanno dato il consenso.
+            </p>
+            <div className="wm-actions">
+              <button type="button" className="wm-btn wm-btn-small" onClick={onEditRecipients}>
+                Modifica selezione
+              </button>
+              <button type="button" className="wm-btn wm-btn-small" onClick={onClearRecipients}>
+                Usa i criteri
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <label className="wm-check">
+              <input type="checkbox" checked={tuttiRegistrati} onChange={(e) => setTuttiRegistrati(e.target.checked)} />
+              Tutti i registrati
+            </label>
+            <label htmlFor="wm-minp">Almeno N partite</label>
+            <input id="wm-minp" inputMode="numeric" value={minPartite} onChange={(e) => setMinPartite(e.target.value)} />
+            <p className="wm-muted wm-hint">
+              Per scegliere i destinatari uno a uno, spuntali nella scheda Utenti e premi &quot;Scrivi ai
+              selezionati&quot;.
+            </p>
+          </>
+        )}
       </fieldset>
 
       <div className="wm-actions">
@@ -799,8 +1073,9 @@ function CatalogoTab() {
     <>
       <p className="wm-note">
         <span className="wm-note-badge">Predisposizione</span>
-        È possibile inserire ed elencare eventi e prodotti. La vetrina pubblica, le iscrizioni ai tornei e il
-        carrello/pagamento dello shop non sono attivi in questo ciclo.
+        È possibile inserire ed elencare eventi; i prodotti si creano, modificano ed eliminano, con foto e anteprima
+        della scheda. La vetrina pubblica, le iscrizioni ai tornei e il carrello/pagamento dello shop non sono attivi
+        in questo ciclo.
       </p>
       <div className="wm-catalog-grid">
         <EventiSection />
@@ -907,13 +1182,77 @@ function EventiSection() {
   );
 }
 
+/** Foto della scheda prodotto: ritagliata e ridimensionata dal browser a 800×600 (4:3). */
+const PRODUCT_IMG_W = 800;
+const PRODUCT_IMG_H = 600;
+/** Tetto del data URL, sotto il limite del backend (400.000 caratteri). */
+const PRODUCT_IMG_MAX_CHARS = 380_000;
+
+const fmtPrezzo = (cent: number, valuta: string) =>
+  `${(cent / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${valuta}`;
+
+/** Scheda prodotto come apparirà nella vetrina: usata sia in elenco sia come anteprima del form. */
+function ProductCard({
+  nome,
+  descrizione,
+  prezzoCent,
+  valuta,
+  immagineUrl,
+  disponibile,
+  children,
+}: {
+  nome: string;
+  descrizione: string | null;
+  prezzoCent: number;
+  valuta: string;
+  immagineUrl: string | null;
+  disponibile: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <article className="wm-product-card">
+      <div className="wm-product-img">
+        {immagineUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- data URL: nessuna ottimizzazione Next applicabile
+          <img src={immagineUrl} alt={`Foto di ${nome || "prodotto"}`} />
+        ) : (
+          <span className="wm-product-noimg">Nessuna foto</span>
+        )}
+      </div>
+      <div className="wm-product-body">
+        <strong className="wm-product-name">{nome || "Nome prodotto"}</strong>
+        <span className="wm-product-price">{fmtPrezzo(prezzoCent, valuta)}</span>
+        {descrizione && <p className="wm-product-desc">{descrizione}</p>}
+        <span className={disponibile ? "wm-tag wm-tag-live" : "wm-tag"}>
+          {disponibile ? "disponibile" : "non disponibile"}
+        </span>
+        {children}
+      </div>
+    </article>
+  );
+}
+
 function ShopSection() {
   const [items, setItems] = useState<ShopProductRow[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [nome, setNome] = useState("");
   const [prezzo, setPrezzo] = useState(""); // in euro, convertito in centesimi
+  const [descrizione, setDescrizione] = useState("");
+  const [disponibile, setDisponibile] = useState(true);
+  const [foto, setFoto] = useState<string | null>(null);
+  const [fotoBusy, setFotoBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [listBusy, setListBusy] = useState(true);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const nomeRef = useRef<HTMLInputElement>(null);
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (confirmDeleteId) confirmBtnRef.current?.focus();
+  }, [confirmDeleteId]);
 
   const refresh = useCallback(async () => {
     setListBusy(true);
@@ -931,47 +1270,195 @@ function ShopSection() {
     void refresh();
   }, [refresh]);
 
-  const create = useCallback(async () => {
+  const prezzoCent = (() => {
+    const euro = Number(prezzo.replace(",", "."));
+    return Number.isFinite(euro) ? Math.max(0, Math.round(euro * 100)) : 0;
+  })();
+
+  const resetForm = useCallback(() => {
+    setEditingId(null);
+    setNome("");
+    setPrezzo("");
+    setDescrizione("");
+    setDisponibile(true);
+    setFoto(null);
+    if (fileRef.current) fileRef.current.value = "";
+  }, []);
+
+  const startEdit = useCallback((p: ShopProductRow) => {
+    setEditingId(p.id);
+    setNome(p.nome);
+    setPrezzo((p.prezzoCent / 100).toFixed(2).replace(".", ","));
+    setDescrizione(p.descrizione ?? "");
+    setDisponibile(p.disponibile);
+    setFoto(p.immagineUrl);
+    setError(null);
+    setNotice(null);
+    setConfirmDeleteId(null);
+    if (fileRef.current) fileRef.current.value = "";
+    nomeRef.current?.focus();
+    nomeRef.current?.scrollIntoView({ block: "center" });
+  }, []);
+
+  const onPickFoto = useCallback(async (file: File | undefined) => {
+    if (!file) return;
+    setFotoBusy(true);
+    setError(null);
+    try {
+      setFoto(await resizeImageToDataUrl(file, PRODUCT_IMG_W, PRODUCT_IMG_H, { maxChars: PRODUCT_IMG_MAX_CHARS }));
+    } catch (err) {
+      setError(err instanceof ImageError ? err.message : "Impossibile elaborare la foto.");
+      if (fileRef.current) fileRef.current.value = "";
+    } finally {
+      setFotoBusy(false);
+    }
+  }, []);
+
+  const save = useCallback(async () => {
     if (!nome.trim()) {
       setError("Il nome del prodotto è obbligatorio.");
       return;
     }
-    const euro = Number(prezzo.replace(",", "."));
-    const prezzoCent = Number.isFinite(euro) ? Math.max(0, Math.round(euro * 100)) : 0;
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
-      await admin.createShopProduct({ nome, prezzoCent });
-      setNome("");
-      setPrezzo("");
+      const desc = descrizione.trim();
+      if (editingId) {
+        await admin.updateShopProduct(editingId, {
+          nome,
+          prezzoCent,
+          descrizione: desc || null,
+          immagineUrl: foto,
+          disponibile,
+        });
+        setNotice("Prodotto aggiornato.");
+      } else {
+        await admin.createShopProduct({
+          nome,
+          prezzoCent,
+          descrizione: desc || undefined,
+          immagineUrl: foto ?? undefined,
+          disponibile,
+        });
+        setNotice("Prodotto creato.");
+      }
+      resetForm();
       await refresh();
     } catch (err) {
-      setError(err instanceof AdminError ? err.message : "Errore nella creazione prodotto.");
+      setError(err instanceof AdminError ? err.message : "Errore nel salvataggio del prodotto.");
     } finally {
       setBusy(false);
     }
-  }, [nome, prezzo, refresh]);
+  }, [nome, prezzoCent, descrizione, foto, disponibile, editingId, resetForm, refresh]);
 
-  const fmtPrezzo = (cent: number, valuta: string) =>
-    `${(cent / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${valuta}`;
+  const remove = useCallback(
+    async (p: ShopProductRow) => {
+      setBusy(true);
+      setError(null);
+      setNotice(null);
+      try {
+        await admin.deleteShopProduct(p.id);
+        setConfirmDeleteId(null);
+        if (editingId === p.id) resetForm();
+        setNotice(`Prodotto "${p.nome}" eliminato.`);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof AdminError ? err.message : "Errore nella cancellazione del prodotto.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [editingId, resetForm, refresh],
+  );
 
   return (
     <section className="wm-card" aria-label="Prodotti shop">
       <h2 className="wm-h2">Shop (prodotti)</h2>
+      <h3 className="wm-h3">{editingId ? "Modifica prodotto" : "Nuovo prodotto"}</h3>
       <div className="wm-field">
         <label htmlFor="wm-sp-nome">Nome</label>
-        <input id="wm-sp-nome" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={150} />
+        <input id="wm-sp-nome" ref={nomeRef} value={nome} onChange={(e) => setNome(e.target.value)} maxLength={150} />
       </div>
       <div className="wm-field">
         <label htmlFor="wm-sp-prezzo">Prezzo (EUR)</label>
         <input id="wm-sp-prezzo" inputMode="decimal" value={prezzo} onChange={(e) => setPrezzo(e.target.value)} placeholder="es. 12,50" />
       </div>
+      <div className="wm-field">
+        <label htmlFor="wm-sp-desc">Descrizione</label>
+        <textarea
+          id="wm-sp-desc"
+          value={descrizione}
+          onChange={(e) => setDescrizione(e.target.value)}
+          rows={3}
+          maxLength={2000}
+        />
+      </div>
+      <div className="wm-field">
+        <label htmlFor="wm-sp-foto">Foto</label>
+        <input
+          id="wm-sp-foto"
+          ref={fileRef}
+          type="file"
+          accept={ACCEPTED_IMAGE_TYPES}
+          onChange={(e) => void onPickFoto(e.target.files?.[0])}
+          disabled={fotoBusy || busy}
+          aria-describedby="wm-sp-foto-hint"
+        />
+        <p id="wm-sp-foto-hint" className="wm-muted wm-hint">
+          Dimensioni consigliate: <strong>800 × 600 px</strong> (formato orizzontale 4:3), JPG, PNG o WebP, fino a
+          15 MB. La foto viene ritagliata al centro e ridotta automaticamente a 800 × 600 px.
+        </p>
+        {fotoBusy && (
+          <p className="wm-loading" role="status">
+            <span className="wm-spinner" aria-hidden="true" /> Elaborazione della foto…
+          </p>
+        )}
+        {foto && !fotoBusy && (
+          <div className="wm-actions">
+            <button
+              type="button"
+              className="wm-btn wm-btn-small"
+              onClick={() => {
+                setFoto(null);
+                if (fileRef.current) fileRef.current.value = "";
+              }}
+              disabled={busy}
+            >
+              Rimuovi foto
+            </button>
+          </div>
+        )}
+      </div>
+      <label className="wm-check">
+        <input type="checkbox" checked={disponibile} onChange={(e) => setDisponibile(e.target.checked)} />
+        Disponibile
+      </label>
+
+      <h3 className="wm-h3">Anteprima della scheda</h3>
+      <div className="wm-product-preview">
+        <ProductCard
+          nome={nome.trim()}
+          descrizione={descrizione.trim() || null}
+          prezzoCent={prezzoCent}
+          valuta="EUR"
+          immagineUrl={foto}
+          disponibile={disponibile}
+        />
+      </div>
+
       <div className="wm-actions">
-        <button type="button" className="wm-btn" onClick={() => void create()} disabled={busy || !nome}>
-          {busy ? "Salvo…" : "Aggiungi prodotto"}
+        <button type="button" className="wm-btn wm-btn-primary" onClick={() => void save()} disabled={busy || fotoBusy || !nome.trim()}>
+          {busy ? "Salvo…" : editingId ? "Salva modifiche" : "Aggiungi prodotto"}
         </button>
+        {editingId && (
+          <button type="button" className="wm-btn" onClick={resetForm} disabled={busy}>
+            Annulla modifica
+          </button>
+        )}
       </div>
       {error && <p className="wm-alert" role="alert">{error}</p>}
+      {notice && <p className="wm-success" role="status" aria-live="polite">{notice}</p>}
 
       <h3 className="wm-h3">Prodotti inseriti</h3>
       {listBusy ? (
@@ -981,21 +1468,61 @@ function ShopSection() {
       ) : items.length === 0 ? (
         <p className="wm-empty">Nessun prodotto inserito. Compila il form qui sopra per aggiungerne uno.</p>
       ) : (
-        <ul className="wm-list">
+        <div className="wm-product-grid">
           {items.map((p) => (
-            <li key={p.id} className="wm-list-row">
-              <span className="wm-list-main">
-                <strong>{p.nome}</strong>
-                <span className="wm-list-meta">
-                  <span className="wm-muted">{fmtPrezzo(p.prezzoCent, p.valuta)}</span>
-                  <span className={p.disponibile ? "wm-tag wm-tag-live" : "wm-tag"}>
-                    {p.disponibile ? "disponibile" : "non disponibile"}
+            <ProductCard
+              key={p.id}
+              nome={p.nome}
+              descrizione={p.descrizione}
+              prezzoCent={p.prezzoCent}
+              valuta={p.valuta}
+              immagineUrl={p.immagineUrl}
+              disponibile={p.disponibile}
+            >
+              {confirmDeleteId === p.id ? (
+                <span className="wm-confirm" role="group" aria-label={`Conferma eliminazione di ${p.nome}`}>
+                  <span className="wm-confirm-text">Eliminazione irreversibile. Confermi?</span>
+                  <span className="wm-confirm-actions">
+                    <button
+                      type="button"
+                      className="wm-btn wm-btn-small wm-btn-danger"
+                      onClick={() => void remove(p)}
+                      disabled={busy}
+                      aria-busy={busy}
+                      ref={confirmBtnRef}
+                    >
+                      {busy ? "Elimino…" : "Sì, elimina"}
+                    </button>
+                    <button type="button" className="wm-btn wm-btn-small" onClick={() => setConfirmDeleteId(null)} disabled={busy}>
+                      Annulla
+                    </button>
                   </span>
                 </span>
-              </span>
-            </li>
+              ) : (
+                <span className="wm-row-actions">
+                  <button
+                    type="button"
+                    className="wm-btn wm-btn-small"
+                    onClick={() => startEdit(p)}
+                    disabled={busy}
+                    aria-label={`Modifica ${p.nome}`}
+                  >
+                    Modifica
+                  </button>
+                  <button
+                    type="button"
+                    className="wm-btn wm-btn-small wm-btn-danger"
+                    onClick={() => setConfirmDeleteId(p.id)}
+                    disabled={busy}
+                    aria-label={`Elimina ${p.nome}`}
+                  >
+                    Elimina
+                  </button>
+                </span>
+              )}
+            </ProductCard>
           ))}
-        </ul>
+        </div>
       )}
     </section>
   );

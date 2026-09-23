@@ -70,6 +70,8 @@ export interface BroadcastCriterio {
   registratiDopo?: number;
   minPartite?: number;
   inattiviDaGiorni?: number;
+  /** Destinatari scelti a mano nella tab Utenti (id registrati). */
+  userIds?: string[];
 }
 export type BroadcastTipo = "servizio" | "promozionale";
 export interface BroadcastCreateResponse {
@@ -151,9 +153,19 @@ export interface EventRow {
 export interface ShopProductRow {
   id: string;
   nome: string;
+  descrizione: string | null;
   prezzoCent: number;
   valuta: string;
+  /** Foto della scheda: data URL d'immagine (o URL); null = assente. */
+  immagineUrl: string | null;
   disponibile: boolean;
+}
+
+/* ── CICLO Webmaster — operazioni sul singolo utente ─────────────────────── */
+
+export interface AdminResetPasswordResponse {
+  tempPassword: string;
+  emailed: boolean;
 }
 
 /* ── Chiamate ────────────────────────────────────────────────────────────── */
@@ -224,6 +236,36 @@ export const admin = {
     immagineUrl?: string;
     disponibile?: boolean;
   }) => adminFetch<ShopProductRow>("/admin/shop/products", { method: "POST", body: JSON.stringify(payload) }),
+
+  /* ── CICLO Webmaster — CRUD prodotti e operazioni sugli utenti ─────────── */
+  // Solo GET/POST (CORS del BE): modifica e cancellazione sono POST dedicate.
+  updateShopProduct: (
+    id: string,
+    payload: {
+      nome?: string;
+      descrizione?: string | null;
+      prezzoCent?: number;
+      valuta?: string;
+      immagineUrl?: string | null;
+      disponibile?: boolean;
+    },
+  ) =>
+    adminFetch<ShopProductRow>(`/admin/shop/products/${encodeURIComponent(id)}`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  deleteShopProduct: (id: string) =>
+    adminFetch<{ deleted: boolean }>(`/admin/shop/products/${encodeURIComponent(id)}/delete`, {
+      method: "POST",
+      body: "{}",
+    }),
+  deleteUser: (id: string) =>
+    adminFetch<{ deleted: boolean }>(`/admin/users/${encodeURIComponent(id)}/delete`, { method: "POST", body: "{}" }),
+  resetUserPassword: (id: string) =>
+    adminFetch<AdminResetPasswordResponse>(`/admin/users/${encodeURIComponent(id)}/reset-password`, {
+      method: "POST",
+      body: "{}",
+    }),
 };
 
 /**

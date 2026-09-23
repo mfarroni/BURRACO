@@ -1,12 +1,12 @@
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db, schema } from "../db/client.js";
 import type { EventRow, ShopProductRow } from "./types.js";
 
 /**
- * CICLO Pannello Admin — PREDISPOSIZIONE Eventi (Tornei) e Shop (§2.6). CRUD MINIMALE:
- * solo create + list dietro `requireAdmin`. Niente update/delete, niente vetrina
- * pubblica, niente carrello/pagamento in questo ciclo: il dato è inseribile e
- * conservato, l'esposizione al pubblico è un ciclo futuro.
+ * CICLO Pannello Admin — PREDISPOSIZIONE Eventi (Tornei) e Shop (§2.6), dietro
+ * `requireAdmin`. Eventi: create + list. Prodotti shop: CRUD completo (create, list,
+ * update, delete) con descrizione e foto (CICLO Webmaster). Niente vetrina pubblica,
+ * niente carrello/pagamento: l'esposizione al pubblico è un ciclo futuro.
  */
 
 const LIST_LIMIT = 100;
@@ -75,8 +75,49 @@ export interface CreateShopProductInput {
   descrizione?: string;
   prezzoCent?: number; // centesimi (mai float sul denaro)
   valuta?: string;
+  /** URL o data URL d'immagine (validato dall'handler HTTP). */
   immagineUrl?: string;
   disponibile?: boolean;
+}
+
+/** Aggiornamento PARZIALE: solo i campi presenti cambiano; `null` svuota descrizione/foto. */
+export interface UpdateShopProductInput {
+  nome?: string;
+  descrizione?: string | null;
+  prezzoCent?: number;
+  valuta?: string;
+  immagineUrl?: string | null;
+  disponibile?: boolean;
+}
+
+const productColumns = {
+  id: schema.shopProducts.id,
+  nome: schema.shopProducts.nome,
+  descrizione: schema.shopProducts.descrizione,
+  prezzoCent: schema.shopProducts.prezzoCent,
+  valuta: schema.shopProducts.valuta,
+  immagineUrl: schema.shopProducts.immagineUrl,
+  disponibile: schema.shopProducts.disponibile,
+};
+
+function toProductRow(r: {
+  id: string;
+  nome: string;
+  descrizione: string | null;
+  prezzoCent: number;
+  valuta: string;
+  immagineUrl: string | null;
+  disponibile: boolean;
+}): ShopProductRow {
+  return {
+    id: r.id,
+    nome: r.nome,
+    descrizione: r.descrizione,
+    prezzoCent: r.prezzoCent,
+    valuta: r.valuta,
+    immagineUrl: r.immagineUrl,
+    disponibile: r.disponibile,
+  };
 }
 
 export async function createShopProduct(authorId: string, input: CreateShopProductInput): Promise<ShopProductRow | null> {
@@ -92,36 +133,44 @@ export async function createShopProduct(authorId: string, input: CreateShopProdu
       disponibile: input.disponibile ?? true,
       createdBy: authorId,
     })
-    .returning({
-      id: schema.shopProducts.id,
-      nome: schema.shopProducts.nome,
-      prezzoCent: schema.shopProducts.prezzoCent,
-      valuta: schema.shopProducts.valuta,
-      disponibile: schema.shopProducts.disponibile,
-    });
-  if (!row) return null;
-  return { id: row.id, nome: row.nome, prezzoCent: row.prezzoCent, valuta: row.valuta, disponibile: row.disponibile };
+    .returning(productColumns);
+  return row ? toProductRow(row) : null;
 }
 
 export async function listShopProducts(): Promise<ShopProductRow[]> {
   if (!db) return [];
   const rows = await db
-    .select({
-      id: schema.shopProducts.id,
-      nome: schema.shopProducts.nome,
-      prezzoCent: schema.shopProducts.prezzoCent,
-      valuta: schema.shopProducts.valuta,
-      disponibile: schema.shopProducts.disponibile,
-      createdAt: schema.shopProducts.createdAt,
-    })
+    .select(productColumns)
     .from(schema.shopProducts)
     .orderBy(desc(schema.shopProducts.createdAt))
     .limit(LIST_LIMIT);
-  return rows.map((r) => ({
-    id: r.id,
-    nome: r.nome,
-    prezzoCent: r.prezzoCent,
-    valuta: r.valuta,
-    disponibile: r.disponibile,
-  }));
+  return rows.map(toProductRow);
+}
+
+/** Aggiorna un prodotto. `undefined` = non toccare il campo. Ritorna null se inesistente. */
+export async function updateShopProduct(id: string, input: UpdateShopProductInput): Promise<ShopProductRow | null> {
+  if (!db) return null;
+  const set: Partial<typeof schema.shopProducts.$inferInsert> = { updatedAt: new Date() };
+  if (input.nome !== undefined) set.nome = input.nome;
+  if (input.descrizione !== undefined) set.descrizione = input.descrizione;
+  if (input.prezzoCent !== undefined) set.prezzoCent = Math.max(0, Math.trunc(input.prezzoCent));
+  if (input.valuta !== undefined) set.valuta = input.valuta;
+  if (input.immagineUrl !== undefined) set.immagineUrl = input.immagineUrl;
+  if (input.disponibile !== undefined) set.disponibile = input.disponibile;
+  const [row] = await db
+    .update(schema.shopProducts)
+    .set(set)
+    .where(eq(schema.shopProducts.id, id))
+    .returning(productColumns);
+  return row ? toProductRow(row) : null;
+}
+
+/** Cancella un prodotto. Ritorna false se inesistente. */
+export async function deleteShopProduct(id: string): Promise<boolean> {
+  if (!db) return false;
+  const rows = await db
+    .delete(schema.shopProducts)
+    .where(eq(schema.shopProducts.id, id))
+    .returning({ id: schema.shopProducts.id });
+  return rows.length > 0;
 }

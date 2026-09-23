@@ -133,6 +133,23 @@ export async function guest(displayName?: string): Promise<AuthUser> {
 }
 
 /**
+ * CICLO Profilo — cambio password dell'utente registrato (serve l'attuale). Il
+ * backend revoca TUTTE le sessioni e ne emette una nuova: il token restituito
+ * sostituisce quello locale, così questo dispositivo resta connesso.
+ */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<AuthUser> {
+  const token = getAuthToken();
+  if (!token) throw new AuthClientError("UNAUTHORIZED", "Sessione non valida: accedi di nuovo.", 401);
+  const res = await call<AuthSuccess>("/auth/change-password", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  saveAuthToken(res.token);
+  return res.user;
+}
+
+/**
  * Revoca la sessione lato server e cancella il token locale. Idempotente e
  * tollerante agli errori: il token locale viene comunque rimosso.
  */

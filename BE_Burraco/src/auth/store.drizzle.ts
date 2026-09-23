@@ -108,6 +108,10 @@ export class DrizzleAuthStore implements AuthStore {
       .where(and(eq(schema.sessions.tokenHash, tokenHash), isNull(schema.sessions.revokedAt)));
   }
 
+  async setPasswordHash(userId: string, passwordHash: string): Promise<void> {
+    await this.db.update(schema.users).set({ passwordHash }).where(eq(schema.users.id, userId));
+  }
+
   async revokeAllForUser(userId: string): Promise<number> {
     const rows = await this.db
       .update(schema.sessions)

@@ -763,3 +763,135 @@
     transition: none;
   }
 }
+
+/* ─── CICLO Webmaster: intestazione, azioni di riga, schede prodotto ─────── */
+
+.webmaster-root .wm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3, 12px);
+  margin-bottom: var(--sp-5, 24px);
+}
+
+.webmaster-root .wm-header .wm-title {
+  margin: 0;
+}
+
+.webmaster-root .wm-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2, 8px);
+}
+
+.webmaster-root .wm-temp-pw {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.06em;
+  user-select: all;
+}
+
+.webmaster-root .wm-hint {
+  font-size: var(--fs-sm, 0.875rem);
+  margin: var(--sp-1, 4px) 0 0;
+}
+
+.webmaster-root .wm-product-preview {
+  max-width: 320px;
+  margin-bottom: var(--sp-3, 12px);
+}
+
+.webmaster-root .wm-product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 280px));
+  gap: var(--sp-4, 16px);
+}
+
+.webmaster-root .wm-product-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--wm-panel-2);
+  border: 1px solid var(--wm-border-gold);
+  border-radius: var(--wm-r);
+  overflow: hidden;
+}
+
+.webmaster-root .wm-product-img {
+  aspect-ratio: 4 / 3;
+  background: var(--wm-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--wm-border);
+}
+
+.webmaster-root .wm-product-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.webmaster-root .wm-product-noimg {
+  color: var(--wm-faint);
+  font-size: var(--fs-sm, 0.875rem);
+}
+
+.webmaster-root .wm-product-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2, 8px);
+  padding: var(--sp-3, 12px);
+}
+
+.webmaster-root .wm-product-name {
+  font-family: var(--font-serif, Georgia, serif);
+  color: var(--wm-text-strong);
+  word-break: break-word;
+}
+
+.webmaster-root .wm-product-price {
+  color: var(--wm-gold-soft);
+  font-weight: 600;
+}
+
+.webmaster-root .wm-product-desc {
+  margin: 0;
+  color: var(--wm-muted);
+  font-size: var(--fs-sm, 0.875rem);
+  white-space: pre-line;
+  word-break: break-word;
+}
+
+.webmaster-root .wm-product-card .wm-confirm {
+  align-items: flex-start;
+}
+
+/* ─── CICLO Webmaster: selezione destinatari (tab Utenti → Comunicazioni) ── */
+
+.webmaster-root .wm-select-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2, 8px) var(--sp-4, 16px);
+  padding: var(--sp-3, 12px);
+  margin-bottom: var(--sp-3, 12px);
+  border: 1px solid var(--wm-border);
+  border-radius: var(--wm-r-sm);
+  background: var(--wm-panel-2);
+}
+
+.webmaster-root .wm-select-cell {
+  width: 1%;
+}
+
+.webmaster-root .wm-row-check {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--wm-gold);
+}
+
+.webmaster-root .wm-recipients .wm-muted {
+  margin: 0 0 var(--sp-2, 8px);
+}

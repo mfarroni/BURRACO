@@ -14,6 +14,8 @@ import type {
 import { fetchStats, fetchMatches, fetchMatchDetail } from "@/lib/profile";
 import { AuthClientError } from "@/lib/auth";
 import { DonationButton } from "@/components/DonationButton";
+import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { SideFlank } from "@/components/SideFlanks";
 import { VetrinaBrandHeader } from "@/components/VetrinaBrandHeader";
 
@@ -166,12 +168,26 @@ export function ProfilePanel({ user, onBack }: Props) {
         <VetrinaBrandHeader title="Burraco" subtitle="Profilo Giocatore — Circolo Nettuno" />
 
         <div className="profile-identity">
-          <span className="profile-name">{displayName}</span>
+          <div className="profile-who">
+            <ProfileAvatar name={displayName} editable={!isGuest} />
+            <div className="profile-who-text">
+              <span className="profile-name">{displayName}</span>
+              {/* Account del giocatore: l'email con cui accede (gli ospiti non ne hanno). */}
+              {user.email && (
+                <span className="profile-account">
+                  Account: <strong>{user.email}</strong>
+                </span>
+              )}
+            </div>
+          </div>
           <span className="profile-badge" data-guest={isGuest ? "true" : "false"}>
             <span className="profile-badge-icon" aria-hidden="true">{isGuest ? "○" : "✓"}</span>
             {isGuest ? "Ospite" : "Registrato"}
           </span>
         </div>
+
+        {/* Cambio password: solo per i registrati (gli ospiti non hanno password). */}
+        {!isGuest && <ChangePasswordForm />}
 
       {isGuest ? (
         <div className="profile-guest-note" role="status">

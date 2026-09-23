@@ -21,10 +21,18 @@ import { getOccupancy } from "../admin/occupancy.js";
 import { runRetentionSweep } from "../retention/service.js";
 import { createBroadcast, enqueueSend, listBroadcasts, unsubscribeByToken } from "../broadcast/service.js";
 import { getAppLogs, getDbStatus, getRenderLogs } from "../admin/logs.js";
-import { listUsers } from "../admin/users.js";
+import { deleteUser, listUsers, resetUserPassword, type AdminUserOpError } from "../admin/users.js";
 import { runStatusCheck } from "../admin/status.js";
-import { createEvent, listEvents, createShopProduct, listShopProducts } from "../admin/catalog.js";
-import type { LogLinksResponse } from "../admin/types.js";
+import {
+  createEvent,
+  listEvents,
+  createShopProduct,
+  listShopProducts,
+  updateShopProduct,
+  deleteShopProduct,
+} from "../admin/catalog.js";
+import type { AdminResetPasswordResponse, LogLinksResponse } from "../admin/types.js";
+import { AVATAR_MAX_CHARS, IMAGE_DATA_URL_RE, getAvatar, setAvatar } from "../profile/avatar.js";
 
 /**
  * APP HTTP del backend auth (Express) montata sullo STESSO http.Server del WS
@@ -35,6 +43,7 @@ import type { LogLinksResponse } from "../admin/types.js";
  *   POST /auth/logout    (Bearer)                           → { ok: true }
  *   POST /auth/logout-all(Bearer)                           → { ok: true, revoked }
  *   GET  /auth/me        (Bearer)                           → { user }
+ *   POST /auth/change-password (Bearer) { currentPassword, newPassword } → { token, user }
  *
  * Sicurezza:
  *  - security header HTTP (SEC-A5): nosniff, frame-deny, no-referrer, HSTS in prod.
@@ -68,6 +77,11 @@ const loginBody = z.object({
   website: z.string().max(200).optional(),
 });
 const guestBody = z.object({ displayName: displayNameSchema });
+// CICLO Profilo — cambio password: l'attuale ha solo il tetto anti-DoS, la nuova la policy.
+const changePasswordBody = z.object({
+  currentPassword: z.string().min(1).max(200),
+  newPassword: passwordSchema,
+});
 
 // Storico partite paginato: cap ragionevoli anti-abuso. Coercizione da querystring.
 // limit ∈ [1,50] (default 10); offset ≥ 0 con tetto anti-DoS (default 0).
@@ -110,6 +124,8 @@ const broadcastCriterioSchema = z.object({
   registratiDopo: z.coerce.number().int().nonnegative().optional(),
   minPartite: z.coerce.number().int().min(0).max(100000).optional(),
   inattiviDaGiorni: z.coerce.number().int().min(0).max(3650).optional(),
+  // CICLO Webmaster — destinatari selezionati a mano (tab Utenti): uuid, tetto 1000.
+  userIds: z.array(z.string().uuid()).min(1).max(1000).optional(),
 });
 const broadcastCreateBody = z.object({
   oggetto: z.string().trim().min(1).max(150),
@@ -147,15 +163,38 @@ const eventCreateBody = z.object({
   pubblicato: z.boolean().optional(),
 });
 
-// CICLO Pannello Admin — predisposizione Shop: create minimale. `prezzoCent` è un
-// intero in CENTESIMI (mai float sul denaro); `immagineUrl` è un URL valido opzionale.
+// CICLO Webmaster — foto della scheda prodotto: data URL d'immagine (jpeg/png/webp,
+// mai SVG) già ridimensionato dal client, con tetto; oppure un URL http(s) (compat.).
+const PRODUCT_IMAGE_MAX_CHARS = 400_000;
+const productImageSchema = z.union([
+  z.string().max(PRODUCT_IMAGE_MAX_CHARS).regex(IMAGE_DATA_URL_RE),
+  z.string().trim().url().max(500).regex(/^https?:\/\//i),
+]);
+
+// CICLO Pannello Admin — predisposizione Shop. `prezzoCent` è un intero in CENTESIMI
+// (mai float sul denaro); `immagineUrl` è una foto (data URL) o un URL opzionale.
 const shopProductCreateBody = z.object({
   nome: z.string().trim().min(1).max(150),
   descrizione: z.string().trim().max(2000).optional(),
   prezzoCent: z.coerce.number().int().min(0).max(100_000_000).optional(),
   valuta: z.string().trim().min(1).max(8).optional(),
-  immagineUrl: z.string().trim().url().max(500).optional(),
+  immagineUrl: productImageSchema.optional(),
   disponibile: z.boolean().optional(),
+});
+// CICLO Webmaster — modifica PARZIALE: campi assenti invariati; `null` svuota
+// descrizione/foto. Stessi tetti della creazione.
+const shopProductUpdateBody = z.object({
+  nome: z.string().trim().min(1).max(150).optional(),
+  descrizione: z.string().trim().max(2000).nullable().optional(),
+  prezzoCent: z.coerce.number().int().min(0).max(100_000_000).optional(),
+  valuta: z.string().trim().min(1).max(8).optional(),
+  immagineUrl: productImageSchema.nullable().optional(),
+  disponibile: z.boolean().optional(),
+});
+
+// CICLO Profilo — foto profilo: data URL d'immagine con tetto, oppure null (rimozione).
+const avatarBody = z.object({
+  avatar: z.string().max(AVATAR_MAX_CHARS).regex(IMAGE_DATA_URL_RE).nullable(),
 });
 
 /* ─────────────────────────────── helper ──────────────────────────────────── */
@@ -166,6 +205,8 @@ const STATUS_BY_CODE: Record<AuthErrorCode, number> = {
   INVALID_CREDENTIALS: 401,
   WEAK_PASSWORD: 400,
   UNAUTHORIZED: 401,
+  WRONG_PASSWORD: 400,
+  GUEST_NO_PASSWORD: 403,
 };
 
 function sendAuthError(res: Response, err: unknown): void {
@@ -241,6 +282,14 @@ export function createHttpApp(
     maxAge: 600,
   };
   app.use(cors(corsOptions));
+
+  // CICLO Webmaster/Profilo — tetti DEDICATI alle sole rotte che trasportano una foto
+  // (data URL già ridimensionato dal client). Montati PRIMA del parser globale: il
+  // body-parser salta un corpo già letto, quindi le altre rotte restano a 8kb.
+  app.use("/admin/shop/products", express.json({ limit: "450kb" }));
+  app.use("/users/me/avatar", express.json({ limit: "160kb" }));
+  // Comunicazioni con destinatari selezionati: fino a 1000 uuid (~40kb).
+  app.use("/admin/broadcasts", express.json({ limit: "64kb" }));
 
   // Corpo JSON con tetto anti-DoS (i body auth sono piccoli).
   app.use(express.json({ limit: "8kb" }));
@@ -361,6 +410,28 @@ export function createHttpApp(
       // (auth.logoutAll solleva UNAUTHORIZED).
       const revoked = await auth.logoutAll(bearer(req));
       res.json({ ok: true, revoked });
+    }),
+  );
+
+  // CICLO Profilo — cambio password. Rate-limit dedicato (tentativi sulla password
+  // attuale con una sessione valida). Risponde con un token NUOVO: tutte le sessioni
+  // precedenti, anche su altri dispositivi, sono revocate.
+  const changePasswordLimiter = rateLimit({ name: "change-password", windowMs: 15 * 60_000, max: 10 });
+  app.post(
+    "/auth/change-password",
+    changePasswordLimiter,
+    handler(async (req, res) => {
+      const parsed = changePasswordBody.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({
+          error: "WEAK_PASSWORD",
+          message: "La nuova password deve avere almeno 8 caratteri.",
+        });
+        return;
+      }
+      const result = await auth.changePassword(bearer(req), parsed.data.currentPassword, parsed.data.newPassword);
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ token: result.sessionToken, user: result.user });
     }),
   );
 
@@ -575,6 +646,38 @@ export function createHttpApp(
           return;
         }
         res.json(detail);
+      }),
+    );
+
+    /* CICLO Profilo — FOTO PROFILO del principale (solo registrati, come il resto di
+     * /users/me/*). L'utente è derivato SOLO dal token: nessun id nel percorso, nessun
+     * IDOR. POST con `{ avatar: dataUrl }` imposta, `{ avatar: null }` rimuove. */
+    const avatarLimiter = rateLimit({ name: "avatar", windowMs: 60_000, max: 20 });
+    app.get(
+      "/users/me/avatar",
+      avatarLimiter,
+      handler(async (req, res) => {
+        const principal = await requireRegistered(req, res);
+        if (!principal) return;
+        res.json({ avatar: await getAvatar(principal.userId) });
+      }),
+    );
+    app.post(
+      "/users/me/avatar",
+      avatarLimiter,
+      handler(async (req, res) => {
+        const principal = await requireRegistered(req, res);
+        if (!principal) return;
+        const parsed = avatarBody.safeParse(req.body ?? {});
+        if (!parsed.success) {
+          res.status(400).json({
+            error: "INVALID_AVATAR",
+            message: "Immagine non valida: usa una foto JPG, PNG o WebP.",
+          });
+          return;
+        }
+        await setAvatar(principal.userId, parsed.data.avatar);
+        res.json({ avatar: parsed.data.avatar });
       }),
     );
   }
@@ -840,6 +943,65 @@ export function createHttpApp(
     }),
   );
 
+  // CICLO Webmaster — operazioni sul SINGOLO utente registrato. Mai su se stessi né su
+  // un altro admin (409); ospite o inesistente → 404; senza DB → 503. Audit nella
+  // stessa transazione dell'operazione (users.ts).
+  const sendUserOpError = (res: Response, error: AdminUserOpError): void => {
+    if (error === "not_found") {
+      res.status(404).json({ error: "NOT_FOUND", message: "Utente non trovato." });
+    } else if (error === "forbidden") {
+      res.status(409).json({
+        error: "FORBIDDEN_TARGET",
+        message: "Operazione non consentita sul tuo account o su un altro amministratore.",
+      });
+    } else {
+      res.status(503).json({ error: "NO_DB", message: "Persistenza non disponibile." });
+    }
+  };
+
+  app.post(
+    "/admin/users/:id/delete",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const idParsed = matchIdSchema.safeParse(req.params.id);
+      if (!idParsed.success) {
+        res.status(400).json({ error: "INVALID_ID", message: "Identificativo non valido." });
+        return;
+      }
+      const result = await deleteUser(principal.userId, idParsed.data);
+      if (!result.ok) {
+        sendUserOpError(res, result.error);
+        return;
+      }
+      res.json({ deleted: true });
+    }),
+  );
+
+  app.post(
+    "/admin/users/:id/reset-password",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const idParsed = matchIdSchema.safeParse(req.params.id);
+      if (!idParsed.success) {
+        res.status(400).json({ error: "INVALID_ID", message: "Identificativo non valido." });
+        return;
+      }
+      const result = await resetUserPassword(principal.userId, idParsed.data);
+      if (!result.ok) {
+        sendUserOpError(res, result.error);
+        return;
+      }
+      // La password temporanea non deve restare in cache intermedie.
+      res.setHeader("Cache-Control", "no-store");
+      const body: AdminResetPasswordResponse = { tempPassword: result.tempPassword, emailed: result.emailed };
+      res.json(body);
+    }),
+  );
+
   // Link dashboard (§2, tab Log): SOLO i link (mai i log). Gli URL restano dietro
   // requireAdmin: non finiscono nel bundle FE (nessuna NEXT_PUBLIC_).
   app.get(
@@ -868,8 +1030,9 @@ export function createHttpApp(
     }),
   );
 
-  /* ── Predisposizione Eventi (Tornei) e Shop (§2.6) — CRUD MINIMALE create/list ──
-   * Niente update/delete, niente vetrina pubblica, niente carrello/pagamento. */
+  /* ── Predisposizione Eventi (Tornei) e Shop (§2.6) ──────────────────────────
+   * Eventi: create/list. Prodotti: CRUD completo con foto (CICLO Webmaster).
+   * Niente vetrina pubblica, niente carrello/pagamento. */
   app.get(
     "/admin/events",
     adminLimiter,
@@ -927,6 +1090,58 @@ export function createHttpApp(
         return;
       }
       res.status(201).json(row);
+    }),
+  );
+
+  // CICLO Webmaster — MODIFICA di un prodotto (aggiornamento parziale).
+  app.post(
+    "/admin/shop/products/:id",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const idParsed = matchIdSchema.safeParse(req.params.id);
+      if (!idParsed.success) {
+        res.status(400).json({ error: "INVALID_ID", message: "Identificativo non valido." });
+        return;
+      }
+      const parsed = shopProductUpdateBody.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: "INVALID_BODY", message: "Dati del prodotto non validi." });
+        return;
+      }
+      const row = await updateShopProduct(idParsed.data, parsed.data);
+      if (!row) {
+        res.status(404).json({ error: "NOT_FOUND", message: "Prodotto non trovato." });
+        return;
+      }
+      res.json(row);
+    }),
+  );
+
+  // CICLO Webmaster — CANCELLAZIONE di un prodotto.
+  app.post(
+    "/admin/shop/products/:id/delete",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const idParsed = matchIdSchema.safeParse(req.params.id);
+      if (!idParsed.success) {
+        res.status(400).json({ error: "INVALID_ID", message: "Identificativo non valido." });
+        return;
+      }
+      if (!(await deleteShopProduct(idParsed.data))) {
+        res.status(404).json({ error: "NOT_FOUND", message: "Prodotto non trovato." });
+        return;
+      }
+      void recordAdminAudit({
+        actorId: principal.userId,
+        action: "shop.product.delete",
+        target: { productId: idParsed.data },
+        outcome: "ok",
+      });
+      res.json({ deleted: true });
     }),
   );
 
