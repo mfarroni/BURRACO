@@ -846,6 +846,15 @@ export function createHttpApp(
         criterio: parsed.data.criterio,
         dryRun: parsed.data.dryRun ?? false,
       });
+      if ("error" in result) {
+        res.status(400).json({
+          error: "NO_RECIPIENTS",
+          message:
+            "Nessun destinatario: scegli gli utenti nella scheda Utenti o imposta un criterio. " +
+            "Gli utenti senza email (e, per le promozionali, senza consenso) sono esclusi.",
+        });
+        return;
+      }
       res.json(result);
     }),
   );
