@@ -2210,6 +2210,73 @@ button:disabled {
   color: var(--text-muted);
   text-align: center;
 }
+/* Regolazione dell'inquadratura di una foto (ImageCropper): profilo e shop. */
+.img-crop-frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: var(--surface-sunken);
+  cursor: grab;
+  touch-action: none; /* i gesti (trascina, pizzico) sono del riquadro, non della pagina */
+  user-select: none;
+}
+.img-crop-frame:active {
+  cursor: grabbing;
+}
+.img-crop-frame:focus-visible {
+  outline: 2px solid var(--brass-300);
+  outline-offset: 2px;
+}
+.img-crop-frame.is-round {
+  border-radius: 50%;
+  border: 2px solid var(--brass-500);
+}
+.img-crop-frame img {
+  pointer-events: none;
+}
+.img-crop-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  width: 100%;
+}
+.img-crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+}
+.img-crop-zoom input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--brass-500);
+}
+.img-crop-center {
+  font: inherit;
+  font-size: var(--fs-xs);
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--brass-500);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.img-crop-center:focus-visible {
+  outline: 2px solid var(--brass-300);
+  outline-offset: 2px;
+}
+.img-crop-hint {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.profile-avatar-crop {
+  width: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+}
 /* Cambio password (solo registrati), sotto l'identità. */
 .profile-password {
   margin-bottom: var(--sp-5);
