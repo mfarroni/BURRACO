@@ -6,7 +6,7 @@ import type { GameEndedInfo, HandEndedInfo, RejectionInfo, RoomClosedInfo } from
 import { REJECT_TITLE, rejectText } from "@/lib/rejectMessages";
 
 /**
- * Overlay e feedback degli stati di gioco, in stile "Circolo Notturno".
+ * Overlay e feedback degli stati di gioco, in stile "Circolo Nettuno".
  * Il testo dei rifiuti viene dalla mappa `rejectMessages` (proprietà FE): il
  * `reason` grezzo del server NON è mai mostrato.
  */

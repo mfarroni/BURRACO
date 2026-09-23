@@ -34,7 +34,9 @@ export function DonationButton({ size = "normale" }: DonationButtonProps) {
           alt="Offrimi un caffè su Buy Me a Coffee"
         />
       </a>
-      <p className="bmc-note">Il circolo è gratuito. Se ti fa piacere, offrici un caffè.</p>
+      {/* Frase decisa dal lead (proposta-donazione-condivisione.md §3/§8): dice il BISOGNO,
+          non solo la gratuità. Nessuna cifra, nessun conteggio. */}
+      <p className="bmc-note">Il circolo va avanti solo grazie alle vostre offerte.</p>
     </div>
   );
 }

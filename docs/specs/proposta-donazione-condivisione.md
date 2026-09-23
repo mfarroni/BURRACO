@@ -124,7 +124,7 @@ In `GameEndedOverlay` (`Overlays.tsx:323`), sotto il punteggio finale, un blocco
 ```
 
 - **Tetto di frequenza:** il blocco compare al massimo **una volta ogni 2 partite concluse**
-  e **mai più di una volta ogni 7 giorni**; "Non ora" lo sospende per 14 giorni. Stato in
+  e **mai più di una volta al giorno**; "Non ora" lo sospende per 14 giorni. Stato in
   `localStorage` (lettura/scrittura in `try/catch`; se non disponibile, il blocco non compare:
   meglio perdere una richiesta che insistere).
 - **Mai alla prima partita** in assoluto: prima si dà valore.
@@ -235,8 +235,8 @@ del marchio BMC. Nessuna richiesta in partita (vincolo R6 confermato).
 | 1 | Frase | **Versione breve ovunque:** "Il circolo va avanti solo grazie alle vostre offerte." |
 | 2 | Costo mensile reale | **No**, non si mostra alcuna cifra |
 | 3 | Nome ufficiale | **"Circolo Nettuno"** — da unificare in `app/layout.tsx` (oggi "Circolo Notturno") |
-| 4 | Tetto a fine partita | **Una volta ogni 2 partite concluse** (resta: mai alla prima partita, "Non ora" = 14 giorni, massimo 1 a settimana) |
-| 5 | Link diretto al tavolo | **In attesa**: il lead ha chiesto il perché (motivazione sotto) |
+| 4 | Tetto a fine partita | **Una volta ogni 2 partite concluse** (restano: mai alla prima partita, "Non ora" = 14 giorni; massimo **1 al giorno**, deciso il 2026-09-23) |
+| 5 | Link diretto al tavolo | **Sì**, incluso nel Lotto C (motivazione sotto) |
 | 6 | Contatore anonimo dei clic | **Sì** — richiede una piccola modifica BE (endpoint senza dati personali) |
 
 ### Perché il link diretto al tavolo (`?tavolo=CODICE`)
@@ -250,7 +250,7 @@ Con il link basta un tocco: il codice è già inserito nel campo e l'utente prem
   messaggio d'invito, quindi non si espone nulla di nuovo. Il parametro viene tolto dalla
   barra degli indirizzi appena letto (`history.replaceState`), così non resta nella cronologia
   né passa ad altri siti.
-- **Raccomandazione:** includerlo nel Lotto C, insieme all'invito dalla sala d'attesa.
+- **Decisione:** incluso nel Lotto C, insieme all'invito dalla sala d'attesa.
 
 ### Contatore anonimo — vincoli
 Endpoint BE di sola scrittura (es. `POST /metrics/click` con `{ tipo: "caffe" | "invito", punto }`),
@@ -264,11 +264,12 @@ solo dal pannello admin. **Non** tocca il contratto WS (`contract/types.ts`): vi
 2. **Lotto B — Fine partita:** `SupportPrompt` con tetto di frequenza + `ShareButton`.
 3. **Lotto C — Condivisione ovunque:** invito in sala d'attesa, lobby, sezione landing,
    frase personalizzata nel profilo.
-4. **Lotto D (facoltativo):** link diretto al tavolo, contatore anonimo.
+   Include il **link diretto al tavolo** (`?tavolo=CODICE`).
+4. **Lotto D:** contatore anonimo dei clic (endpoint BE + lettura nel pannello admin).
 
 Flusso: `agente_develop` → `agente_ui_ux` (rifinitura tono e grafica) → `agente_test`
 (nessuna regressione, tetto di frequenza, fallback share, 375px) → `agente_security`
 (nessun leak nel testo condiviso: **mai** carte, punteggi altrui o dati di altri giocatori
 nei messaggi precompilati; nessuno script esterno).
 
-OUTPUT PER: lead (conferma del link diretto al tavolo, poi avvio Lotto A)
+OUTPUT PER: agente_develop (Lotto A)
