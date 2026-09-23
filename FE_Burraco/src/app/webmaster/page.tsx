@@ -20,7 +20,16 @@ import {
   type ShopProductRow,
   type StatusCheckResponse,
 } from "@/lib/admin";
-import { ACCEPTED_IMAGE_TYPES, ImageError, resizeImageToDataUrl } from "@/lib/image";
+import {
+  ACCEPTED_IMAGE_TYPES,
+  CENTER_CROP,
+  ImageError,
+  loadImageFile,
+  renderCropToDataUrl,
+  type Crop,
+  type SourceImage,
+} from "@/lib/image";
+import { CropControls, CropFrame } from "@/components/ImageCropper";
 import "./webmaster.css";
 
 /**
@@ -1193,7 +1202,7 @@ function EventiSection() {
   );
 }
 
-/** Foto della scheda prodotto: ritagliata e ridimensionata dal browser a 800×600 (4:3). */
+/** Foto della scheda prodotto: inquadrata dall'admin e ridotta dal browser a 800×600 (4:3). */
 const PRODUCT_IMG_W = 800;
 const PRODUCT_IMG_H = 600;
 /** Tetto del data URL, sotto il limite del backend (400.000 caratteri). */
@@ -1210,6 +1219,7 @@ function ProductCard({
   valuta,
   immagineUrl,
   disponibile,
+  media,
   children,
 }: {
   nome: string;
@@ -1218,12 +1228,16 @@ function ProductCard({
   valuta: string;
   immagineUrl: string | null;
   disponibile: boolean;
+  /** Sostituisce la foto (es. il riquadro di regolazione nell'anteprima del form). */
+  media?: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <article className="wm-product-card">
       <div className="wm-product-img">
-        {immagineUrl ? (
+        {media ? (
+          media
+        ) : immagineUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- data URL: nessuna ottimizzazione Next applicabile
           <img src={immagineUrl} alt={`Foto di ${nome || "prodotto"}`} />
         ) : (
@@ -1250,7 +1264,12 @@ function ShopSection() {
   const [prezzo, setPrezzo] = useState(""); // in euro, convertito in centesimi
   const [descrizione, setDescrizione] = useState("");
   const [disponibile, setDisponibile] = useState(true);
+  // `foto` = immagine già pronta (quella salvata del prodotto in modifica). Se l'admin
+  // sceglie un file, l'originale resta in `fotoSrc` e si regola l'inquadratura
+  // (`crop`): la foto 800×600 si genera solo al salvataggio.
   const [foto, setFoto] = useState<string | null>(null);
+  const [fotoSrc, setFotoSrc] = useState<SourceImage | null>(null);
+  const [crop, setCrop] = useState<Crop>(CENTER_CROP);
   const [fotoBusy, setFotoBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1293,6 +1312,8 @@ function ShopSection() {
     setDescrizione("");
     setDisponibile(true);
     setFoto(null);
+    setFotoSrc(null);
+    setCrop(CENTER_CROP);
     if (fileRef.current) fileRef.current.value = "";
   }, []);
 
@@ -1303,6 +1324,8 @@ function ShopSection() {
     setDescrizione(p.descrizione ?? "");
     setDisponibile(p.disponibile);
     setFoto(p.immagineUrl);
+    setFotoSrc(null);
+    setCrop(CENTER_CROP);
     setError(null);
     setNotice(null);
     setConfirmDeleteId(null);
@@ -1316,7 +1339,8 @@ function ShopSection() {
     setFotoBusy(true);
     setError(null);
     try {
-      setFoto(await resizeImageToDataUrl(file, PRODUCT_IMG_W, PRODUCT_IMG_H, { maxChars: PRODUCT_IMG_MAX_CHARS }));
+      setFotoSrc(await loadImageFile(file));
+      setCrop(CENTER_CROP);
     } catch (err) {
       setError(err instanceof ImageError ? err.message : "Impossibile elaborare la foto.");
       if (fileRef.current) fileRef.current.value = "";
@@ -1330,6 +1354,16 @@ function ShopSection() {
       setError("Il nome del prodotto è obbligatorio.");
       return;
     }
+    // La foto finale (800×600) nasce qui, dall'originale con l'inquadratura scelta.
+    let immagine = foto;
+    if (fotoSrc) {
+      try {
+        immagine = renderCropToDataUrl(fotoSrc, PRODUCT_IMG_W, PRODUCT_IMG_H, crop, { maxChars: PRODUCT_IMG_MAX_CHARS });
+      } catch (err) {
+        setError(err instanceof ImageError ? err.message : "Impossibile elaborare la foto.");
+        return;
+      }
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -1340,7 +1374,7 @@ function ShopSection() {
           nome,
           prezzoCent,
           descrizione: desc || null,
-          immagineUrl: foto,
+          immagineUrl: immagine,
           disponibile,
         });
         setNotice("Prodotto aggiornato.");
@@ -1349,7 +1383,7 @@ function ShopSection() {
           nome,
           prezzoCent,
           descrizione: desc || undefined,
-          immagineUrl: foto ?? undefined,
+          immagineUrl: immagine ?? undefined,
           disponibile,
         });
         setNotice("Prodotto creato.");
@@ -1361,7 +1395,7 @@ function ShopSection() {
     } finally {
       setBusy(false);
     }
-  }, [nome, prezzoCent, descrizione, foto, disponibile, editingId, resetForm, refresh]);
+  }, [nome, prezzoCent, descrizione, foto, fotoSrc, crop, disponibile, editingId, resetForm, refresh]);
 
   const remove = useCallback(
     async (p: ShopProductRow) => {
@@ -1418,20 +1452,24 @@ function ShopSection() {
         />
         <p id="wm-sp-foto-hint" className="wm-muted wm-hint">
           Dimensioni consigliate: <strong>800 × 600 px</strong> (formato orizzontale 4:3), JPG, PNG o WebP, fino a
-          15 MB. La foto viene ritagliata al centro e ridotta automaticamente a 800 × 600 px.
+          15 MB. Dopo averla scelta puoi regolarne l&apos;inquadratura direttamente nell&apos;anteprima della scheda;
+          al salvataggio viene ridotta a 800 × 600 px.
+          {foto && !fotoSrc && " Per regolare la foto già salvata, carica di nuovo l'originale."}
         </p>
         {fotoBusy && (
           <p className="wm-loading" role="status">
             <span className="wm-spinner" aria-hidden="true" /> Elaborazione della foto…
           </p>
         )}
-        {foto && !fotoBusy && (
+        {(foto || fotoSrc) && !fotoBusy && (
           <div className="wm-actions">
             <button
               type="button"
               className="wm-btn wm-btn-small"
               onClick={() => {
                 setFoto(null);
+                setFotoSrc(null);
+                setCrop(CENTER_CROP);
                 if (fileRef.current) fileRef.current.value = "";
               }}
               disabled={busy}
@@ -1455,7 +1493,20 @@ function ShopSection() {
           valuta="EUR"
           immagineUrl={foto}
           disponibile={disponibile}
+          media={
+            fotoSrc ? (
+              <CropFrame
+                source={fotoSrc}
+                aspect={PRODUCT_IMG_W / PRODUCT_IMG_H}
+                crop={crop}
+                onChange={setCrop}
+                label={`Inquadratura della foto di ${nome.trim() || "prodotto"}`}
+                hintId="wm-sp-crop-hint"
+              />
+            ) : undefined
+          }
         />
+        {fotoSrc && <CropControls crop={crop} onChange={setCrop} hintId="wm-sp-crop-hint" disabled={busy} />}
       </div>
 
       <div className="wm-actions">

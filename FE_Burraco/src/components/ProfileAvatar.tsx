@@ -3,12 +3,22 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchAvatar, saveAvatar } from "@/lib/profile";
 import { AuthClientError } from "@/lib/auth";
-import { ACCEPTED_IMAGE_TYPES, ImageError, resizeImageToDataUrl } from "@/lib/image";
+import {
+  ACCEPTED_IMAGE_TYPES,
+  CENTER_CROP,
+  ImageError,
+  loadImageFile,
+  renderCropToDataUrl,
+  type Crop,
+  type SourceImage,
+} from "@/lib/image";
+import { CropControls, CropFrame } from "./ImageCropper";
 
 /**
  * FOTO PROFILO del giocatore. Senza foto mostra l'iniziale del nome. Per i
- * REGISTRATI (`editable`) offre carica/cambia/rimuovi: la foto è ritagliata al centro
- * e ridotta a 256×256 nel browser, poi inviata al backend (che la rivalida). Gli
+ * REGISTRATI (`editable`) offre carica/cambia/rimuovi: scelto il file, l'utente ne
+ * regola l'inquadratura (trascina, zoom) e conferma; la foto è ridotta a 256×256 nel
+ * browser, poi inviata al backend (che la rivalida). Gli
  * ospiti vedono solo l'iniziale: il backend non conserva foto per loro (403).
  */
 
@@ -20,6 +30,9 @@ export function ProfileAvatar({ name, editable }: { name: string; editable: bool
   const [avatar, setAvatar] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Originale scelto e in attesa di conferma, con l'inquadratura corrente.
+  const [pending, setPending] = useState<SourceImage | null>(null);
+  const [crop, setCrop] = useState<Crop>(CENTER_CROP);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -42,15 +55,30 @@ export function ProfileAvatar({ name, editable }: { name: string; editable: bool
     setBusy(true);
     setError(null);
     try {
-      const data = await resizeImageToDataUrl(file, AVATAR_SIZE, AVATAR_SIZE, { maxChars: AVATAR_MAX_CHARS });
+      setPending(await loadImageFile(file));
+      setCrop(CENTER_CROP);
+    } catch (err) {
+      setError(err instanceof ImageError ? err.message : "Impossibile leggere la foto.");
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const onConfirm = async () => {
+    if (!pending) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const data = renderCropToDataUrl(pending, AVATAR_SIZE, AVATAR_SIZE, crop, { maxChars: AVATAR_MAX_CHARS });
       setAvatar(await saveAvatar(data));
+      setPending(null);
     } catch (err) {
       setError(
         err instanceof ImageError || err instanceof AuthClientError ? err.message : "Impossibile salvare la foto.",
       );
     } finally {
       setBusy(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
   };
 
@@ -67,6 +95,38 @@ export function ProfileAvatar({ name, editable }: { name: string; editable: bool
   };
 
   const initial = (name.trim()[0] ?? "?").toUpperCase();
+
+  if (pending) {
+    return (
+      <div className="profile-avatar-block">
+        <div className="profile-avatar-crop">
+          <CropFrame
+            source={pending}
+            aspect={1}
+            crop={crop}
+            onChange={setCrop}
+            label={`Inquadratura della foto profilo di ${name}`}
+            hintId="profile-avatar-crop-hint"
+            round
+          />
+          <CropControls crop={crop} onChange={setCrop} hintId="profile-avatar-crop-hint" disabled={busy} />
+          <div className="profile-avatar-actions">
+            <button type="button" className="btn-ghost profile-avatar-btn" onClick={() => void onConfirm()} disabled={busy}>
+              {busy ? "Salvataggio…" : "Salva foto"}
+            </button>
+            <button type="button" className="btn-ghost profile-avatar-btn" onClick={() => setPending(null)} disabled={busy}>
+              Annulla
+            </button>
+          </div>
+          {error && (
+            <p className="profile-avatar-error" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="profile-avatar-block">
@@ -93,7 +153,7 @@ export function ProfileAvatar({ name, editable }: { name: string; editable: bool
             aria-describedby="profile-avatar-hint"
           />
           <label htmlFor="profile-avatar-file" className="btn-ghost profile-avatar-btn" aria-disabled={busy}>
-            {busy ? "Salvataggio…" : avatar ? "Cambia foto" : "Carica foto"}
+            {busy ? "Attendere…" : avatar ? "Cambia foto" : "Carica foto"}
           </label>
           {avatar && (
             <button type="button" className="btn-ghost profile-avatar-btn" onClick={() => void onRemove()} disabled={busy}>
@@ -101,7 +161,7 @@ export function ProfileAvatar({ name, editable }: { name: string; editable: bool
             </button>
           )}
           <p id="profile-avatar-hint" className="profile-avatar-hint">
-            JPG, PNG o WebP: la foto viene ritagliata e ridotta a 256 × 256 px.
+            JPG, PNG o WebP: dopo la scelta ne regoli l&apos;inquadratura; viene ridotta a 256 × 256 px.
           </p>
           {error && (
             <p className="profile-avatar-error" role="alert">
