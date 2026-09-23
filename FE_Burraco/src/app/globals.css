@@ -892,6 +892,55 @@ button:disabled {
   font-size: 0.68rem;
   letter-spacing: 0.02em;
 }
+/* JOLLY ILLUSTRATI — SOLO DESKTOP E SOLO SE LA CARTA È ABBASTANZA GRANDE.
+ * Strato `.jolly-art` (CardView) SOPRA la faccia stilizzata, che resta nel DOM:
+ * accessibilità invariata, nessun vuoto mentre l'immagine arriva, ritorno
+ * istantaneo sotto soglia. Colore da `data-jolly` (src/lib/jollyColor.ts).
+ *
+ * PUNTO UNICO delle due condizioni (media/container query non accettano var()):
+ *  - desktop = (min-width: 1024px) and (hover: hover) and (pointer: fine):
+ *    esclusi tablet (anche iPad orizzontale, puntatore coarse) e smartphone;
+ *  - soglia = carta larga ≥ 72 px CSS (prova sull'asset: a 70 px "JOKER" e il
+ *    volto si leggono, a 56 px è una macchia). Lo strato sta dentro il bordo di
+ *    1 px, quindi misura la carta − 2 px: 72 px di carta = min-width 70px.
+ * L'immagine è scritta SOLO come background-image dentro entrambe le condizioni:
+ * fuori (telefono, tablet, carta piccola) il browser non la scarica mai.
+ * Asset 400×555 (rapporto 0,721): `contain` + fondo #F7F7F3 = la carta
+ * dell'immagine; nessuna deformazione, cornice mai tagliata.
+ * Stati: selezione/hover/focus/matta sono outline, ombre esterne e transform
+ * della .card (fuori dallo strato); lo spinner "in attesa" (::after) è dipinto
+ * dopo lo strato, quindi sopra. pointer-events:none: click e drag invariati. */
+.card[data-jolly] > .jolly-art {
+  display: none;
+}
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .card[data-jolly] > .jolly-art {
+    display: block;
+    position: absolute;
+    inset: 0;
+    container-type: inline-size;
+    border-radius: calc(var(--r-card) - 1px);
+    pointer-events: none;
+  }
+  @container (min-width: 70px) {
+    .card[data-jolly] .jolly-art-img {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background-color: #f7f7f3;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: contain;
+    }
+    .card[data-jolly="rosso"] .jolly-art-img {
+      background-image: url("/images/carte/jolly-rosso.webp");
+    }
+    .card[data-jolly="nero"] .jolly-art-img {
+      background-image: url("/images/carte/jolly-nero.webp");
+    }
+  }
+}
+
 /* pinella = il 2: indici del "2" SEMPRE leggibili (non coperti). L'identità di
    matta è marcata da una cornice interna d'ottone + una gemma d'ottone in
    alto a destra, lontano dagli indici. */
