@@ -40,7 +40,7 @@
   --wm-r-sm: var(--r-sm, 6px);
 
   box-sizing: border-box;
-  min-height: 100vh;
+  min-height: calc(100vh - 2 * var(--frame-inset, 0px));
   max-width: 1000px;
   margin: 0 auto;
   padding: var(--sp-6, 32px) var(--sp-5, 24px) var(--sp-7, 48px);

@@ -187,13 +187,7 @@ export function Landing({ onOpenAuth, inviteCode = null }: Props) {
     <div className="landing-root">
       <div className="room-background" aria-hidden="true" />
 
-      <div className="frame-overlay" aria-hidden="true">
-        <div className="frame-decorative" />
-        <div className="frame-corner tl" />
-        <div className="frame-corner tr" />
-        <div className="frame-corner bl" />
-        <div className="frame-corner br" />
-      </div>
+      {/* La cornice d'ottone è comune a tutte le pagine: `SiteFrame` in app/layout.tsx. */}
 
       <div className="scroll-container" ref={scrollRef}>
         <div className="content-wrapper">
