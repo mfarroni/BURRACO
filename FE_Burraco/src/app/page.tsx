@@ -18,6 +18,7 @@ import { BottomHand } from "@/components/BottomHand";
 import { CardView } from "@/components/CardView";
 import { Melds } from "@/components/Melds";
 import { SeatPost } from "@/components/SeatPost";
+import { useTableAvatars } from "@/lib/useTableAvatars";
 import { ActionBar } from "@/components/ActionBar";
 import {
   ConfirmDialog,
@@ -76,6 +77,10 @@ export default function Page() {
   // Beacon di chiusura pulita del tavolo in ATTESA su pagehide (§5.4-B): attivo
   // solo quando si ha un tavolo in attesa (joined ma partita non ancora iniziata).
   useLeaveOnPageHide(g.joined && !g.state);
+  // Foto dei giocatori ai posti: chieste solo a partita in corso, e di nuovo quando
+  // cambia chi siede dove (non a ogni mossa).
+  const rosterKey = g.state ? g.players.map((p) => `${p.seat}:${p.displayName}`).join("|") : "";
+  const seatAvatars = useTableAvatars(g.state ? g.roomCode : null, rosterKey);
 
   // Ramo anonimo: la vetrina è la prima vista; `showAuth` apre l'AuthPanel sul
   // percorso scelto (login/register/guest) senza cambiare route (SPA).
@@ -477,6 +482,7 @@ export default function Page() {
         handCount={view.handCount}
         active={s.whoseTurn === view.seat}
         connected={view.connectionStatus !== "disconnected"}
+        avatarUrl={seatAvatars[view.seat] ?? null}
         burracoCount={burracoByTeam(view.team)}
       />
     );
@@ -638,6 +644,7 @@ export default function Page() {
             handCount={opponentHandCount}
             active={!isMyTurn}
             connected={opponentConnected}
+            avatarUrl={oppSeatView ? seatAvatars[oppSeatView.seat] ?? null : null}
             burracoCount={burracoByTeam(otherTeam)}
           />
         ) : (
@@ -724,6 +731,7 @@ export default function Page() {
           handCount={s.yourHand.length}
           active={isMyTurn}
           isGuest={auth.user?.isGuest}
+          avatarUrl={seatAvatars[you] ?? null}
           pozzettoTaken={s.yourPozzettoTaken}
           burracoCount={burracoByTeam(youTeam)}
           size="extended"
