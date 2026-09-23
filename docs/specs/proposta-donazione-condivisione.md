@@ -1,6 +1,6 @@
 # Proposta — Donazione "Buy Me a Coffee" efficace + condivisione dell'app
 
-> **Stato:** PROPOSTA da approvare (nessun codice modificato).
+> **Stato:** DECISIONI DEL LEAD RACCOLTE (2026-09-23) — vedi §8. Nessun codice modificato.
 > **Ambito:** solo FE (`FE_Burraco`). Nessuna modifica a contratto, BE, DB o CSP.
 > **Richiesta del lead:** (1) rendere efficace il pulsante Buy Me a Coffee; (2) inserire una
 > frase che dica chiaramente che **il progetto può continuare solo se ci sono offerte**;
@@ -123,7 +123,7 @@ In `GameEndedOverlay` (`Overlays.tsx:323`), sotto il punteggio finale, un blocco
 └──────────────────────────────────────────────────┘
 ```
 
-- **Tetto di frequenza:** il blocco compare al massimo **una volta ogni 3 partite concluse**
+- **Tetto di frequenza:** il blocco compare al massimo **una volta ogni 2 partite concluse**
   e **mai più di una volta ogni 7 giorni**; "Non ora" lo sospende per 14 giorni. Stato in
   `localStorage` (lettura/scrittura in `try/catch`; se non disponibile, il blocco non compare:
   meglio perdere una richiesta che insistere).
@@ -228,17 +228,34 @@ del marchio BMC. Nessuna richiesta in partita (vincolo R6 confermato).
 
 ---
 
-## 8. Decisioni aperte per il lead
+## 8. Decisioni del lead (2026-09-23)
 
-1. **Frase:** versione principale + breve del §3, oppure una delle alternative?
-2. **Costo mensile reale** da mostrare ("circa X € al mese")? Sì/no, e cifra.
-3. **Nome ufficiale:** "Circolo Nettuno" o "Circolo Notturno"? (D6 — va unificato prima di
-   far circolare i link).
-4. **Tetto di frequenza** a fine partita: va bene 1 ogni 3 partite / max 1 a settimana?
-5. **Link diretto al tavolo** (`?tavolo=CODICE`): includerlo in questo lotto?
-6. **Contatore anonimo dei clic** lato BE: sì/no?
+| # | Tema | Decisione |
+|---|---|---|
+| 1 | Frase | **Versione breve ovunque:** "Il circolo va avanti solo grazie alle vostre offerte." |
+| 2 | Costo mensile reale | **No**, non si mostra alcuna cifra |
+| 3 | Nome ufficiale | **"Circolo Nettuno"** — da unificare in `app/layout.tsx` (oggi "Circolo Notturno") |
+| 4 | Tetto a fine partita | **Una volta ogni 2 partite concluse** (resta: mai alla prima partita, "Non ora" = 14 giorni, massimo 1 a settimana) |
+| 5 | Link diretto al tavolo | **In attesa**: il lead ha chiesto il perché (motivazione sotto) |
+| 6 | Contatore anonimo dei clic | **Sì** — richiede una piccola modifica BE (endpoint senza dati personali) |
 
----
+### Perché il link diretto al tavolo (`?tavolo=CODICE`)
+Oggi chi riceve l'invito deve: aprire il sito → entrare (login o ospite) → arrivare in lobby →
+**trascrivere a mano** il codice. Ogni passaggio fa perdere persone, soprattutto su telefono.
+Con il link basta un tocco: il codice è già inserito nel campo e l'utente preme solo "Entra".
+È ciò che trasforma un invito in un giocatore seduto al tavolo.
+
+- **Costo:** solo FE, piccolo (lettura del parametro e precompilazione del campo).
+- **Sicurezza:** il server continua a validare l'ingresso come oggi; il codice è già nel
+  messaggio d'invito, quindi non si espone nulla di nuovo. Il parametro viene tolto dalla
+  barra degli indirizzi appena letto (`history.replaceState`), così non resta nella cronologia
+  né passa ad altri siti.
+- **Raccomandazione:** includerlo nel Lotto C, insieme all'invito dalla sala d'attesa.
+
+### Contatore anonimo — vincoli
+Endpoint BE di sola scrittura (es. `POST /metrics/click` con `{ tipo: "caffe" | "invito", punto }`),
+nessun identificativo utente, nessun IP salvato, limitazione di frequenza, lettura dei totali
+solo dal pannello admin. **Non** tocca il contratto WS (`contract/types.ts`): vincolo P2 non coinvolto.
 
 ## 9. Piano in lotti (dopo approvazione)
 
@@ -254,4 +271,4 @@ Flusso: `agente_develop` → `agente_ui_ux` (rifinitura tono e grafica) → `age
 (nessun leak nel testo condiviso: **mai** carte, punteggi altrui o dati di altri giocatori
 nei messaggi precompilati; nessuno script esterno).
 
-OUTPUT PER: lead (approvazione delle decisioni del §8)
+OUTPUT PER: lead (conferma del link diretto al tavolo, poi avvio Lotto A)
