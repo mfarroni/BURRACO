@@ -46,7 +46,8 @@ export async function resolveRecipients(criterio: BroadcastCriterio, tipo: Broad
     criterio.all === true ||
     criterio.registratiDopo !== undefined ||
     criterio.minPartite !== undefined ||
-    criterio.inattiviDaGiorni !== undefined;
+    criterio.inattiviDaGiorni !== undefined ||
+    (criterio.userIds !== undefined && criterio.userIds.length > 0);
   if (!hasFilter) return [];
 
   if (!criterio.all) {
@@ -62,6 +63,11 @@ export async function resolveRecipients(criterio: BroadcastCriterio, tipo: Broad
         sql`(select count(*) from ${schema.matchPlayers} mp join ${schema.matches} m on m.id = mp.match_id
              where mp.user_id = ${schema.users.id} and m.status = 'completed') >= ${criterio.minPartite}`,
       );
+    }
+    // Selezione manuale dalla tab Utenti: si combina (AND) con gli altri filtri e
+    // resta soggetta a registrato + email + consenso promozionale.
+    if (criterio.userIds !== undefined && criterio.userIds.length > 0) {
+      conds.push(inArray(schema.users.id, criterio.userIds));
     }
   }
 

@@ -43,6 +43,7 @@ import { AVATAR_MAX_CHARS, IMAGE_DATA_URL_RE, getAvatar, setAvatar } from "../pr
  *   POST /auth/logout    (Bearer)                           → { ok: true }
  *   POST /auth/logout-all(Bearer)                           → { ok: true, revoked }
  *   GET  /auth/me        (Bearer)                           → { user }
+ *   POST /auth/change-password (Bearer) { currentPassword, newPassword } → { token, user }
  *
  * Sicurezza:
  *  - security header HTTP (SEC-A5): nosniff, frame-deny, no-referrer, HSTS in prod.
@@ -76,6 +77,11 @@ const loginBody = z.object({
   website: z.string().max(200).optional(),
 });
 const guestBody = z.object({ displayName: displayNameSchema });
+// CICLO Profilo — cambio password: l'attuale ha solo il tetto anti-DoS, la nuova la policy.
+const changePasswordBody = z.object({
+  currentPassword: z.string().min(1).max(200),
+  newPassword: passwordSchema,
+});
 
 // Storico partite paginato: cap ragionevoli anti-abuso. Coercizione da querystring.
 // limit ∈ [1,50] (default 10); offset ≥ 0 con tetto anti-DoS (default 0).
@@ -118,6 +124,8 @@ const broadcastCriterioSchema = z.object({
   registratiDopo: z.coerce.number().int().nonnegative().optional(),
   minPartite: z.coerce.number().int().min(0).max(100000).optional(),
   inattiviDaGiorni: z.coerce.number().int().min(0).max(3650).optional(),
+  // CICLO Webmaster — destinatari selezionati a mano (tab Utenti): uuid, tetto 1000.
+  userIds: z.array(z.string().uuid()).min(1).max(1000).optional(),
 });
 const broadcastCreateBody = z.object({
   oggetto: z.string().trim().min(1).max(150),
@@ -197,6 +205,8 @@ const STATUS_BY_CODE: Record<AuthErrorCode, number> = {
   INVALID_CREDENTIALS: 401,
   WEAK_PASSWORD: 400,
   UNAUTHORIZED: 401,
+  WRONG_PASSWORD: 400,
+  GUEST_NO_PASSWORD: 403,
 };
 
 function sendAuthError(res: Response, err: unknown): void {
@@ -278,6 +288,8 @@ export function createHttpApp(
   // body-parser salta un corpo già letto, quindi le altre rotte restano a 8kb.
   app.use("/admin/shop/products", express.json({ limit: "450kb" }));
   app.use("/users/me/avatar", express.json({ limit: "160kb" }));
+  // Comunicazioni con destinatari selezionati: fino a 1000 uuid (~40kb).
+  app.use("/admin/broadcasts", express.json({ limit: "64kb" }));
 
   // Corpo JSON con tetto anti-DoS (i body auth sono piccoli).
   app.use(express.json({ limit: "8kb" }));
@@ -398,6 +410,28 @@ export function createHttpApp(
       // (auth.logoutAll solleva UNAUTHORIZED).
       const revoked = await auth.logoutAll(bearer(req));
       res.json({ ok: true, revoked });
+    }),
+  );
+
+  // CICLO Profilo — cambio password. Rate-limit dedicato (tentativi sulla password
+  // attuale con una sessione valida). Risponde con un token NUOVO: tutte le sessioni
+  // precedenti, anche su altri dispositivi, sono revocate.
+  const changePasswordLimiter = rateLimit({ name: "change-password", windowMs: 15 * 60_000, max: 10 });
+  app.post(
+    "/auth/change-password",
+    changePasswordLimiter,
+    handler(async (req, res) => {
+      const parsed = changePasswordBody.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({
+          error: "WEAK_PASSWORD",
+          message: "La nuova password deve avere almeno 8 caratteri.",
+        });
+        return;
+      }
+      const result = await auth.changePassword(bearer(req), parsed.data.currentPassword, parsed.data.newPassword);
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ token: result.sessionToken, user: result.user });
     }),
   );
 

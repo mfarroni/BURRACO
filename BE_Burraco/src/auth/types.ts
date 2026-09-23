@@ -124,6 +124,9 @@ export interface AuthStore {
    */
   revokeAllForUser(userId: string): Promise<number>;
 
+  /** CICLO Profilo — sostituisce l'hash password (argon2id) di un utente registrato. */
+  setPasswordHash(userId: string, passwordHash: string): Promise<void>;
+
   /**
    * SEC-A4: mantiene al massimo `max` sessioni ATTIVE (non revocate, non scadute a
    * `now`) per utente, revocando le più VECCHIE in eccesso. Chiamato alla

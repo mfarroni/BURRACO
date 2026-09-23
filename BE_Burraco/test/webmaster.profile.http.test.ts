@@ -177,3 +177,91 @@ test("password temporanea: 12 caratteri, alfabeto senza ambigui, valori diversi"
   }
   assert.equal(seen.size, 50);
 });
+
+test("cambio password: attuale errata → 400, nuova debole → 400, ospite → 403, successo → nuovo token e vecchie sessioni revocate", async () => {
+  const s = await startProfileServer();
+  try {
+    const noTok = await call(s.base, "POST", "/auth/change-password", {
+      body: { currentPassword: "password12", newPassword: "nuovaPassword1" },
+    });
+    assert.equal(noTok.status, 401);
+
+    const guest = await makeGuest(s.base);
+    const g = await call(s.base, "POST", "/auth/change-password", {
+      token: guest.token,
+      body: { currentPassword: "qualsiasi", newPassword: "nuovaPassword1" },
+    });
+    assert.equal(g.status, 403);
+    assert.equal(g.json?.error, "GUEST_NO_PASSWORD");
+
+    const u = await makeUser(s.base, "cambio@example.com", "password12");
+    // Seconda sessione (altro dispositivo) dello stesso utente.
+    const other = await call(s.base, "POST", "/auth/login", {
+      body: { email: "cambio@example.com", password: "password12" },
+    });
+    assert.equal(other.status, 200);
+
+    const wrong = await call(s.base, "POST", "/auth/change-password", {
+      token: u.token,
+      body: { currentPassword: "sbagliata", newPassword: "nuovaPassword1" },
+    });
+    assert.equal(wrong.status, 400);
+    assert.equal(wrong.json?.error, "WRONG_PASSWORD");
+    // La sessione resta valida dopo un tentativo errato.
+    assert.equal((await call(s.base, "GET", "/auth/me", { token: u.token })).status, 200);
+
+    const weak = await call(s.base, "POST", "/auth/change-password", {
+      token: u.token,
+      body: { currentPassword: "password12", newPassword: "corta" },
+    });
+    assert.equal(weak.status, 400);
+
+    const ok = await call(s.base, "POST", "/auth/change-password", {
+      token: u.token,
+      body: { currentPassword: "password12", newPassword: "nuovaPassword1" },
+    });
+    assert.equal(ok.status, 200);
+    assert.equal(typeof ok.json.token, "string");
+    assert.notEqual(ok.json.token, u.token);
+    assert.equal(ok.json.user.email, "cambio@example.com");
+    assert.equal(ok.headers.get("cache-control"), "no-store");
+
+    // Vecchie sessioni revocate (anche l'altro dispositivo); la nuova funziona.
+    assert.equal((await call(s.base, "GET", "/auth/me", { token: u.token })).status, 401);
+    assert.equal((await call(s.base, "GET", "/auth/me", { token: other.json.token })).status, 401);
+    assert.equal((await call(s.base, "GET", "/auth/me", { token: ok.json.token })).status, 200);
+
+    // Login: la vecchia password non vale più, la nuova sì.
+    const oldLogin = await call(s.base, "POST", "/auth/login", {
+      body: { email: "cambio@example.com", password: "password12" },
+    });
+    assert.equal(oldLogin.status, 401);
+    const newLogin = await call(s.base, "POST", "/auth/login", {
+      body: { email: "cambio@example.com", password: "nuovaPassword1" },
+    });
+    assert.equal(newLogin.status, 200);
+  } finally {
+    await s.close();
+  }
+});
+
+test("comunicazioni: criterio userIds valido accettato (anche oltre 8kb); id non-uuid o lista vuota → 400", async () => {
+  const s = await startAdminServer();
+  try {
+    const a = await makeAdmin(s, "admin@example.com");
+    const base = { oggetto: "Ciao", corpo: "Testo", tipo: "servizio", dryRun: true };
+    const ids = Array.from({ length: 500 }, (_, i) => `11111111-1111-4111-8111-${String(i).padStart(12, "0")}`);
+    const ok = await call(s.base, "POST", "/admin/broadcasts", { token: a.token, body: { ...base, criterio: { userIds: ids } } });
+    assert.equal(ok.status, 200, `atteso 200, dato ${ok.status}: ${ok.text}`);
+    assert.equal(ok.json.dryRun, true);
+    const bad = await call(s.base, "POST", "/admin/broadcasts", {
+      token: a.token,
+      body: { ...base, criterio: { userIds: ["non-un-uuid"] } },
+    });
+    assert.equal(bad.status, 400);
+    const empty = await call(s.base, "POST", "/admin/broadcasts", { token: a.token, body: { ...base, criterio: { userIds: [] } } });
+    assert.equal(empty.status, 400);
+  } finally {
+    await s.close();
+  }
+});

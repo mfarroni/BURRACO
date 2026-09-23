@@ -2210,6 +2210,48 @@ button:disabled {
   color: var(--text-muted);
   text-align: center;
 }
+/* Cambio password (solo registrati), sotto l'identità. */
+.profile-password {
+  margin-bottom: var(--sp-5);
+}
+.profile-password-form {
+  display: flex;
+  flex-direction: column;
+  max-width: 420px;
+}
+.profile-password-form label {
+  margin: var(--sp-3) 0 var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.profile-password-form input {
+  width: 100%;
+  padding: var(--sp-3);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+  font-size: var(--fs-body);
+}
+.profile-password-form input[aria-invalid="true"] {
+  border-color: var(--danger-300);
+}
+.profile-password-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+.profile-password-ok {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--success-300);
+}
+.profile-password-error {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--danger-300);
+}
 .profile-avatar-error {
   margin: 0;
   font-size: var(--fs-xs);

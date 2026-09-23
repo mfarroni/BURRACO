@@ -70,6 +70,8 @@ export interface BroadcastCriterio {
   registratiDopo?: number;
   minPartite?: number;
   inattiviDaGiorni?: number;
+  /** Destinatari scelti a mano nella tab Utenti (id registrati). */
+  userIds?: string[];
 }
 export type BroadcastTipo = "servizio" | "promozionale";
 export interface BroadcastCreateResponse {

@@ -19,7 +19,9 @@ export type AuthErrorCode =
   | "EMAIL_TAKEN" // 409
   | "INVALID_CREDENTIALS" // 401
   | "WEAK_PASSWORD" // 400 (difesa in profondità: la policy è anche in zod)
-  | "UNAUTHORIZED"; // 401 (token assente/non valido)
+  | "UNAUTHORIZED" // 401 (token assente/non valido)
+  | "WRONG_PASSWORD" // 400 (cambio password: password attuale errata)
+  | "GUEST_NO_PASSWORD"; // 403 (cambio password: gli ospiti non hanno password)
 
 export class AuthError extends Error {
   constructor(
@@ -252,6 +254,36 @@ export class AuthService {
     const principal = await this.getPrincipalByToken(token);
     if (!principal) throw new AuthError("UNAUTHORIZED", "Sessione non valida.");
     return this.store.revokeAllForUser(principal.userId);
+  }
+
+  /**
+   * CICLO Profilo — CAMBIO PASSWORD dell'utente registrato del token. Richiede la
+   * password ATTUALE (anche dopo un reset admin: è quella temporanea), applica la
+   * policy alla nuova, salva solo l'hash argon2id, REVOCA tutte le sessioni (anche su
+   * altri dispositivi) ed emette una sessione nuova per il chiamante, che resta
+   * connesso con il token restituito. Password attuale errata → WRONG_PASSWORD (400,
+   * non 401: la sessione del chiamante è valida). Ospite → GUEST_NO_PASSWORD (403).
+   */
+  async changePassword(
+    token: string | undefined | null,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<AuthResult> {
+    const principal = await this.getPrincipalByToken(token);
+    if (!principal) throw new AuthError("UNAUTHORIZED", "Sessione non valida.");
+    const user = await this.store.getUserById(principal.userId);
+    if (!user) throw new AuthError("UNAUTHORIZED", "Sessione non valida.");
+    if (user.isGuest || user.passwordHash === null) {
+      throw new AuthError("GUEST_NO_PASSWORD", "Gli ospiti non hanno una password da cambiare.");
+    }
+    if (!(await verifyPassword(user.passwordHash, currentPassword))) {
+      throw new AuthError("WRONG_PASSWORD", "La password attuale non è corretta.");
+    }
+    this.assertPasswordPolicy(newPassword);
+    await this.store.setPasswordHash(user.id, await hashPassword(newPassword));
+    await this.store.revokeAllForUser(user.id);
+    const sessionToken = await this.issueSession(user.id);
+    return { sessionToken, user: toAuthUser(user) };
   }
 
   /**

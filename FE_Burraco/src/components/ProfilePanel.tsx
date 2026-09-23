@@ -15,6 +15,7 @@ import { fetchStats, fetchMatches, fetchMatchDetail } from "@/lib/profile";
 import { AuthClientError } from "@/lib/auth";
 import { DonationButton } from "@/components/DonationButton";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { SideFlank } from "@/components/SideFlanks";
 import { VetrinaBrandHeader } from "@/components/VetrinaBrandHeader";
 
@@ -184,6 +185,9 @@ export function ProfilePanel({ user, onBack }: Props) {
             {isGuest ? "Ospite" : "Registrato"}
           </span>
         </div>
+
+        {/* Cambio password: solo per i registrati (gli ospiti non hanno password). */}
+        {!isGuest && <ChangePasswordForm />}
 
       {isGuest ? (
         <div className="profile-guest-note" role="status">

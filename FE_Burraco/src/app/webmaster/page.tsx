@@ -46,9 +46,23 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "catalogo", label: "Eventi & Shop" },
 ];
 
+/**
+ * Destinatari scelti nella tab Utenti (soluzione A): `all` = tutti i registrati (anche
+ * quelli non ancora caricati in tabella), altrimenti gli utenti spuntati (id → nome).
+ * Vive nella pagina così sopravvive al cambio di scheda.
+ */
+interface Selection {
+  all: boolean;
+  users: Record<string, string>;
+}
+const EMPTY_SELECTION: Selection = { all: false, users: {} };
+
 export default function WebmasterPage() {
   const [gate, setGate] = useState<Gate>("checking");
   const [tab, setTab] = useState<Tab>("utenti");
+  const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
+  // Destinatari passati a Comunicazioni da "Scrivi ai selezionati" (null = criteri liberi).
+  const [composeFor, setComposeFor] = useState<Selection | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   // WCAG Tabs pattern con ATTIVAZIONE MANUALE (APG): le frecce spostano solo il
@@ -145,10 +159,29 @@ export default function WebmasterPage() {
       </div>
 
       {/* Ogni pannello resta montato solo quando attivo: le fetch partono all'apertura. */}
-      {tab === "utenti" && <TabPanel id="utenti"><UsersTab /></TabPanel>}
+      {tab === "utenti" && (
+        <TabPanel id="utenti">
+          <UsersTab
+            selection={selection}
+            onSelectionChange={setSelection}
+            onWrite={() => {
+              setComposeFor(selection);
+              setTab("comunicazioni");
+            }}
+          />
+        </TabPanel>
+      )}
       {tab === "log" && <TabPanel id="log"><LogTab /></TabPanel>}
       {tab === "monitoraggio" && <TabPanel id="monitoraggio"><MonitoraggioTab /></TabPanel>}
-      {tab === "comunicazioni" && <TabPanel id="comunicazioni"><ComunicazioniTab /></TabPanel>}
+      {tab === "comunicazioni" && (
+        <TabPanel id="comunicazioni">
+          <ComunicazioniTab
+            recipients={composeFor}
+            onClearRecipients={() => setComposeFor(null)}
+            onEditRecipients={() => setTab("utenti")}
+          />
+        </TabPanel>
+      )}
       {tab === "catalogo" && <TabPanel id="catalogo"><CatalogoTab /></TabPanel>}
     </main>
   );
@@ -166,7 +199,15 @@ function TabPanel({ id, children }: { id: Tab; children: ReactNode }) {
 
 type UserAction = "delete" | "reset";
 
-function UsersTab() {
+function UsersTab({
+  selection,
+  onSelectionChange,
+  onWrite,
+}: {
+  selection: Selection;
+  onSelectionChange: (s: Selection) => void;
+  onWrite: () => void;
+}) {
   const [items, setItems] = useState<AdminUserRow[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -215,6 +256,10 @@ function UsersTab() {
       if (action === "delete") {
         await admin.deleteUser(u.id);
         setItems((prev) => prev.filter((x) => x.id !== u.id));
+        if (selection.users[u.id]) {
+          const { [u.id]: _removed, ...rest } = selection.users;
+          onSelectionChange({ ...selection, users: rest });
+        }
         setNotice(`Utente ${u.displayName} eliminato: i suoi dati sono stati cancellati.`);
       } else {
         const r = await admin.resetUserPassword(u.id);
@@ -226,11 +271,49 @@ function UsersTab() {
     } finally {
       setOpBusy(false);
     }
-  }, []);
+  }, [selection, onSelectionChange]);
+
+  const selectedCount = Object.keys(selection.users).length;
+  const hasSelection = selection.all || selectedCount > 0;
+  const toggleUser = (u: AdminUserRow, checked: boolean) => {
+    const users = { ...selection.users };
+    if (checked) users[u.id] = u.displayName;
+    else delete users[u.id];
+    onSelectionChange({ all: false, users });
+  };
 
   return (
     <section className="wm-card" aria-label="Utenti registrati">
       <h2 className="wm-h2">Utenti registrati</h2>
+      {items.length > 0 && (
+        <div className="wm-select-bar" role="group" aria-label="Selezione destinatari email">
+          <label className="wm-check">
+            <input
+              type="checkbox"
+              checked={selection.all}
+              onChange={(e) => onSelectionChange(e.target.checked ? { all: true, users: {} } : EMPTY_SELECTION)}
+            />
+            Seleziona tutti i registrati
+          </label>
+          <span className="wm-muted" aria-live="polite">
+            {selection.all
+              ? "Tutti i registrati selezionati (anche quelli non ancora caricati)."
+              : selectedCount > 0
+                ? `${selectedCount} ${selectedCount === 1 ? "utente selezionato" : "utenti selezionati"}.`
+                : "Nessun utente selezionato."}
+          </span>
+          <span className="wm-row-actions">
+            <button type="button" className="wm-btn wm-btn-small wm-btn-primary" onClick={onWrite} disabled={!hasSelection}>
+              {selection.all ? "Scrivi a tutti i registrati" : `Scrivi ai selezionati (${selectedCount})`}
+            </button>
+            {hasSelection && (
+              <button type="button" className="wm-btn wm-btn-small" onClick={() => onSelectionChange(EMPTY_SELECTION)}>
+                Deseleziona
+              </button>
+            )}
+          </span>
+        </div>
+      )}
       {error && <p className="wm-alert" role="alert">{error}</p>}
       {notice && <p className="wm-success" role="status" aria-live="polite">{notice}</p>}
       {resetResult && (
@@ -268,6 +351,9 @@ function UsersTab() {
           <table className="wm-table">
             <thead>
               <tr>
+                <th scope="col">
+                  <span className="wm-sr-only">Selezione</span>
+                </th>
                 <th scope="col">Nome</th>
                 <th scope="col">Email</th>
                 <th scope="col">Iscrizione</th>
@@ -277,6 +363,16 @@ function UsersTab() {
             <tbody>
               {items.map((u) => (
                 <tr key={u.id}>
+                  <td className="wm-select-cell">
+                    <input
+                      type="checkbox"
+                      className="wm-row-check"
+                      checked={selection.all || Boolean(selection.users[u.id])}
+                      disabled={selection.all}
+                      onChange={(e) => toggleUser(u, e.target.checked)}
+                      aria-label={`Seleziona ${u.displayName}`}
+                    />
+                  </td>
                   <td>{u.displayName}</td>
                   <td>{u.email ?? "—"}</td>
                   <td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}</td>
@@ -705,7 +801,15 @@ function RetentionSection() {
 
 /* ═══════════════════════════ Tab COMUNICAZIONI ═══════════════════════════ */
 
-function ComunicazioniTab() {
+function ComunicazioniTab({
+  recipients,
+  onClearRecipients,
+  onEditRecipients,
+}: {
+  recipients: Selection | null;
+  onClearRecipients: () => void;
+  onEditRecipients: () => void;
+}) {
   const [oggetto, setOggetto] = useState("");
   const [corpo, setCorpo] = useState("");
   const [tipo, setTipo] = useState<BroadcastTipo>("servizio");
@@ -727,11 +831,13 @@ function ComunicazioniTab() {
   }, [confirmId]);
 
   const criterio = useCallback((): BroadcastCriterio => {
+    // Destinatari scelti nella tab Utenti: sostituiscono i criteri liberi.
+    if (recipients) return recipients.all ? { all: true } : { userIds: Object.keys(recipients.users) };
     const c: BroadcastCriterio = {};
     if (tuttiRegistrati) c.all = true;
     if (minPartite.trim() !== "") c.minPartite = Math.max(0, Number(minPartite) || 0);
     return c;
-  }, [tuttiRegistrati, minPartite]);
+  }, [recipients, tuttiRegistrati, minPartite]);
 
   const refresh = useCallback(async () => {
     setListBusy(true);
@@ -808,12 +914,51 @@ function ComunicazioniTab() {
       </div>
       <fieldset className="wm-field">
         <legend>Destinatari</legend>
-        <label className="wm-check">
-          <input type="checkbox" checked={tuttiRegistrati} onChange={(e) => setTuttiRegistrati(e.target.checked)} />
-          Tutti i registrati
-        </label>
-        <label htmlFor="wm-minp">Almeno N partite</label>
-        <input id="wm-minp" inputMode="numeric" value={minPartite} onChange={(e) => setMinPartite(e.target.value)} />
+        {recipients ? (
+          <div className="wm-recipients">
+            <p className="wm-muted">
+              {recipients.all ? (
+                <>
+                  Scelti dalla scheda Utenti: <strong>tutti i registrati</strong>.
+                </>
+              ) : (
+                <>
+                  Scelti dalla scheda Utenti: <strong>{Object.keys(recipients.users).length}</strong>{" "}
+                  {Object.keys(recipients.users).length === 1 ? "utente" : "utenti"} —{" "}
+                  {Object.values(recipients.users).slice(0, 5).join(", ")}
+                  {Object.keys(recipients.users).length > 5
+                    ? ` e altri ${Object.keys(recipients.users).length - 5}`
+                    : ""}
+                  .
+                </>
+              )}
+            </p>
+            <p className="wm-muted wm-hint">
+              Per le comunicazioni promozionali ricevono l&apos;email solo gli utenti che hanno dato il consenso.
+            </p>
+            <div className="wm-actions">
+              <button type="button" className="wm-btn wm-btn-small" onClick={onEditRecipients}>
+                Modifica selezione
+              </button>
+              <button type="button" className="wm-btn wm-btn-small" onClick={onClearRecipients}>
+                Usa i criteri
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <label className="wm-check">
+              <input type="checkbox" checked={tuttiRegistrati} onChange={(e) => setTuttiRegistrati(e.target.checked)} />
+              Tutti i registrati
+            </label>
+            <label htmlFor="wm-minp">Almeno N partite</label>
+            <input id="wm-minp" inputMode="numeric" value={minPartite} onChange={(e) => setMinPartite(e.target.value)} />
+            <p className="wm-muted wm-hint">
+              Per scegliere i destinatari uno a uno, spuntali nella scheda Utenti e premi &quot;Scrivi ai
+              selezionati&quot;.
+            </p>
+          </>
+        )}
       </fieldset>
 
       <div className="wm-actions">

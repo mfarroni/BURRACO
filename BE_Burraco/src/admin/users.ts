@@ -217,7 +217,7 @@ export async function resetUserPassword(
           `La tua nuova password temporanea è: ${tempPassword}`,
           "",
           "Per sicurezza tutte le sessioni aperte sono state chiuse: accedi di nuovo con",
-          "questa password e conservala in un luogo sicuro.",
+          "questa password, poi sceglierne una tua dal Profilo con \"Cambia password\".",
           ...(site ? ["", `Entra qui: ${site}`] : []),
           "",
           "Se non hai chiesto tu il reset, rispondi a questa email.",

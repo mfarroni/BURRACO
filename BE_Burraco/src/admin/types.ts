@@ -32,6 +32,8 @@ export interface BroadcastCriterio {
   registratiDopo?: number; // epoch ms
   minPartite?: number;
   inattiviDaGiorni?: number;
+  /** CICLO Webmaster — destinatari scelti a mano nella tab Utenti (id registrati). */
+  userIds?: string[];
 }
 
 export type BroadcastTipo = "servizio" | "promozionale";
