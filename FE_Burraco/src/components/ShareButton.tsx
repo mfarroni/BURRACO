@@ -25,6 +25,8 @@ interface ShareButtonProps {
   /** Percorso relativo all'origine (default "/"). */
   path?: string;
   className?: string;
+  /** Classe del pulsante secondario "Copia link" (solo senza Web Share). */
+  secondaryClassName?: string;
   /** Chiamata dopo un'azione di condivisione avviata (menu nativo, copia o WhatsApp). */
   onShared?: () => void;
 }
@@ -44,6 +46,7 @@ export function ShareButton({
   text = INVITE_TEXT,
   path = "/",
   className = "btn-primary",
+  secondaryClassName = "btn-ghost",
   onShared,
 }: ShareButtonProps) {
   // Rilevata DOPO il montaggio: sul server `navigator` non esiste (niente mismatch di idratazione).
@@ -97,7 +100,7 @@ export function ShareButton({
         >
           Invia su WhatsApp
         </a>
-        <button type="button" className="share-btn btn-ghost" onClick={copy}>
+        <button type="button" className={`share-btn ${secondaryClassName}`} onClick={copy}>
           Copia link
         </button>
       </div>

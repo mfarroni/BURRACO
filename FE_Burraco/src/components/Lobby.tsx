@@ -6,6 +6,7 @@ import type { WaitingTableView } from "@/lib/contract";
 import type { LobbyStatus } from "@/lib/lobby";
 import type { SitRejectedInfo, TableMode } from "@/lib/useGameSocket";
 import { DonationButton } from "@/components/DonationButton";
+import { ShareButton } from "@/components/ShareButton";
 
 /** Un tavolo della lista è 2v2 se lo dichiara `modalita` o se ha 4 posti. */
 function isCouplesTable(t: WaitingTableView): boolean {
@@ -44,6 +45,10 @@ interface LobbyProps {
    */
   mode: TableMode;
   onChangeMode: (mode: TableMode) => void;
+  /** Codice da un link d'invito `/?tavolo=` (già validato nel formato), o null. */
+  inviteCode?: string | null;
+  /** Chiamata dopo aver precompilato il campo: l'invito non va riproposto. */
+  onInviteConsumed?: () => void;
 }
 
 const MODE_1V1: TableMode = { numeroGiocatori: 2, modalita: "individuale" };
@@ -71,9 +76,26 @@ export function Lobby({
   onAbort,
   mode,
   onChangeMode,
+  inviteCode = null,
+  onInviteConsumed,
 }: LobbyProps) {
   const is2v2 = mode.numeroGiocatori === 4;
   const [codeInput, setCodeInput] = useState("");
+  // Invito ricevuto via link: precompila il codice e porta il focus su "Entra".
+  // L'ingresso resta un gesto dell'utente (nessun join automatico).
+  const [invitedTo, setInvitedTo] = useState<string | null>(null);
+  const enterRef = useRef<HTMLButtonElement>(null);
+  const consumedRef = useRef(onInviteConsumed);
+  consumedRef.current = onInviteConsumed;
+  useEffect(() => {
+    if (!inviteCode) return;
+    setCodeInput(inviteCode);
+    setInvitedTo(inviteCode);
+    consumedRef.current?.();
+  }, [inviteCode]);
+  useEffect(() => {
+    if (invitedTo) enterRef.current?.focus();
+  }, [invitedTo]);
   // Un solo tick al secondo per tutti i timer "attende da" delle righe.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -336,6 +358,15 @@ export function Lobby({
 
       {/* Ingresso con codice (door c): raggiunge anche i tavoli privati. */}
       <div className="join-by-code">
+        {invitedTo && (
+          <div className="banner" data-tone="success" role="status">
+            <span className="banner-icon" aria-hidden="true">✉</span>
+            <span className="banner-body">
+              <span className="banner-title">Sei stato invitato al tavolo {invitedTo}</span>
+              <span className="banner-sub">Il codice è già inserito: premi «Entra» per sederti.</span>
+            </span>
+          </div>
+        )}
         <label htmlFor="join-code">
           <KeyIcon />
           Entra con codice
@@ -355,13 +386,27 @@ export function Lobby({
             spellCheck={false}
             aria-describedby="join-code-hint"
           />
-          <button type="button" className="lobby-action" onClick={submitCode} disabled={!trimmedCode || connecting}>
+          <button
+            type="button"
+            className="lobby-action"
+            onClick={submitCode}
+            disabled={!trimmedCode || connecting}
+            ref={enterRef}
+          >
             Entra
           </button>
         </div>
         <p id="join-code-hint" className="field-hint">
           Hai un codice da un amico? Digitalo per sederti al suo tavolo (anche privato).
         </p>
+        <p className="field-hint">
+          Vuoi giocare con un amico? Apri un tavolo: dalla sala d&apos;attesa gli mandi l&apos;invito con un tocco.
+        </p>
+      </div>
+
+      {/* Invito generico al circolo (proposta donazione/condivisione §4.4): discreto. */}
+      <div className="lobby-share">
+        <ShareButton label="Invita un amico al circolo" className="btn-ghost" />
       </div>
 
       {/* Donazione (Lotto 4 — R6): in fondo alla lobby, visibile anche agli ospiti.

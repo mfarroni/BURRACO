@@ -953,7 +953,7 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────
-   SOSTIENI (Ko-fi)
+   SOSTIENI (Buy Me a Coffee + invito)
    ───────────────────────────────────────────────────────────────────── */
 
 .landing-root .support-section {
@@ -976,6 +976,34 @@
 .landing-root .support-body.muted {
   color: var(--lp-cream-dark);
   margin-bottom: 28px;
+}
+
+.landing-root .support-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.landing-root .support-actions .btn-icon {
+  margin-right: 0.5em;
+}
+
+.landing-root .support-actions .share-fallback-label {
+  color: var(--lp-cream);
+}
+
+/* Avviso d'invito nell'hero (link `/?tavolo=`): chiaro, non allarmante. */
+.landing-root .invite-notice {
+  margin: 0 auto 18px;
+  max-width: 52ch;
+  padding: 10px 16px;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-radius: 8px;
+  background: rgba(20, 53, 42, 0.85);
+  color: var(--lp-cream);
+  line-height: 1.5;
 }
 
 .landing-root .support-note {

@@ -4189,3 +4189,38 @@ button:disabled {
   }
 }
 
+
+/* Invito generico al circolo in lobby e invito al tavolo in sala d'attesa
+   (proposta donazione/condivisione §4.2, §4.4). Centrati, mai più forti delle azioni di gioco. */
+.lobby-share,
+.waiting-invite {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+  text-align: center;
+}
+.waiting-invite {
+  margin-bottom: var(--sp-4);
+}
+.waiting-invite-lede {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* Profilo: invito personale a sostenere il circolo (proposta §4.5). */
+.profile-support {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-6);
+  text-align: center;
+}
+.profile-support-lede {
+  margin: 0;
+  max-width: 48ch;
+  color: var(--text);
+}

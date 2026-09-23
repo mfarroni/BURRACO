@@ -8,6 +8,7 @@ import { useServiceHealth } from "@/lib/useServiceHealth";
 import { getAuthToken } from "@/lib/auth";
 import { useIsAdmin } from "@/lib/admin";
 import { useLobbyList, useLeaveOnPageHide } from "@/lib/lobby";
+import { captureInviteCode, clearInviteCode } from "@/lib/tableInvite";
 import { AuthPanel, type AuthMode } from "@/components/AuthPanel";
 import { Landing } from "@/components/Landing";
 import { Lobby } from "@/components/Lobby";
@@ -58,6 +59,16 @@ export default function Page() {
   useEffect(() => {
     setHasSession(!!getAuthToken());
   }, []);
+  // LINK D'INVITO `/?tavolo=CODICE` (proposta donazione/condivisione §5): letto una
+  // volta al mount e tolto dall'indirizzo; precompila il campo codice in lobby.
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  useEffect(() => {
+    setInviteCode(captureInviteCode());
+  }, []);
+  const consumeInvite = () => {
+    clearInviteCode();
+    setInviteCode(null);
+  };
   // Ingresso AUTOMATICO: quando il backend torna su e un token è ancora presente ma
   // il ripristino era finito in "anonimo" (per un'indisponibilità precedente),
   // ritenta /auth/me una sola volta così l'utente rientra senza ri-accedere.
@@ -239,7 +250,7 @@ export default function Page() {
         onRequestTable={setPendingRoom}
       />
     ) : (
-      <Landing onOpenAuth={setShowAuth} />
+      <Landing onOpenAuth={setShowAuth} inviteCode={inviteCode} />
     );
   }
 
@@ -322,6 +333,8 @@ export default function Page() {
             g.join(code, name);
           }}
           onAbort={g.abortConnection}
+          inviteCode={inviteCode}
+          onInviteConsumed={consumeInvite}
         />
 
         {/* SEC-08: ingresso negato per autenticazione (token mancante/scaduto).

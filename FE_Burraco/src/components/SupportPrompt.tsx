@@ -35,7 +35,7 @@ export function SupportPrompt({ won }: { won: boolean }) {
   if (phase === "thanks") {
     return (
       <section className="support-prompt" aria-label="Sostieni il circolo">
-        <p className="support-thanks" role="status">
+        <p className="support-prompt-thanks" role="status">
           Grazie di cuore: il circolo va avanti anche grazie a te.
         </p>
       </section>
@@ -44,14 +44,14 @@ export function SupportPrompt({ won }: { won: boolean }) {
 
   return (
     <section className="support-prompt" aria-labelledby="support-prompt-title">
-      <h3 id="support-prompt-title" className="support-title">
+      <h3 id="support-prompt-title" className="support-prompt-title">
         {won ? "Bella partita!" : "Ti è piaciuta la partita?"}
       </h3>
-      <p className="support-body">Il circolo va avanti solo grazie alle vostre offerte.</p>
-      <div className="support-actions">
+      <p className="support-prompt-body">Il circolo va avanti solo grazie alle vostre offerte.</p>
+      <div className="support-prompt-actions">
         <ShareButton onShared={() => setPhase("thanks")} />
         <a
-          className="support-coffee"
+          className="support-prompt-coffee"
           href={BMC_URL}
           target="_blank"
           rel="noopener noreferrer"
@@ -62,7 +62,7 @@ export function SupportPrompt({ won }: { won: boolean }) {
       </div>
       <button
         type="button"
-        className="support-later"
+        className="support-prompt-later"
         onClick={() => {
           snoozeSupportPrompt();
           setPhase("hidden");

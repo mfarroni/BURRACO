@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import type { ConnPhase, MergedInfo } from "@/lib/useGameSocket";
 import type { PlayerPublic } from "@/lib/contract";
 import { ConnectionBanner } from "@/components/StateBanners";
+import { ShareButton } from "@/components/ShareButton";
+import { inviteLinkPath } from "@/lib/tableInvite";
 
 /**
  * SCHERMATA TAVOLO IN ATTESA (`waiting`, §6.4). Codice in grande evidenza con
@@ -72,6 +74,7 @@ export function WaitingRoom({ code, isPrivate, connPhase, resumed, merged, onCan
   const isCoppie = modalita === "coppie";
   const slots = Array.from({ length: seatsTotal }, (_, i) => players.find((p) => p.seat === i) ?? null);
   const seated = players.length;
+  const missing = Math.max(1, seatsTotal - seated);
 
   // Etichetta dettata per screen reader (una lettera/cifra alla volta).
   const spelled = code ? code.split("").join(" ") : "";
@@ -146,6 +149,22 @@ export function WaitingRoom({ code, isPrivate, connPhase, resumed, merged, onCan
               : ""}
         </span>
       </div>
+
+      {/* Invito al tavolo (proposta donazione/condivisione §4.2): qui l'invito è un
+          SERVIZIO — riempie il tavolo. Link diretto `/?tavolo=CODICE` che precompila
+          il codice in lobby; l'ingresso resta validato dal server. Nessun caffè qui. */}
+      {code && (
+        <div className="waiting-invite">
+          <p className="waiting-invite-lede">
+            {missing > 1 ? `Mancano ${missing} giocatori: invita chi vuoi al tavolo.` : "Manca un giocatore: invita chi vuoi al tavolo."}
+          </p>
+          <ShareButton
+            label="Invita al tavolo"
+            text={`Ti aspetto al tavolo per una partita a burraco al Circolo Nettuno! Codice: ${code} — entra da qui:`}
+            path={inviteLinkPath(code)}
+          />
+        </div>
+      )}
 
       {/* Contatore del tempo d'attesa. */}
       <p className="waiting-elapsed" role="status" aria-live="off">

@@ -281,4 +281,14 @@ nei messaggi precompilati; nessuno script esterno).
   Limite noto: se il client si ricollega e riceve di nuovo `game_ended` per la stessa partita,
   questa conta due volte (effetto trascurabile: al più anticipa la comparsa di una partita).
 
-OUTPUT PER: agente_develop (Lotto C)
+- **Lotto C — completato:**
+  - sala d'attesa: "Invita al tavolo" con link `/?tavolo=CODICE` (`lib/tableInvite.ts`: formato
+    validato, codice in `sessionStorage` per sopravvivere al login, parametro tolto dall'URL);
+  - landing: avviso "Un amico ti aspetta al tavolo…" nell'hero; la sezione "Sostieni" (prima
+    legata a Ko-fi via `NEXT_PUBLIC_KOFI_URL`, mai attiva) è ora sempre visibile e punta a
+    Buy Me a Coffee, con caffè + invito;
+  - lobby: codice precompilato e focus su "Entra" (ingresso manuale), riga d'invito, pulsante
+    "Invita un amico al circolo";
+  - profilo: "Hai giocato N partite al circolo…" (N solo sul periodo "Sempre").
+
+OUTPUT PER: agente_develop (Lotto D — contatore anonimo dei clic)
