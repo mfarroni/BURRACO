@@ -99,11 +99,35 @@ test("le 26 carte di picche del mazzo reale hanno un file, e il file esiste", ()
   assert.equal(cardArtUrl({ id: "x", rank: "Q", suit: "spades", wildKind: null }), "/images/carte/donna-picche.webp");
 });
 
-test("i quadri restano stilizzati (null)", () => {
-  assert.deepEqual([...ENABLED_SUITS], ["hearts", "clubs", "spades"]);
-  for (const c of createDeck().filter((x) => x.suit === "diamonds")) {
-    assert.equal(cardArtUrl(c), null);
+test("le 26 carte di quadri del mazzo reale hanno un file, e il file esiste", () => {
+  const diamonds = createDeck().filter((c) => c.suit === "diamonds");
+  assert.equal(diamonds.length, 26);
+  const byRank = new Map();
+  for (const c of diamonds) {
+    const url = cardArtUrl(c);
+    assert.match(url, /^\/images\/carte\/(asso|[2-9]|10|fante|donna|re)-quadri\.webp$/);
+    assert.ok(existsSync(publicFile(url)), `manca ${url}`);
+    // le due copie della stessa carta usano lo stesso file
+    if (byRank.has(c.rank)) assert.equal(url, byRank.get(c.rank));
+    else byRank.set(c.rank, url);
   }
+  assert.equal(byRank.size, 13);
+  assert.equal(cardArtUrl({ id: "x", rank: "J", suit: "diamonds", wildKind: null }), "/images/carte/fante-quadri.webp");
+});
+
+test("tutti e quattro i semi sono abilitati", () => {
+  assert.deepEqual([...ENABLED_SUITS], ["hearts", "clubs", "spades", "diamonds"]);
+});
+
+test("mazzo completo: le 108 carte portano a 54 file, tutti esistenti", () => {
+  const urls = new Set();
+  for (const c of createDeck()) {
+    const url = cardArtUrl(c);
+    assert.ok(url, `nessun file per ${c.id}`);
+    urls.add(url);
+  }
+  assert.equal(urls.size, 54);
+  for (const url of urls) assert.ok(existsSync(publicFile(url)), `manca ${url}`);
 });
 
 test("valori inattesi → null, mai un percorso arbitrario", () => {
