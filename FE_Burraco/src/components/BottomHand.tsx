@@ -357,6 +357,7 @@ export function BottomHand({
                   selected={selected}
                   pressed={pressId === card.id}
                   pending={inFlightCardId === card.id}
+                  compact={layout === "rows" && !narrow}
                   onClick={isMyTurn && !pending ? onKeyboardActivate : undefined}
                   onKeyDown={(e) => onKeyDownCard(e, card, index)}
                   onPointerDown={(e) => onPointerDown(e, card, index)}

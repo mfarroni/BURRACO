@@ -76,6 +76,12 @@ interface Props {
   /** Press-preview (touch): la carta è evidenziata prima del commit al rilascio. */
   pressed?: boolean;
   small?: boolean;
+  /**
+   * Faccia COMPATTA a dimensioni piene: indice d'angolo + un solo segno centrale
+   * (come `small`), ma la misura la decide il contenitore. Usata dalla mano "in
+   * linea" su desktop, dove i pip in colonna non entrano nella carta.
+   */
+  compact?: boolean;
   /** true tra invio dell'intenzione e ack del server, agganciato a QUESTA carta. */
   pending?: boolean;
   /** carta a faccia coperta (mano avversario / dorso). */
@@ -95,6 +101,7 @@ export function CardView({
   onPointerCancel,
   pressed,
   small,
+  compact,
   pending,
   faceDown,
   wildRole,
@@ -128,7 +135,7 @@ export function CardView({
       <span className="jolly" aria-hidden="true">
         ★
       </span>
-    ) : pipSpec && symbol && !small ? (
+    ) : pipSpec && symbol && !small && !compact ? (
       <span className="pips" aria-hidden="true">
         {(["L", "C", "R"] as const).map((col) => (
           <span key={col} className="pip-col" data-col={col}>
@@ -148,8 +155,8 @@ export function CardView({
         <span className="court-letter">{rankLabel}</span>
       </span>
     ) : (
-      // Asso, e carte numeriche in formato piccolo (giochi calati / scarti): un
-      // solo seme grande al centro, sempre riconoscibile.
+      // Asso, e carte numeriche in formato piccolo (giochi calati / scarti) o
+      // compatto (mano in linea su desktop): un solo seme grande al centro.
       <span className="pip" aria-hidden="true">
         {symbol}
       </span>
@@ -179,6 +186,7 @@ export function CardView({
     "data-pressed": pressed ? "true" : "false",
     "data-color": isRed ? "red" : "black",
     "data-small": small ? "true" : "false",
+    "data-compact": compact ? "true" : undefined,
     "data-pending": pending ? "true" : "false",
     "data-wildkind": kind ?? undefined,
     "data-jolly": jolly ?? undefined,
