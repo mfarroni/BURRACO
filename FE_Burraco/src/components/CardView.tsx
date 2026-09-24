@@ -1,6 +1,7 @@
 "use client";
 
 import type { Card, Suit } from "@/lib/contract";
+import { cardArtUrl } from "@/lib/cardArt";
 import { jollyColor } from "@/lib/jollyColor";
 import "./CardFace.css";
 
@@ -117,6 +118,8 @@ export function CardView({
   const rankLabel = card.rank === "JOKER" ? "JLY" : card.rank;
   // Colore grafico stabile del jolly SCOPERTO (mai sui dorsi: return sopra).
   const jolly = jollyColor(card);
+  // Illustrazione (jolly e semi abilitati in lib/cardArt.ts); null → solo stilizzata.
+  const art = cardArtUrl(card);
 
   const index = (
     <span className="index" aria-hidden="true">
@@ -170,11 +173,11 @@ export function CardView({
         <span className="r">{rankLabel}</span>
         {symbol && <span className="s">{symbol}</span>}
       </span>
-      {/* Jolly illustrato: strato SOPRA la faccia stilizzata (che resta nel DOM).
+      {/* Carta illustrata: strato SOPRA la faccia stilizzata (che resta nel DOM).
           Visibile solo su desktop e con carta ≥ 72 px: vedi globals.css. */}
-      {jolly && (
-        <span className="jolly-art" aria-hidden="true">
-          <span className="jolly-art-img" />
+      {art && (
+        <span className="card-art" aria-hidden="true">
+          <span className="card-art-img" />
         </span>
       )}
     </>
@@ -190,6 +193,10 @@ export function CardView({
     "data-pending": pending ? "true" : "false",
     "data-wildkind": kind ?? undefined,
     "data-jolly": jolly ?? undefined,
+    "data-art": art ? "true" : undefined,
+    // Solo una variabile: l'immagine si scarica soltanto dove il CSS la usa come
+    // sfondo (desktop, carta ≥ 72 px). L'URL viene dalle tabelle di cardArt.ts.
+    style: art ? ({ ["--card-art" as string]: `url("${art}")` } as React.CSSProperties) : undefined,
     "data-wildrole": wildRole ? "true" : undefined,
     title: cardLabel(card),
     "aria-label": `${cardLabel(card)}${kind ? ` (${kind === "joker" ? "jolly" : "pinella"})` : ""}${

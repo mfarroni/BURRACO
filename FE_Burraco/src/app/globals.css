@@ -895,10 +895,12 @@ button:disabled {
   font-size: 0.68rem;
   letter-spacing: 0.02em;
 }
-/* JOLLY ILLUSTRATI — SOLO DESKTOP E SOLO SE LA CARTA È ABBASTANZA GRANDE.
- * Strato `.jolly-art` (CardView) SOPRA la faccia stilizzata, che resta nel DOM:
- * accessibilità invariata, nessun vuoto mentre l'immagine arriva, ritorno
- * istantaneo sotto soglia. Colore da `data-jolly` (src/lib/jollyColor.ts).
+/* CARTE ILLUSTRATE (jolly e semi abilitati) — SOLO DESKTOP E SOLO SE LA CARTA
+ * È ABBASTANZA GRANDE. Strato `.card-art` (CardView) SOPRA la faccia stilizzata,
+ * che resta nel DOM: accessibilità invariata, nessun vuoto mentre l'immagine
+ * arriva, ritorno istantaneo sotto soglia. Quale file: `--card-art`, impostata da
+ * CardView con l'URL delle tabelle di src/lib/cardArt.ts (jolly: colore da
+ * src/lib/jollyColor.ts; semi abilitati: ENABLED_SUITS). Qui nessun nome di file.
  *
  * PUNTO UNICO delle due condizioni (media/container query non accettano var()):
  *  - desktop = (min-width: 1024px) and (hover: hover) and (pointer: fine):
@@ -906,18 +908,19 @@ button:disabled {
  *  - soglia = carta larga ≥ 72 px CSS (prova sull'asset: a 70 px "JOKER" e il
  *    volto si leggono, a 56 px è una macchia). Lo strato sta dentro il bordo di
  *    1 px, quindi misura la carta − 2 px: 72 px di carta = min-width 70px.
- * L'immagine è scritta SOLO come background-image dentro entrambe le condizioni:
- * fuori (telefono, tablet, carta piccola) il browser non la scarica mai.
+ * La variabile da sola non scarica nulla: l'immagine si scarica SOLO dove
+ * `background-image: var(--card-art)` si applica, cioè dentro entrambe le
+ * condizioni. Fuori (telefono, tablet, carta piccola) nessuna richiesta.
  * Asset 400×591 (rapporto 0,677, come il mazzo): `contain` + fondo #F4ECDA = la carta
  * dell'immagine; nessuna deformazione, cornice mai tagliata.
  * Stati: selezione/hover/focus/matta sono outline, ombre esterne e transform
  * della .card (fuori dallo strato); lo spinner "in attesa" (::after) è dipinto
  * dopo lo strato, quindi sopra. pointer-events:none: click e drag invariati. */
-.card[data-jolly] > .jolly-art {
+.card[data-art] > .card-art {
   display: none;
 }
 @media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
-  .card[data-jolly] > .jolly-art {
+  .card[data-art] > .card-art {
     display: block;
     position: absolute;
     inset: 0;
@@ -926,20 +929,15 @@ button:disabled {
     pointer-events: none;
   }
   @container (min-width: 70px) {
-    .card[data-jolly] .jolly-art-img {
+    .card[data-art] .card-art-img {
       position: absolute;
       inset: 0;
       border-radius: inherit;
       background-color: #f4ecda;
+      background-image: var(--card-art);
       background-position: center;
       background-repeat: no-repeat;
       background-size: contain;
-    }
-    .card[data-jolly="rosso"] .jolly-art-img {
-      background-image: url("/images/carte/jolly-rosso.webp");
-    }
-    .card[data-jolly="nero"] .jolly-art-img {
-      background-image: url("/images/carte/jolly-nero.webp");
     }
   }
 }
