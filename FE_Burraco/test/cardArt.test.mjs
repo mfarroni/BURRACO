@@ -67,9 +67,25 @@ test("jolly invariati: stesso file di prima (jolly-rosso / jolly-nero)", () => {
   ]);
 });
 
-test("quadri, fiori e picche restano stilizzati (null)", () => {
-  assert.deepEqual([...ENABLED_SUITS], ["hearts"]);
-  for (const c of createDeck().filter((x) => x.suit && x.suit !== "hearts")) {
+test("le 26 carte di fiori del mazzo reale hanno un file, e il file esiste", () => {
+  const clubs = createDeck().filter((c) => c.suit === "clubs");
+  assert.equal(clubs.length, 26);
+  const byRank = new Map();
+  for (const c of clubs) {
+    const url = cardArtUrl(c);
+    assert.match(url, /^\/images\/carte\/(asso|[2-9]|10|fante|donna|re)-fiori\.webp$/);
+    assert.ok(existsSync(publicFile(url)), `manca ${url}`);
+    // le due copie della stessa carta usano lo stesso file
+    if (byRank.has(c.rank)) assert.equal(url, byRank.get(c.rank));
+    else byRank.set(c.rank, url);
+  }
+  assert.equal(byRank.size, 13);
+  assert.equal(cardArtUrl({ id: "x", rank: "K", suit: "clubs", wildKind: null }), "/images/carte/re-fiori.webp");
+});
+
+test("quadri e picche restano stilizzati (null)", () => {
+  assert.deepEqual([...ENABLED_SUITS], ["hearts", "clubs"]);
+  for (const c of createDeck().filter((x) => x.suit === "diamonds" || x.suit === "spades")) {
     assert.equal(cardArtUrl(c), null);
   }
 });
