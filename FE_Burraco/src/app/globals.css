@@ -241,7 +241,10 @@ button {
   transition: background var(--dur-base) var(--ease-out),
     transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-base);
 }
-button:not(:disabled):hover {
+/* Le carte (CardView, <button class="card">) sono escluse: il fondo verde dei
+   pulsanti sostituiva in hover la faccia avorio. `:where()` lascia invariata la
+   specificità, quindi per tutti gli altri pulsanti non cambia nulla. */
+button:not(:disabled):where(:not(.card)):hover {
   background: linear-gradient(180deg, var(--felt-600), var(--felt-700));
   border-color: var(--brass-600);
 }
