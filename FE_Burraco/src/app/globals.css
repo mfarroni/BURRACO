@@ -241,7 +241,10 @@ button {
   transition: background var(--dur-base) var(--ease-out),
     transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-base);
 }
-button:not(:disabled):hover {
+/* Le carte (CardView, <button class="card">) sono escluse: il fondo verde dei
+   pulsanti sostituiva in hover la faccia avorio. `:where()` lascia invariata la
+   specificità, quindi per tutti gli altri pulsanti non cambia nulla. */
+button:not(:disabled):where(:not(.card)):hover {
   background: linear-gradient(180deg, var(--felt-600), var(--felt-700));
   border-color: var(--brass-600);
 }
@@ -2045,6 +2048,76 @@ button:disabled {
 }
 .fan[data-layout="rows"] .card .jolly {
   font-size: 1.1rem;
+}
+/* MANO IN LINEA SU DESKTOP (≥ 16 carte, finestra > 640px = il breakpoint
+ * `narrow` di BottomHand.tsx). Qui la carta usa la faccia COMPATTA
+ * (CardView `compact` → data-compact): indice d'angolo + un solo segno
+ * centrale. La faccia piena non entrava in 44px: tre colonne di pip da 17px
+ * con margini di 16px (CardFace.css) uscivano dalla carta, le figure pure.
+ * Tutte le misure interne sono in `em` del font della carta, che è
+ * proporzionale alla sua larghezza (--hand-w): nessun pixel fisso slegato
+ * dalla carta. Carta 44×64 → 50×73 (+14%), striscia esposta 30 → 34px.
+ * Sotto i 640px (mobile) e nel ventaglio nulla cambia. */
+@media (min-width: 641px) {
+  .fan[data-layout="rows"] {
+    --hand-w: 50px;
+    --hand-strip: 34px;
+    padding-left: calc(var(--sp-3) + var(--hand-w) - var(--hand-strip));
+  }
+  .fan[data-layout="rows"] .fan-slot {
+    margin-left: calc(var(--hand-strip) - var(--hand-w));
+  }
+  .fan[data-layout="rows"] .card[data-compact="true"] {
+    width: var(--hand-w);
+    height: calc(var(--hand-w) * 1.46);
+    font-size: calc(var(--hand-w) * 0.32); /* 16px a 50px */
+  }
+  .fan[data-layout="rows"] .card[data-compact="true"] .index {
+    top: 0.2em;
+    left: 0.25em;
+    width: 1.2em;
+    font-size: 1em;
+    line-height: 0.82;
+  }
+  .fan[data-layout="rows"] .card[data-compact="true"] .index.br {
+    top: auto;
+    left: auto;
+    bottom: 0.2em;
+    right: 0.25em;
+  }
+  .fan[data-layout="rows"] .card[data-compact="true"] .index .r {
+    font-size: 0.8em;
+  }
+  /* "10": le due cifre restano dentro la colonna dell'indice (1.2em), centrate
+     sul seme come i valori a una cifra. Il jolly ("JLY") tiene la sua spaziatura. */
+  .fan[data-layout="rows"] .card[data-compact="true"]:not([data-wildkind="joker"]) .index .r {
+    letter-spacing: -0.06em;
+  }
+  .fan[data-layout="rows"] .card[data-compact="true"] .index .s {
+    font-size: 0.62em;
+  }
+  .fan[data-layout="rows"] .card[data-compact="true"] .pip,
+  .fan[data-layout="rows"] .card[data-compact="true"] .court,
+  .fan[data-layout="rows"] .card[data-compact="true"] .jolly {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    transform: none;
+    line-height: 1;
+  }
+  .fan[data-layout="rows"] .card[data-compact="true"] .pip {
+    font-size: 1.5em;
+  }
+  .fan[data-layout="rows"] .card[data-compact="true"] .court-suit {
+    font-size: 1.6em;
+  }
+  .fan[data-layout="rows"] .card[data-compact="true"] .court-letter {
+    font-size: 0.75em;
+  }
+  .fan[data-layout="rows"] .card[data-compact="true"] .jolly {
+    font-size: 1.4em;
+  }
 }
 /* Schermi molto stretti (<340px): strip esposto ≥28px, mai meno. */
 @media (max-width: 340px) {
