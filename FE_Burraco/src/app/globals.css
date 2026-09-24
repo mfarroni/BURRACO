@@ -905,7 +905,7 @@ button:disabled {
  *    1 px, quindi misura la carta − 2 px: 72 px di carta = min-width 70px.
  * L'immagine è scritta SOLO come background-image dentro entrambe le condizioni:
  * fuori (telefono, tablet, carta piccola) il browser non la scarica mai.
- * Asset 400×555 (rapporto 0,721): `contain` + fondo #F7F7F3 = la carta
+ * Asset 400×591 (rapporto 0,677, come il mazzo): `contain` + fondo #F4ECDA = la carta
  * dell'immagine; nessuna deformazione, cornice mai tagliata.
  * Stati: selezione/hover/focus/matta sono outline, ombre esterne e transform
  * della .card (fuori dallo strato); lo spinner "in attesa" (::after) è dipinto
@@ -927,7 +927,7 @@ button:disabled {
       position: absolute;
       inset: 0;
       border-radius: inherit;
-      background-color: #f7f7f3;
+      background-color: #f4ecda;
       background-position: center;
       background-repeat: no-repeat;
       background-size: contain;
