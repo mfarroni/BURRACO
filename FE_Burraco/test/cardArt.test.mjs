@@ -1,0 +1,88 @@
+// Test unitario dell'associazione carta → file illustrato (nessuna dipendenza nuova).
+// Esecuzione, da FE_Burraco/:  node --test test/cardArt.test.mjs
+// Richiede Node >= 22.18 (type stripping nativo per importare i sorgenti .ts).
+// src/lib/cardArt.ts importa "./jollyColor" senza estensione (stile del bundler):
+// un piccolo hook di risoluzione, solo per questo test, prova il suffisso ".ts".
+import { register } from "node:module";
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+register(
+  "data:text/javascript," +
+    encodeURIComponent(`
+      export async function resolve(spec, ctx, next) {
+        try { return await next(spec, ctx); }
+        catch (e) {
+          if (spec.startsWith(".") && !/\\.[a-z]+$/.test(spec)) return next(spec + ".ts", ctx);
+          throw e;
+        }
+      }`),
+);
+
+const { cardArtUrl, ENABLED_SUITS } = await import("../src/lib/cardArt.ts");
+const { createDeck } = await import("../../BE_Burraco/src/engine/cards.ts");
+
+const publicFile = (url) => fileURLToPath(new URL(`../public${url}`, import.meta.url));
+
+test("le 26 carte di cuori del mazzo reale hanno un file, e il file esiste", () => {
+  const hearts = createDeck().filter((c) => c.suit === "hearts");
+  assert.equal(hearts.length, 26);
+  for (const c of hearts) {
+    const url = cardArtUrl(c);
+    assert.match(url, /^\/images\/carte\/(asso|[2-9]|10|fante|donna|re)-cuori\.webp$/);
+    assert.ok(existsSync(publicFile(url)), `manca ${url}`);
+  }
+});
+
+test("tabella esplicita dei valori", () => {
+  const h = (rank) => cardArtUrl({ id: "x", rank, suit: "hearts", wildKind: null });
+  assert.equal(h("A"), "/images/carte/asso-cuori.webp");
+  assert.equal(h("2"), "/images/carte/2-cuori.webp");
+  assert.equal(h("10"), "/images/carte/10-cuori.webp");
+  assert.equal(h("J"), "/images/carte/fante-cuori.webp");
+  assert.equal(h("Q"), "/images/carte/donna-cuori.webp");
+  assert.equal(h("K"), "/images/carte/re-cuori.webp");
+});
+
+test("le due copie della stessa carta usano lo stesso file", () => {
+  const byRank = new Map();
+  for (const c of createDeck().filter((x) => x.suit === "hearts")) {
+    const url = cardArtUrl(c);
+    if (byRank.has(c.rank)) assert.equal(url, byRank.get(c.rank));
+    else byRank.set(c.rank, url);
+  }
+  assert.equal(byRank.size, 13);
+});
+
+test("jolly invariati: stesso file di prima (jolly-rosso / jolly-nero)", () => {
+  const jokers = createDeck().filter((c) => c.wildKind === "joker");
+  const urls = jokers.map(cardArtUrl).sort();
+  assert.deepEqual(urls, [
+    "/images/carte/jolly-nero.webp",
+    "/images/carte/jolly-nero.webp",
+    "/images/carte/jolly-rosso.webp",
+    "/images/carte/jolly-rosso.webp",
+  ]);
+});
+
+test("quadri, fiori e picche restano stilizzati (null)", () => {
+  assert.deepEqual([...ENABLED_SUITS], ["hearts"]);
+  for (const c of createDeck().filter((x) => x.suit && x.suit !== "hearts")) {
+    assert.equal(cardArtUrl(c), null);
+  }
+});
+
+test("valori inattesi → null, mai un percorso arbitrario", () => {
+  const bad = [
+    { id: "x", rank: "../../etc", suit: "hearts", wildKind: null },
+    { id: "x", rank: "__proto__", suit: "hearts", wildKind: null },
+    { id: "x", rank: "constructor", suit: "hearts", wildKind: null },
+    { id: "x", rank: "JOKER", suit: "hearts", wildKind: null },
+    { id: "x", rank: "A", suit: "../hearts", wildKind: null },
+    { id: "x", rank: "A", suit: null, wildKind: null },
+    { id: "JOKER-1-9", rank: "JOKER", suit: null, wildKind: "joker" },
+  ];
+  for (const c of bad) assert.equal(cardArtUrl(c), null, JSON.stringify(c));
+});
