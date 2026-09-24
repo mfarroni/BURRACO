@@ -18,7 +18,7 @@ import { jollyColor } from "./jollyColor";
  * PUNTO UNICO dei semi con gli asset illustrati. Per aggiungere un seme: caricare
  * i 13 file `<valore>-<seme>.webp` e aggiungerlo qui.
  */
-export const ENABLED_SUITS: readonly Suit[] = ["hearts", "clubs"];
+export const ENABLED_SUITS: readonly Suit[] = ["hearts", "clubs", "spades"];
 
 /** Valore del contratto → parte del nome file. */
 const RANK_FILE: Readonly<Record<Exclude<Rank, "JOKER">, string>> = {
