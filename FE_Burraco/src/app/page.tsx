@@ -37,6 +37,7 @@ import {
   TurnBanner,
 } from "@/components/StateBanners";
 import { ConnectionScreen } from "@/components/ConnectionScreen";
+import { WakeUpDialog } from "@/components/WakeUpNotice";
 import { SideFlank } from "@/components/SideFlanks";
 import { VetrinaBrandHeader } from "@/components/VetrinaBrandHeader";
 
@@ -98,6 +99,8 @@ export default function Page() {
   const [showAuth, setShowAuth] = useState<AuthMode | null>(null);
   // Vista Profilo (sola lettura) sovrapposta alla lobby autenticata.
   const [showProfile, setShowProfile] = useState(false);
+  // Account appena eliminato dal suo titolare (R05): la vetrina lo conferma una volta.
+  const [accountDeleted, setAccountDeleted] = useState(false);
   // Modale "Apri un tavolo" (door a). Aperta dalla lobby; chiusa a join riuscito.
   const [showOpenModal, setShowOpenModal] = useState(false);
   // MODALITÀ scelta in lobby (1v1/2v2): sorgente unica per "Gioca subito",
@@ -221,7 +224,7 @@ export default function Page() {
    * poi rientra da solo. Un visitatore nuovo (nessun token) NON è bloccato: vede
    * subito la vetrina, e il suo /auth/me non fa nemmeno rete (nessun token). */
   if (hasSession && !health.ready) {
-    return <ConnectionScreen longWait={health.longWait} />;
+    return <ConnectionScreen elapsedMs={health.elapsedMs} />;
   }
 
   /* ── Ripristino sessione in corso ──────────────────────────────────── */
@@ -242,21 +245,49 @@ export default function Page() {
    * NON navigano a route: impostano `showAuth`, che apre l'AuthPanel sul percorso
    * corrispondente. `onBack` riporta alla vetrina senza toccare lo stato auth. */
   if (auth.status === "anonymous") {
+    // Server che si sta svegliando (cold start di Render free, decisione del lead):
+    // il pannello resta visibile ma inerte, e una finestra spiega l'attesa invece di
+    // lasciar scadere la richiesta con "Tempo scaduto". Si chiude da sola a server su.
+    // Mostrata dopo 1s per non lampeggiare quando il server è già sveglio.
+    const waking = !health.ready;
     return showAuth ? (
-      <AuthPanel
-        auth={auth}
-        initialMode={showAuth}
-        onBack={() => setShowAuth(null)}
-        onRequestTable={setPendingRoom}
-      />
+      <>
+        <div inert={waking}>
+          <AuthPanel
+            auth={auth}
+            initialMode={showAuth}
+            onBack={() => setShowAuth(null)}
+            onRequestTable={setPendingRoom}
+          />
+        </div>
+        {waking && health.elapsedMs >= 1000 && <WakeUpDialog elapsedMs={health.elapsedMs} />}
+      </>
     ) : (
-      <Landing onOpenAuth={setShowAuth} inviteCode={inviteCode} />
+      <Landing
+        onOpenAuth={(mode) => {
+          setAccountDeleted(false);
+          setShowAuth(mode);
+        }}
+        inviteCode={inviteCode}
+        notice={accountDeleted ? "Il tuo account è stato eliminato insieme ai tuoi dati. Grazie di aver giocato al circolo." : null}
+      />
     );
   }
 
   /* ── Profilo (sola lettura), raggiungibile dalla lobby autenticata ──── */
   if (!g.joined && showProfile && auth.user) {
-    return <ProfilePanel user={auth.user} onBack={() => setShowProfile(false)} />;
+    return (
+      <ProfilePanel
+        user={auth.user}
+        onBack={() => setShowProfile(false)}
+        onAccountDeleted={() => {
+          setShowProfile(false);
+          setShowAuth(null);
+          setAccountDeleted(true);
+          void auth.logout();
+        }}
+      />
+    );
   }
 
   /* ── Autenticato ma non ancora al tavolo → LOBBY (lista + azioni) ────── */
@@ -268,7 +299,7 @@ export default function Page() {
       <div className="page-3col-wrapper lobby-3col-wrapper">
         <SideFlank side="left" />
         <main className="central-column-card lobby lobby-wide">
-          <VetrinaBrandHeader title="Burraco" subtitle="Il tavolo del circolo, uno contro uno." />
+          <VetrinaBrandHeader title="Burraco" subtitle="Il tavolo del circolo, uno contro uno o a coppie." />
 
           {/* Identità corrente + logout. */}
           <div className="whoami">

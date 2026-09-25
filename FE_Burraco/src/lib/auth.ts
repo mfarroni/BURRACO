@@ -150,6 +150,21 @@ export async function changePassword(currentPassword: string, newPassword: strin
 }
 
 /**
+ * Audit lancio R05 — cancella il PROPRIO account (solo registrati), confermando con
+ * la password. Il server rimuove utente e sessioni; il chiamante poi esegue il logout
+ * locale per azzerare token e stato.
+ */
+export async function deleteAccount(password: string): Promise<void> {
+  const token = getAuthToken();
+  if (!token) throw new AuthClientError("UNAUTHORIZED", "Sessione non valida: accedi di nuovo.", 401);
+  await call<{ deleted: true }>("/users/me/delete", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ password }),
+  });
+}
+
+/**
  * Revoca la sessione lato server e cancella il token locale. Idempotente e
  * tollerante agli errori: il token locale viene comunque rimosso.
  */

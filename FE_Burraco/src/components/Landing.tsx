@@ -34,6 +34,8 @@ interface Props {
   onOpenAuth: (mode: AuthMode) => void;
   /** Codice di un link d'invito `/?tavolo=` ancora da usare: mostra un avviso nell'hero. */
   inviteCode?: string | null;
+  /** Avviso di servizio da mostrare nell'hero (es. account appena eliminato). */
+  notice?: string | null;
 }
 
 /** Mail contatti da env, con fallback neutro. */
@@ -100,27 +102,23 @@ const RULES = [
   {
     n: "VI",
     title: "Durante la partita",
-    body: "Le regole complete restano a portata di mano, dal pannello al tavolo. Nessuno deve ricordarle a memoria.",
+    body: "Il tavolo accetta solo le mosse valide e ti dice perché una mossa non è ammessa: nessuno deve ricordare le regole a memoria.",
   },
 ] as const;
 
+/* Audit lancio (decisione del lead): lo Shop è NASCOSTO dalla vetrina finché non si
+   decide cosa vendere; il 2 contro 2 è già giocabile e non è più "in sviluppo". */
 const ROADMAP = [
   {
-    stage: "In sviluppo",
+    stage: "Già al tavolo",
     title: "Tavoli a coppie",
-    body: "Il 2 contro 2. Il layout del tavolo è già predisposto.",
+    body: "Il 2 contro 2 si gioca già: in lobby scegli «2 contro 2» e aspetta i tre compagni di tavolo.",
     lead: true,
   },
   {
     stage: "Progettato",
     title: "Tornei del circolo",
     body: "Serate a calendario e classifica. Nessun montepremi in denaro.",
-    lead: false,
-  },
-  {
-    stage: "Idea",
-    title: "Shop del circolo",
-    body: "Mazzi, tappetini, la guida stampata. Da valutare.",
     lead: false,
   },
 ] as const;
@@ -133,7 +131,7 @@ const PROFILE_SAMPLE = [
   { value: "7", label: "Burraco puliti" },
 ] as const;
 
-export function Landing({ onOpenAuth, inviteCode = null }: Props) {
+export function Landing({ onOpenAuth, inviteCode = null, notice = null }: Props) {
   // Slider hero: indice corrente + pausa su hover; l'avanzamento è governato da
   // un solo interval con cleanup (functional update → nessuna dipendenza sfuggente).
   const [slide, setSlide] = useState(0);
@@ -239,6 +237,11 @@ export function Landing({ onOpenAuth, inviteCode = null }: Props) {
             </div>
 
             <div className="hero-content">
+              {notice && (
+                <p className="invite-notice" role="status">
+                  {notice}
+                </p>
+              )}
               {inviteCode && (
                 <p className="invite-notice" role="status">
                   Un amico ti aspetta al tavolo <strong>{inviteCode}</strong>. Entra come ospite o
@@ -247,8 +250,8 @@ export function Landing({ onOpenAuth, inviteCode = null }: Props) {
               )}
               <h2 className="hero-title">Siediti al tavolo. Adesso, senza registrarti.</h2>
               <p className="hero-sub">
-                Burraco a due giocatori nel browser. Carte grandi, regole del circolo,
-                nessun costo.
+                Burraco nel browser, uno contro uno o a coppie. Carte grandi, regole del
+                circolo, nessun costo.
               </p>
 
               <div className="action-buttons">
@@ -351,8 +354,8 @@ export function Landing({ onOpenAuth, inviteCode = null }: Props) {
                 </header>
 
                 <p className="parchment-lede">
-                  Si gioca con due mazzi da cinquantaquattro carte. Vince chi chiude per
-                  primo, ma i punti li fanno le carte in tavola.
+                  Si gioca con due mazzi da cinquantaquattro carte. Si gioca a più smazzate:
+                  vince chi arriva per primo a 2005 punti, e i punti li fanno le carte in tavola.
                 </p>
 
                 <div className="parchment-grid">
@@ -420,8 +423,8 @@ export function Landing({ onOpenAuth, inviteCode = null }: Props) {
           </section>
 
           <section className="section" id="tornei">
-            <h2 className="section-title">Cosa arriva dopo</h2>
-            <p className="section-lede">In lavorazione, senza date promesse.</p>
+            <h2 className="section-title">Novità e prossimi passi</h2>
+            <p className="section-lede">Quello che c&apos;è già e quello in lavorazione, senza date promesse.</p>
             <ul className="roadmap-grid">
               {ROADMAP.map((r) => (
                 <li className={`roadmap-card${r.lead ? " lead" : ""}`} key={r.title}>
@@ -496,6 +499,12 @@ export function Landing({ onOpenAuth, inviteCode = null }: Props) {
             <p className="footer-fine-print">
               Si gioca senza denaro. Nessuna scommessa, nessun premio in denaro.
             </p>
+            {/* Audit lancio R01/R08: documenti legali raggiungibili da ogni visita. */}
+            <nav className="footer-legal" aria-label="Documenti legali">
+              <a href="/privacy">Privacy</a>
+              <a href="/cookie">Cookie</a>
+              <a href="/termini">Termini d&apos;uso</a>
+            </nav>
             {/* Donazione (Lotto 4 — R6): nel piè, dopo Contatti. Mai fissa/overlay. */}
             <DonationButton placement="footer" />
           </footer>

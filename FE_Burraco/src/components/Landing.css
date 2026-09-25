@@ -1132,6 +1132,25 @@
   color: #a89178;
 }
 
+/* Documenti legali (Audit lancio R01/R08): link sobri, stessa tinta del fine-print. */
+.landing-root .footer-legal {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+  margin-top: 10px;
+  font-size: 0.85rem;
+}
+.landing-root .footer-legal a {
+  color: #c9b393;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.landing-root .footer-legal a:hover,
+.landing-root .footer-legal a:focus-visible {
+  color: #e7d097;
+}
+
 /* ─────────────────────────────────────────────────────────────────────
    ACCESSIBILITÀ E STATI
    ───────────────────────────────────────────────────────────────────── */

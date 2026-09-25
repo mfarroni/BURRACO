@@ -21,7 +21,8 @@ export type AuthErrorCode =
   | "WEAK_PASSWORD" // 400 (difesa in profondità: la policy è anche in zod)
   | "UNAUTHORIZED" // 401 (token assente/non valido)
   | "WRONG_PASSWORD" // 400 (cambio password: password attuale errata)
-  | "GUEST_NO_PASSWORD"; // 403 (cambio password: gli ospiti non hanno password)
+  | "GUEST_NO_PASSWORD" // 403 (cambio password/cancellazione: gli ospiti non hanno password)
+  | "ADMIN_NO_SELF_DELETE"; // 403 (un admin non cancella il proprio account dal profilo)
 
 export class AuthError extends Error {
   constructor(
@@ -284,6 +285,34 @@ export class AuthService {
     await this.store.revokeAllForUser(user.id);
     const sessionToken = await this.issueSession(user.id);
     return { sessionToken, user: toAuthUser(user) };
+  }
+
+  /**
+   * Audit lancio R05 — CANCELLAZIONE DEL PROPRIO ACCOUNT. Solo registrati: richiede
+   * la password attuale (conferma d'identità anche con una sessione rubata). Un
+   * ospite non ha password e viene comunque ripulito dallo sweep dopo 7 giorni di
+   * inattività → GUEST_NO_PASSWORD. Un admin non può cancellarsi da qui (la revoca di
+   * un admin resta manuale, come nel pannello) → ADMIN_NO_SELF_DELETE. Dopo la
+   * cancellazione il token non è più valido (sessioni rimosse con l'utente).
+   */
+  async deleteAccount(token: string | undefined | null, password: string): Promise<void> {
+    const principal = await this.getPrincipalByToken(token);
+    if (!principal) throw new AuthError("UNAUTHORIZED", "Sessione non valida.");
+    const user = await this.store.getUserById(principal.userId);
+    if (!user) throw new AuthError("UNAUTHORIZED", "Sessione non valida.");
+    if (user.isGuest || user.passwordHash === null) {
+      throw new AuthError(
+        "GUEST_NO_PASSWORD",
+        "Gli accessi da ospite si cancellano da soli dopo 7 giorni di inattività.",
+      );
+    }
+    if (user.role === "admin") {
+      throw new AuthError("ADMIN_NO_SELF_DELETE", "Un amministratore non può cancellare il proprio account da qui.");
+    }
+    if (!(await verifyPassword(user.passwordHash, password))) {
+      throw new AuthError("WRONG_PASSWORD", "La password non è corretta.");
+    }
+    await this.store.deleteAccount(user.id);
   }
 
   /**

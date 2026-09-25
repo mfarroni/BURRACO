@@ -2,6 +2,7 @@ import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-o
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../db/schema.js";
 import type { AuthStore, LoginAttempt, StoredSession, StoredUser } from "./types.js";
+import { purgeUserData } from "../account/purge.js";
 
 /**
  * Implementazione Drizzle/Neon di AuthStore (attiva con `DATABASE_URL`).
@@ -110,6 +111,18 @@ export class DrizzleAuthStore implements AuthStore {
 
   async setPasswordHash(userId: string, passwordHash: string): Promise<void> {
     await this.db.update(schema.users).set({ passwordHash }).where(eq(schema.users.id, userId));
+  }
+
+  async deleteAccount(userId: string): Promise<void> {
+    const [u] = await this.db
+      .select({ email: schema.users.email })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1);
+    if (!u) return;
+    await this.db.transaction(async (tx) => {
+      await purgeUserData(tx, userId, u.email);
+    });
   }
 
   async revokeAllForUser(userId: string): Promise<number> {
