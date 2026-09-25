@@ -345,3 +345,33 @@ Nessun lavoro di correzione parte senza approvazione esplicita. Nessun merge di 
 **Azioni di Massimo**
 - Se vuoi il keep-alive: in GitHub → Settings → Variables imposta `KEEPALIVE_URL = https://<servizio>.onrender.com/ping`. Oppure, meglio, un monitor esterno gratuito su `/ping`.
 - Su Render: `RETENTION_MODE=live`, dopo l'anteprima.
+
+---
+
+## 9. Ciclo 3 — "Chi arriva da solo gioca" (fatto su questo branch)
+
+**Scelta:** Massimo ha dato il via senza indicare un'opzione, quindi ho applicato quella consigliata in §6: **(a) serate a orario fisso**, più una **versione leggera di (b)**, cioè l'avviso via email delle serate con i broadcast già esistenti. L'avversario computer (c) **non** è stato fatto: costo alto, da valutare con i numeri.
+
+| Cosa | Dettaglio | File principali |
+|---|---|---|
+| Rotta pubblica `GET /circolo` | Senza login: prossime serate **pubblicate** (max 3, whitelist dei campi) e presenze **aggregate** (giocatori al circolo, tavoli pubblici in attesa). Mai nomi, codici o tavoli privati. Rate-limit per IP | `http/app.ts`, `admin/catalog.ts`, `room/RoomManager.ts` (`presenceSummary`), contratto `CircoloResponse`/`PublicEvent` in BE e FE |
+| Vetrina | "N giocatori al circolo adesso" nell'hero; riquadro "Prossime serate al circolo" nella sezione novità, oppure l'invito ad attivare gli avvisi se non ci sono serate | `Landing.tsx`, `Landing.css`, `lib/circolo.ts` |
+| Lobby | Nello stato vuoto: prossima serata e pulsante "Attiva gli avvisi delle serate", che apre il Profilo (ospiti: invito a registrarsi) | `Lobby.tsx`, `app/page.tsx` |
+| Profilo (R19) | Casella "Avvisami via email delle serate del circolo": spenta di default, consenso esplicito = `promo_opt_in`. Nuove rotte `GET/POST /users/me/preferences` (solo registrati, corpo `.strict()`) | `SerateOptIn.tsx`, `profile/preferences.ts`, `lib/profile.ts` |
+| Pannello admin | Creazione evento con fine, descrizione e "Pubblica subito"; per ogni evento **Pubblica/Ritira** e **Cancella** (con conferma). Nuove rotte `POST /admin/events/:id` e `/admin/events/:id/delete` (404 ai non admin, audit) | `webmaster/page.tsx`, `lib/admin.ts`, `http/app.ts` |
+| Privacy | Il consenso agli avvisi delle serate si attiva dal Profilo | `app/privacy/page.tsx` |
+
+**Verifiche:** 422 test backend verdi (416 + 6 nuovi in `test/circolo.serate.http.test.ts`), 15 frontend, `tsc`, `next lint` e `next build` puliti; i tipi `PublicEvent`, `CircoloResponse` e `UserPreferences` sono identici nelle due copie del contratto. Prove nel browser della sandbox a 375 px:
+- l'hero mostra "1 giocatore al circolo adesso" con un giocatore reale in attesa;
+- il riquadro serate compare con i dati simulati (la sandbox non ha database);
+- in lobby il pulsante degli avvisi porta al Profilo, dove la casella si attiva e resta attiva dopo il ricaricamento;
+- nessuno scorrimento orizzontale.
+
+**Non verificato nella sandbox:** i pulsanti Pubblica/Ritira/Cancella del pannello admin, perché servono un utente admin e il database. Coperti dai test solo per il controllo d'accesso e la validazione.
+
+**Come si usa (Massimo)**
+1. Pannello admin → Eventi & Shop: crea la serata (es. "Serata del giovedì", inizio 21:00, fine 23:30) e spunta "Pubblica subito". Compare in vetrina e in lobby.
+2. Pannello admin → Comunicazioni: invia un broadcast **promozionale**. Lo ricevono solo gli iscritti che hanno attivato gli avvisi.
+3. Consiglio: una o due serate fisse a settimana, sempre alla stessa ora, annunciate anche fuori dal sito (gruppi, social). È questo che fa incontrare chi arriva da solo.
+
+**Limiti residui:** nessun avviso automatico "c'è qualcuno al tavolo adesso" (opzione b completa) e nessun avversario computer. Si possono riaprire se i numeri delle serate lo giustificano.

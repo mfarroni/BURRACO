@@ -73,9 +73,10 @@ export default function PrivacyPage() {
           registrazione: art. 6.1.b GDPR.
         </li>
         <li>
-          <strong>Comunicazioni promozionali</strong> (per esempio l&apos;annuncio di una serata): solo
-          se ci hai dato il consenso, che puoi ritirare in ogni momento con il link in fondo a ogni
-          email. Art. 6.1.a GDPR.
+          <strong>Avvisi delle serate del circolo</strong> e altre comunicazioni promozionali: solo se
+          attivi tu l&apos;opzione «Avvisami via email delle serate del circolo» nel tuo Profilo. Puoi
+          ritirare il consenso in ogni momento dal Profilo o con il link in fondo a ogni email.
+          Art. 6.1.a GDPR.
         </li>
       </ul>
 

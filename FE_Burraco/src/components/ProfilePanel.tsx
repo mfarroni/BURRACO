@@ -19,6 +19,7 @@ import { trackClick } from "@/lib/metrics";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { DeleteAccountForm } from "@/components/DeleteAccountForm";
+import { SerateOptIn } from "@/components/SerateOptIn";
 import { SideFlank } from "@/components/SideFlanks";
 import { VetrinaBrandHeader } from "@/components/VetrinaBrandHeader";
 
@@ -193,6 +194,9 @@ export function ProfilePanel({ user, onBack, onAccountDeleted }: Props) {
 
         {/* Cambio password: solo per i registrati (gli ospiti non hanno password). */}
         {!isGuest && <ChangePasswordForm />}
+
+        {/* Avvisi delle serate (Audit lancio R02, Ciclo 3): consenso esplicito, spento di default. */}
+        {!isGuest && <SerateOptIn />}
 
       {isGuest ? (
         <div className="profile-guest-note" role="status">

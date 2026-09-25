@@ -6,6 +6,7 @@ import { BMC_URL, DonationButton } from "@/components/DonationButton";
 import { ShareButton } from "@/components/ShareButton";
 import { trackClick } from "@/lib/metrics";
 import { ContactForm } from "@/components/ContactForm";
+import { formatEventWhen, useCircolo } from "@/lib/circolo";
 import "./Landing.css";
 
 /**
@@ -178,6 +179,10 @@ export function Landing({ onOpenAuth, inviteCode = null, notice = null }: Props)
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Audit lancio R02 (Ciclo 3): serate pubblicate e presenze, dalla rotta pubblica.
+  const circolo = useCircolo(true);
+  const players = circolo?.playersOnline ?? 0;
+
   // La voce "Sostieni" esiste in nav solo se la sezione viene resa.
   const navItems = NAV_ITEMS;
 
@@ -282,6 +287,11 @@ export function Landing({ onOpenAuth, inviteCode = null, notice = null }: Props)
                 <li>Gratis</li>
                 <li>Nessuna installazione</li>
                 <li>Si gioca dal browser</li>
+                {players > 0 && (
+                  <li className="hero-live">
+                    {players === 1 ? "1 giocatore al circolo adesso" : `${players} giocatori al circolo adesso`}
+                  </li>
+                )}
               </ul>
             </div>
 
@@ -425,6 +435,28 @@ export function Landing({ onOpenAuth, inviteCode = null, notice = null }: Props)
           <section className="section" id="tornei">
             <h2 className="section-title">Novità e prossimi passi</h2>
             <p className="section-lede">Quello che c&apos;è già e quello in lavorazione, senza date promesse.</p>
+            {/* Audit lancio R02 (Ciclo 3): le SERATE sono l'appuntamento per trovare
+                qualcuno al tavolo. Solo eventi pubblicati dall'admin, mai bozze. */}
+            <div className="serate" aria-labelledby="serate-title">
+              <h3 id="serate-title" className="serate-title">Prossime serate al circolo</h3>
+              {circolo && circolo.events.length > 0 ? (
+                <ul className="serate-list">
+                  {circolo.events.map((ev) => (
+                    <li key={ev.id} className="serate-item">
+                      <p className="serate-when">{formatEventWhen(ev)}</p>
+                      <p className="serate-name">{ev.titolo}</p>
+                      {ev.luogo && <p className="serate-where">{ev.luogo}</p>}
+                      {ev.descrizione && <p className="serate-desc">{ev.descrizione}</p>}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="serate-empty">
+                  Nessuna serata in calendario per ora. Registrati e, dal tuo profilo, attiva gli
+                  avvisi: ti scriviamo quando ne fissiamo una.
+                </p>
+              )}
+            </div>
             <ul className="roadmap-grid">
               {ROADMAP.map((r) => (
                 <li className={`roadmap-card${r.lead ? " lead" : ""}`} key={r.title}>

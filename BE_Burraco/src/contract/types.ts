@@ -689,6 +689,42 @@ export interface TablesResponse {
   lobbyPlayers: number;
 }
 
+/**
+ * Audit lancio R02 (Ciclo 3) — una SERATA del circolo pubblicata dall'admin, come la
+ * vede il pubblico. Whitelist: niente autore, niente bozze, niente date di modifica.
+ */
+export interface PublicEvent {
+  id: string;
+  titolo: string;
+  descrizione: string | null;
+  luogo: string | null;
+  /** Inizio, epoch ms. */
+  inizioAt: number;
+  /** Fine, epoch ms (null = non indicata). */
+  fineAt: number | null;
+}
+
+/**
+ * Risposta di GET /circolo (PUBBLICA, senza login): le prossime serate pubblicate e
+ * quante persone sono al circolo adesso, in forma AGGREGATA (solo conteggi, nessun
+ * nome né codice tavolo). Serve a chi arriva da solo per sapere quando e se trova
+ * qualcuno con cui giocare.
+ */
+export interface CircoloResponse {
+  /** Serate pubblicate non ancora finite, dalla più vicina (max 3). */
+  events: PublicEvent[];
+  /** Persone in lobby + sedute a un tavolo con connessione attiva. */
+  playersOnline: number;
+  /** Tavoli pubblici in attesa di giocatori. */
+  waitingTables: number;
+}
+
+/** Preferenze dell'utente registrato (GET/POST /users/me/preferences). */
+export interface UserPreferences {
+  /** Consenso a ricevere via email gli avvisi delle serate (promo_opt_in). */
+  avvisiSerate: boolean;
+}
+
 /** Risposta di GET /tables/new-code: codice tavolo precompilato dal server. */
 export interface NewCodeResponse {
   code: string;

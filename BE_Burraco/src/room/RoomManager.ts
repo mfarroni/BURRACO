@@ -229,6 +229,22 @@ export class RoomManager {
   }
 
   /**
+   * Audit lancio R02 (Ciclo 3) — presenze AGGREGATE per la vetrina pubblica: chi è
+   * in lobby più chi è seduto con un socket vivo (in attesa o in partita). Solo
+   * conteggi: nessun nome, codice o identità esce da qui.
+   */
+  presenceSummary(): { playersOnline: number; waitingTables: number } {
+    let seated = 0;
+    for (const room of this.rooms.values()) {
+      if (!room.isDisposed()) seated += room.seatsTakenLive();
+    }
+    return {
+      playersOnline: this.lobbyPlayerCount() + seated,
+      waitingTables: this.listPublicWaitingTables().length,
+    };
+  }
+
+  /**
    * LOBBY (§6.1): lista dei tavoli PUBBLICI in attesa con almeno un posto vivo.
    * WHITELIST rigorosa (Room.waitingView): nessun privato, nessun campo interno.
    */
