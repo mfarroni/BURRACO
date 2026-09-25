@@ -377,9 +377,18 @@ export class RoomManager {
       // client reale apre comunque sempre un NUOVO socket per join/riconnessione.
       const prev = this.socketRoom.get(ws);
       if (prev && !prev.isDisposed()) return;
+      const existing = this.rooms.get(code);
+      // Audit lancio R04: RICONNESSIONE a un tavolo che non esiste più (riavvio o
+      // deploy del server: lo stato vive solo in RAM). Prima si creava in silenzio un
+      // tavolo NUOVO col vecchio codice (1v1 di default) e i primi due che rientravano
+      // ricominciavano da zero; ora il client riceve un esito terminale chiaro.
+      if (msg.resume === true && (!existing || existing.isDisposed())) {
+        console.log(`[room] lost room=${code} at=${new Date().toISOString()}`);
+        send(ws, { type: "room_closed", reason: "lost" });
+        return;
+      }
       // R2a: non creare oltre il tetto globale (solo se il codice porterebbe a una
       // NUOVA room; la riconnessione a una room esistente resta sempre ammessa).
-      const existing = this.rooms.get(code);
       if ((!existing || existing.isDisposed()) && this.atRoomCapacity()) {
         this.rejectAtCapacity(ws);
         return;

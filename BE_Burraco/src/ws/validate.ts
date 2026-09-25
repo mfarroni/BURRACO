@@ -42,6 +42,8 @@ const joinRoom = z.object({
   // AUTH: token di sessione opaco per identità e gating SEC-08 (validato dal
   // servizio, non qui). Solo controllo di FORMA/lunghezza al bordo.
   authToken: z.string().max(MAX_AUTH_TOKEN).optional(),
+  // Audit lancio R04: riconnessione a un tavolo già occupato (vedi contratto).
+  resume: z.boolean().optional(),
 });
 
 // LIFECYCLE: smontaggio esplicito del tavolo. Nessun payload oltre al tipo.

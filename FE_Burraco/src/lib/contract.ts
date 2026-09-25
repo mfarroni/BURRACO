@@ -206,6 +206,14 @@ export type ClientMessage =
       displayName: string;
       clientId?: string;
       authToken?: string;
+      /**
+       * Audit lancio R04 — true quando il client si RICOLLEGA a un tavolo a cui era
+       * già seduto (riconnessione automatica). Se quel tavolo non esiste più (es. il
+       * server è stato riavviato e lo stato in RAM è perso) il server NON ne crea
+       * uno nuovo: risponde `room_closed{reason:"lost"}`. Assente/false = ingresso
+       * con codice (un codice sconosciuto crea un tavolo privato, come prima).
+       */
+      resume?: boolean;
     }
   | { type: "draw"; source: "deck" | "discard"; clientMoveId?: string }
   | { type: "meld_new"; cards: string[]; clientMoveId?: string }
@@ -284,7 +292,7 @@ export type ServerMessage =
   | { type: "game_ended"; winnerTeam: TeamId | null; finalScores: number[]; reason?: "forfeit" }
   // Chiusura TERMINALE del tavolo SENZA vincitore, distinta da `game_ended`.
   // "interrupted" = reset esplicito; "abandoned" = avversario non rientrato.
-  | { type: "room_closed"; reason: "interrupted" | "abandoned" }
+  | { type: "room_closed"; reason: "interrupted" | "abandoned" | "lost" }
   // ANNULLAMENTO UNILATERALE della partita (terminale, senza vincitore, distinto da
   // room_closed). `byName` è chi ha annullato, per l'avviso in chiaro. La partita è
   // 'aborted' e NON conta nelle statistiche.

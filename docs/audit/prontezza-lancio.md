@@ -322,3 +322,26 @@ Nessun lavoro di correzione parte senza approvazione esplicita. Nessun merge di 
 - Su Vercel impostare `NEXT_PUBLIC_TITOLARE` (nome del titolare) e `NEXT_PUBLIC_CONTACT_EMAIL`. Senza, le pagine dicono "il gestore del Circolo Nettuno".
 - Su Render impostare `RETENTION_MODE=live`, dopo aver visto la simulazione nel pannello admin: l'informativa dichiara i tempi di conservazione (3/12 mesi, 180 e 90 giorni), che sono veri solo se la pulizia gira davvero (collegato a R06).
 - Far rileggere privacy e termini a un professionista, compresa la soglia dei 14 anni per i minori, che è una scelta del titolare.
+
+---
+
+## 8. Ciclo 2 — "Il server risponde sempre" (fatto su questo branch)
+
+| Rilievo | Cosa è stato fatto | File principali |
+|---|---|---|
+| R04 | Il client segnala quando si **ricollega** al proprio tavolo (`join_room.resume`). Se il tavolo non esiste più (riavvio o deploy) il server risponde `room_closed{reason:"lost"}` e **non crea più una partita nuova** né trasforma un 2v2 in 1v1. Overlay "Il circolo si è riavviato", poi ritorno alla lobby. Contratto aggiornato in BE e FE nello stesso commit (P2). 4 test | `contract/types.ts`, `lib/contract.ts`, `ws/validate.ts`, `room/RoomManager.ts`, `lib/useGameSocket.ts`, `Overlays.tsx`, `test/resume.lost.test.ts` |
+| R06 | Checkpoint cancellati a fine partita (vittoria, forfait, abbandono), come già all'annullamento: sono stato transitorio che nessuno rilegge. Nuovo passo di retention `game_events`: registro mosse conservato **7 giorni** dalla fine della partita; per le partite mai concluse (perse con un riavvio), 2 giorni dall'inizio. Informativa privacy aggiornata | `room/Room.ts`, `retention/constants.ts`, `retention/service.ts`, `app/privacy/page.tsx` |
+| R03 | Nuovo `GET /ping`: risponde senza interrogare il database, così un keep-alive tiene sveglio Render **senza** consumare ore di Neon. Workflow `keep-alive` documentato: usare `/ping` e sapere che GitHub lo esegue ogni 1–2 ore. 1 test | `http/app.ts`, `.github/workflows/keep-alive.yml`, `test/ping.http.test.ts` |
+| R09 | Già chiuso nel Ciclo 1 (finestra "Stiamo preparando il tavolo") | — |
+
+**Verifiche:** 416 test backend verdi (411 + 5 nuovi), 15 frontend, `tsc`, `next lint` e `next build` puliti, contratto `join_room` identico nelle due copie. Prova nel browser della sandbox: due giocatori avviano una partita, il backend viene spento e riavviato, ed entrambi vedono "Il circolo si è riavviato" senza nuova smazzata. Nella prova il ritorno porta alla vetrina e non alla lobby, perché la sandbox gira senza database e il riavvio cancella anche le sessioni ospite. In produzione le sessioni stanno su Neon e si torna in lobby.
+
+**Limiti residui (dichiarati):**
+- La partita interrotta da un riavvio **non si recupera**: il ripristino dai checkpoint resta un'opzione più costosa, non fatta. Consiglio operativo: fare i merge in orari senza partite.
+- La partita interrotta resta su Neon senza esito e non entra nelle statistiche. Il suo registro mosse viene potato dopo 2 giorni.
+- Caso raro: se dopo un riavvio qualcun altro apre un tavolo con **lo stesso codice** prima che i giocatori rientrino, il rientro finisce su quel tavolo invece di ricevere "lost".
+- La pulizia di `game_events` e dei dati vecchi **cancella davvero solo con `RETENTION_MODE=live`** su Render. Prima conviene guardare la simulazione nel pannello admin (Retention → anteprima).
+
+**Azioni di Massimo**
+- Se vuoi il keep-alive: in GitHub → Settings → Variables imposta `KEEPALIVE_URL = https://<servizio>.onrender.com/ping`. Oppure, meglio, un monitor esterno gratuito su `/ping`.
+- Su Render: `RETENTION_MODE=live`, dopo l'anteprima.

@@ -323,8 +323,17 @@ export function createHttpApp(
   //  - tProcessMs: ms dal boot del processo (risveglio del processo Render);
   //  - tQueryMs: durata del SELECT 1 (risveglio del compute Neon), null se no DB.
   //  - db: "ok"|"down" (down anche senza DATABASE_URL, senza errore).
-  // Usato anche dal keep-alive CI e dalla schermata di connessione del FE. `status`
-  // resta "ok" (retro-compatibile con i test e i probe esistenti).
+  // Usato dalla schermata di connessione del FE. `status` resta "ok" (retro-compatibile
+  // con i test e i probe esistenti).
+  //
+  // Audit lancio R03 — `/ping`: risposta LEGGERA senza toccare il DB, per keep-alive
+  // e monitor esterni. Tiene sveglio il processo Render SENZA risvegliare Neon a ogni
+  // controllo (ogni `SELECT 1` consuma ore di calcolo del piano gratuito).
+  app.get("/ping", (_req: Request, res: Response) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ status: "ok" });
+  });
+
   app.get(
     ["/health", "/"],
     handler(async (_req: Request, res: Response) => {

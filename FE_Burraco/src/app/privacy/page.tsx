@@ -98,7 +98,8 @@ export default function PrivacyPage() {
       <ul>
         <li>Account registrato: finché non lo elimini tu o non ci chiedi di eliminarlo.</li>
         <li>Accesso da ospite: cancellato dopo 7 giorni di inattività.</li>
-        <li>Dettaglio delle mosse delle partite: fino a 3 mesi; riepilogo delle partite: fino a 12 mesi.</li>
+        <li>Registro delle singole mosse di una partita: fino a 7 giorni dalla fine della partita.</li>
+        <li>Punteggi di ogni smazzata: fino a 3 mesi; riepilogo delle partite: fino a 12 mesi.</li>
         <li>Messaggi del modulo Contatti: fino a 180 giorni dopo la lettura.</li>
         <li>Registri tecnici: fino a 90 giorni.</li>
       </ul>

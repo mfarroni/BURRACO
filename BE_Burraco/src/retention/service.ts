@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "../db/client.js";
 import { logAppEvent } from "../events/log.js";
 import { recordAdminAudit } from "../admin/audit.js";
@@ -26,6 +26,7 @@ export type RetentionStep =
   | "broadcast_recipients"
   | "support_clicks"
   | "detail"
+  | "game_events"
   | "matches"
   | "referenced_guests"
   | "inactive_accounts_detected";
@@ -189,6 +190,27 @@ async function pruneDetail(dryRun: boolean): Promise<RetentionStepReport> {
 }
 
 /**
+ * Audit lancio R06 — REGISTRO DELLE MOSSE (`game_events`) con orizzonte breve:
+ *  - partite concluse da oltre `gameEventsMs` (7 giorni);
+ *  - partite MAI concluse (riavvio del server: stato in RAM perso) iniziate da oltre
+ *    `orphanMatchMs` (2 giorni), altrimenti il loro registro resterebbe per sempre.
+ * Tocca SOLO game_events: hand_scores e checkpoint seguono `pruneDetail`.
+ */
+async function pruneGameEvents(dryRun: boolean): Promise<RetentionStepReport> {
+  const ended = and(isNotNull(schema.matches.endedAt), lt(schema.matches.endedAt, cutoff(RETENTION.gameEventsMs)));
+  const orphan = and(isNull(schema.matches.endedAt), lt(schema.matches.createdAt, cutoff(RETENTION.orphanMatchMs)));
+  const ids = (await db!.select({ id: schema.matches.id }).from(schema.matches).where(or(ended, orphan))).map((r) => r.id);
+  if (ids.length === 0) return { step: "game_events", matched: 0, removed: 0, dryRun };
+  const [ge] = await db!.select({ n: sql<number>`count(*)` }).from(schema.gameEvents).where(inArray(schema.gameEvents.matchId, ids));
+  const matched = Number(ge?.n ?? 0);
+  let removed = 0;
+  if (!dryRun && matched > 0) {
+    removed = (await db!.delete(schema.gameEvents).where(inArray(schema.gameEvents.matchId, ids)).returning({ id: schema.gameEvents.id })).length;
+  }
+  return { step: "game_events", matched, removed, dryRun };
+}
+
+/**
  * Partite (matches/match_players/hands) concluse da oltre 12 mesi. Ordine FK: prima
  * i figli residui (detail già potato a 3 mesi), poi hands/match_players, poi matches.
  * Prima si annullano i riferimenti da `contact_messages.user_id`? No: quelli puntano
@@ -293,6 +315,7 @@ export async function runRetentionSweep(
     reports.push(await pruneBroadcastRecipients(dryRun));
     reports.push(await pruneSupportClicks(dryRun));
     reports.push(await pruneAdminAudit(dryRun));
+    reports.push(await pruneGameEvents(dryRun));
     reports.push(await pruneDetail(dryRun));
     reports.push(await pruneOldMatches(dryRun));
     reports.push(await pruneReferencedGuests(dryRun));

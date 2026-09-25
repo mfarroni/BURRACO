@@ -59,10 +59,11 @@ export interface GameEndedInfo {
 /**
  * Chiusura TERMINALE del tavolo SENZA vincitore (distinta da game_ended):
  * "interrupted" = tavolo smontato con reset; "abandoned" = avversario non
- * rientrato entro la grazia.
+ * rientrato entro la grazia; "lost" = il tavolo non esiste più sul server
+ * (riavvio/aggiornamento, Audit lancio R04).
  */
 export interface RoomClosedInfo {
-  reason: "interrupted" | "abandoned";
+  reason: "interrupted" | "abandoned" | "lost";
 }
 
 /**
@@ -123,7 +124,9 @@ export const DEFAULT_TABLE_MODE: TableMode = { numeroGiocatori: 2, modalita: "in
  * server la conosce già dal tavolo esistente).
  */
 type FirstFrame =
-  | { kind: "join_room"; code: string }
+  // `resume`: riconnessione a un tavolo già occupato (appreso da room_joined/merge).
+  // Se il tavolo non esiste più il server risponde room_closed{lost} (R04).
+  | { kind: "join_room"; code: string; resume?: boolean }
   | { kind: "open_table"; code: string; private: boolean; mode: TableMode }
   | { kind: "quick_match"; mode: TableMode };
 
@@ -353,7 +356,7 @@ export function useGameSocket(): GameSocketApi {
           // lo usiamo d'ora in poi per ogni riconnessione (reclaim del posto).
           roomRef.current = msg.code;
           setRoomCode(msg.code);
-          firstFrameRef.current = { kind: "join_room", code: msg.code };
+          firstFrameRef.current = { kind: "join_room", code: msg.code, resume: true };
           // Token per-scheda (sessionStorage) + fallback in-memory: la scrittura
           // è best-effort e non lancia mai (gestita dentro saveToken).
           saveToken(msg.code, msg.yourToken);
@@ -478,7 +481,7 @@ export function useGameSocket(): GameSocketApi {
           setMerged({ newCode: msg.newCode });
           roomRef.current = msg.newCode;
           setRoomCode(msg.newCode);
-          firstFrameRef.current = { kind: "join_room", code: msg.newCode };
+          firstFrameRef.current = { kind: "join_room", code: msg.newCode, resume: true };
           break;
         case "open_rejected":
           // LOBBY (door a): codice già in uso. Il socket resta aperto: la modale
@@ -548,6 +551,7 @@ export function useGameSocket(): GameSocketApi {
           playerToken: storedToken(frame.code),
           clientId,
           authToken,
+          ...(frame.resume ? { resume: true } : {}),
         });
       }
     },

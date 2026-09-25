@@ -116,10 +116,34 @@ export function HandEndedOverlay({
  * Esito TERMINALE del tavolo SENZA vincitore, distinto dal game_ended (che ha un
  * vincitore). Due varianti chiaramente riconoscibili e MAI colpevolizzanti:
  *  - interrupted → il tavolo è stato chiuso su richiesta (accento neutro/blu);
- *  - abandoned   → l'avversario non è rientrato entro la grazia (accento ambra).
+ *  - abandoned   → l'avversario non è rientrato entro la grazia (accento ambra);
+ *  - lost        → il server è stato riavviato e la partita non si può riprendere
+ *                  (accento neutro/blu come interrupted: non è colpa di nessuno).
  * Overlay terminale: gestisce il focus (porta il focus sull'azione di uscita) e
  * ha ruolo di dialog per gli screen reader. `onLeave` riporta alla lobby.
  */
+/** Testi dell'esito terminale senza vincitore, per motivo di chiusura. */
+const ROOM_CLOSED_COPY: Record<RoomClosedInfo["reason"], { icon: string; eyebrow: string; title: string; body: string }> = {
+  interrupted: {
+    icon: "⊘",
+    eyebrow: "Tavolo chiuso",
+    title: "Partita terminata",
+    body: "Il tavolo è stato chiuso su richiesta. La partita non prosegue e non c'è un vincitore.",
+  },
+  abandoned: {
+    icon: "⌛",
+    eyebrow: "Partita interrotta",
+    title: "L'avversario ha abbandonato",
+    body: "L'avversario non è rientrato in tempo, quindi la partita è stata annullata. Nessun vincitore e nessuna penalità per te.",
+  },
+  lost: {
+    icon: "↻",
+    eyebrow: "Partita interrotta",
+    title: "Il circolo si è riavviato",
+    body: "Il server è stato riavviato per manutenzione o aggiornamento e questa partita non si può riprendere. Nessun vincitore e nessuna penalità: ci scusiamo per l'interruzione.",
+  },
+};
+
 export function RoomClosedOverlay({
   info,
   onLeave,
@@ -134,24 +158,20 @@ export function RoomClosedOverlay({
   }, [info]);
 
   if (!info) return null;
-  const isInterrupted = info.reason === "interrupted";
+  const copy = ROOM_CLOSED_COPY[info.reason];
   return (
     <div className="overlay">
       <div
         className="overlay-card outcome"
-        data-outcome={isInterrupted ? "interrupted" : "abandoned"}
+        data-outcome={info.reason === "abandoned" ? "abandoned" : "interrupted"}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
       >
-        <div className="outcome-icon" aria-hidden="true">{isInterrupted ? "⊘" : "⌛"}</div>
-        <p className="overlay-eyebrow">{isInterrupted ? "Tavolo chiuso" : "Partita interrotta"}</p>
-        <h2 id={titleId}>{isInterrupted ? "Partita terminata" : "L'avversario ha abbandonato"}</h2>
-        <p className="verdict">
-          {isInterrupted
-            ? "Il tavolo è stato chiuso su richiesta. La partita non prosegue e non c'è un vincitore."
-            : "L'avversario non è rientrato in tempo, quindi la partita è stata annullata. Nessun vincitore e nessuna penalità per te."}
-        </p>
+        <div className="outcome-icon" aria-hidden="true">{copy.icon}</div>
+        <p className="overlay-eyebrow">{copy.eyebrow}</p>
+        <h2 id={titleId}>{copy.title}</h2>
+        <p className="verdict">{copy.body}</p>
         <p className="muted" style={{ textAlign: "center" }}>
           Puoi aprire un nuovo tavolo o unirti a un altro dalla lobby.
         </p>
