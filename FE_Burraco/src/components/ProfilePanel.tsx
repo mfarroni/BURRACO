@@ -18,6 +18,7 @@ import { ShareButton } from "@/components/ShareButton";
 import { trackClick } from "@/lib/metrics";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
+import { DeleteAccountForm } from "@/components/DeleteAccountForm";
 import { SideFlank } from "@/components/SideFlanks";
 import { VetrinaBrandHeader } from "@/components/VetrinaBrandHeader";
 
@@ -41,6 +42,8 @@ import { VetrinaBrandHeader } from "@/components/VetrinaBrandHeader";
 interface Props {
   user: AuthUser;
   onBack: () => void;
+  /** Account eliminato dal suo titolare: il chiamante azzera la sessione locale. */
+  onAccountDeleted: () => void;
 }
 
 type LoadState = "loading" | "ready" | "error";
@@ -64,7 +67,7 @@ function opponentLabel(name: string, isGuest: boolean): string {
   return isGuest ? `${name} (ospite)` : name;
 }
 
-export function ProfilePanel({ user, onBack }: Props) {
+export function ProfilePanel({ user, onBack, onAccountDeleted }: Props) {
   const isGuest = user.isGuest;
 
   const [view, setView] = useState<View>("summary");
@@ -468,6 +471,9 @@ export function ProfilePanel({ user, onBack }: Props) {
           Torna al tavolo
         </button>
       </div>
+
+      {/* Eliminazione dell'account: solo registrati, in fondo e in due passi (R05). */}
+      {!isGuest && <DeleteAccountForm onDeleted={onAccountDeleted} />}
       </main>
       <SideFlank side="right" />
     </div>

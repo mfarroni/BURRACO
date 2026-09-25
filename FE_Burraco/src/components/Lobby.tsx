@@ -195,7 +195,7 @@ export function Lobby({
           disabled={connecting}
         >
           <span className="mode-option-title">1 contro 1</span>
-          <span className="mode-option-sub">- Testa a testa - 2 giocatori</span>
+          <span className="mode-option-sub">Testa a testa · 2 giocatori</span>
         </button>
         <button
           type="button"
@@ -207,7 +207,7 @@ export function Lobby({
           disabled={connecting}
         >
           <span className="mode-option-title">2 contro 2</span>
-          <span className="mode-option-sub">- A coppie - 4 giocatori</span>
+          <span className="mode-option-sub">A coppie · 4 giocatori</span>
         </button>
       </div>
 

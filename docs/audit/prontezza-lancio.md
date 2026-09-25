@@ -292,3 +292,33 @@ Mi fermo qui. Servono le decisioni di Massimo su:
 Nessun lavoro di correzione parte senza approvazione esplicita. Nessun merge di questo branch: lo fa Massimo.
 
 **OUTPUT PER: agente_develop**: da emettere **solo dopo il Gate 1**, con il primo ciclo approvato, i rilievi inclusi e i file che si possono modificare.
+
+---
+
+## 7. Decisioni del Gate 1 (Massimo, 2026-09-25) e stato del Ciclo 1
+
+**Decisioni**
+1. Ordine approvato: Ciclo 1 → Ciclo 2 → Ciclo 3.
+2. Shop: **nascosto** dalla vetrina. Montepremi: su `main` non ci sono più; resta V01.
+3. Piani gratuiti: **si accettano i limiti**. In cambio, una finestra spiega l'attesa: "Stiamo preparando il tavolo — tra circa 30 secondi sarà pronto". Restano da fare le verifiche V02 e V05.
+
+**Ciclo 1: fatto su questo branch**
+
+| Rilievo | Cosa è stato fatto | File principali |
+|---|---|---|
+| R01 | Pagina `/privacy` con i dati realmente trattati, basi giuridiche, fornitori, conservazione, diritti e titolare (variabili `NEXT_PUBLIC_TITOLARE` e `NEXT_PUBLIC_CONTACT_EMAIL`) | `FE_Burraco/src/app/privacy/page.tsx`, `components/LegalPage.tsx` |
+| R08 | Pagine `/termini` e `/cookie` (elenco delle chiavi di memoria del browser realmente usate). Link nel piè della vetrina e sotto il modulo d'accesso | `app/termini`, `app/cookie`, `Landing.tsx`, `AuthPanel.tsx` |
+| R05 | "Elimina il mio account" nel Profilo (solo registrati, conferma con password). Nuova rotta `POST /users/me/delete`; pulizia condivisa con la cancellazione admin (`account/purge.ts`). Ospite → 403; admin → 403. 6 test nuovi | `BE_Burraco/src/account/purge.ts`, `auth/*`, `http/app.ts`, `test/account.delete.http.test.ts`, `DeleteAccountForm.tsx` |
+| R09 (anticipato) | Finestra di risveglio con conto alla rovescia sul pannello d'accesso (pannello inerte finché il server non risponde); stesso testo nella schermata di chi ha già una sessione | `components/WakeUpNotice.tsx`, `ConnectionScreen.tsx`, `app/page.tsx` |
+| R07 | Testi della vetrina corretti: 2v2 "già al tavolo", "uno contro uno o a coppie", vittoria a 2005 punti, niente promessa di un pannello regole. Shop nascosto. Refusi della lobby | `Landing.tsx`, `Lobby.tsx`, `page.tsx` |
+| R14 | Favicon, pagina 404 e pagina d'errore in italiano | `app/icon.svg`, `app/not-found.tsx`, `app/error.tsx` |
+
+**Verifiche eseguite:** 411 test backend verdi (405 esistenti + 6 nuovi), 15 test frontend, `tsc`, `next lint` e `next build` puliti. Prove nel browser della sandbox a 375 px:
+- nessuno scorrimento orizzontale sulle pagine legali, sulla 404 e sulla vetrina;
+- con il backend spento la finestra di risveglio compare; all'avvio del backend si chiude da sola e l'ingresso da ospite riesce;
+- la cancellazione dell'account rifiuta la password errata; con quella giusta torna alla vetrina con l'avviso, e il login successivo dà 401.
+
+**Azioni di Massimo prima del lancio in prova**
+- Su Vercel impostare `NEXT_PUBLIC_TITOLARE` (nome del titolare) e `NEXT_PUBLIC_CONTACT_EMAIL`. Senza, le pagine dicono "il gestore del Circolo Nettuno".
+- Su Render impostare `RETENTION_MODE=live`, dopo aver visto la simulazione nel pannello admin: l'informativa dichiara i tempi di conservazione (3/12 mesi, 180 e 90 giorni), che sono veri solo se la pulizia gira davvero (collegato a R06).
+- Far rileggere privacy e termini a un professionista, compresa la soglia dei 14 anni per i minori, che è una scelta del titolare.

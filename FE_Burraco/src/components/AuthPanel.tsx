@@ -249,6 +249,13 @@ export function AuthPanel({ auth, initialMode = "login", onBack, onRequestTable 
       </form>
 
       <p className="muted auth-hint">{hint}</p>
+      {/* Audit lancio R01/R08: chi crea un account o entra da ospite vede dove leggere
+          privacy e termini (link a pagine statiche, nessun consenso preselezionato). */}
+      <p className="muted auth-hint auth-legal">
+        {mode === "register" ? "Creando l'account accetti i " : "Entrando accetti i "}
+        <a href="/termini" target="_blank" rel="noopener">Termini d&apos;uso</a> e dichiari di aver letto
+        l&apos;<a href="/privacy" target="_blank" rel="noopener">Informativa privacy</a>.
+      </p>
       </main>
       <SideFlank side="right" />
     </div>

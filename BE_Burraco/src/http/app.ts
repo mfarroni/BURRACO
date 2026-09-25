@@ -87,6 +87,10 @@ const loginBody = z.object({
 });
 const guestBody = z.object({ displayName: displayNameSchema });
 // CICLO Profilo — cambio password: l'attuale ha solo il tetto anti-DoS, la nuova la policy.
+const deleteAccountBody = z
+  .object({ password: z.string().min(1).max(200) })
+  .strict();
+
 const changePasswordBody = z.object({
   currentPassword: z.string().min(1).max(200),
   newPassword: passwordSchema,
@@ -225,6 +229,7 @@ const STATUS_BY_CODE: Record<AuthErrorCode, number> = {
   UNAUTHORIZED: 401,
   WRONG_PASSWORD: 400,
   GUEST_NO_PASSWORD: 403,
+  ADMIN_NO_SELF_DELETE: 403,
 };
 
 function sendAuthError(res: Response, err: unknown): void {
@@ -450,6 +455,26 @@ export function createHttpApp(
       const result = await auth.changePassword(bearer(req), parsed.data.currentPassword, parsed.data.newPassword);
       res.setHeader("Cache-Control", "no-store");
       res.json({ token: result.sessionToken, user: result.user });
+    }),
+  );
+
+  // Audit lancio R05 — CANCELLAZIONE DEL PROPRIO ACCOUNT. L'utente è derivato SOLO
+  // dal token (nessun id nel corpo: niente IDOR); la password attuale conferma
+  // l'identità. Rate-limit dedicato contro il tentativo di indovinare la password.
+  const deleteAccountLimiter = rateLimit({ name: "delete-account", windowMs: 15 * 60_000, max: 10 });
+  app.post(
+    "/users/me/delete",
+    deleteAccountLimiter,
+    handler(async (req, res) => {
+      const parsed = deleteAccountBody.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: "WRONG_PASSWORD", message: "Inserisci la tua password per confermare." });
+        return;
+      }
+      await auth.deleteAccount(bearer(req), parsed.data.password);
+      void logAppEvent("info", "auth", "Account cancellato dal titolare");
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ deleted: true });
     }),
   );
 

@@ -1516,6 +1516,51 @@ button:disabled {
   color: var(--text);
 }
 
+/* ── Risveglio del server (WakeUpNotice) ─────────────────────────────
+   Finestra "Stiamo preparando il tavolo" durante il cold start di Render: riusa
+   .overlay/.overlay-card, più stretta; barra di avanzamento indicativa (30 s). */
+.wake-card {
+  max-width: 460px;
+  text-align: center;
+}
+.wake-card h2 {
+  font-size: var(--fs-h1);
+  margin: 0 0 var(--sp-3);
+}
+.wake-lede {
+  margin: 0 0 var(--sp-3);
+  color: var(--text);
+}
+.wake-count {
+  margin: 0 0 var(--sp-3);
+  color: var(--brass-300);
+  font-weight: 600;
+}
+.wake-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+  margin: 0 auto var(--sp-3);
+  max-width: 320px;
+}
+.wake-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--brass-500);
+  transition: width 1s linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wake-bar > span {
+    transition: none;
+  }
+}
+.wake-note {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
 /* ── Esiti TERMINALI senza vincitore (RoomClosedOverlay) ──────────────
    Tre chiusure DISTINGUIBILI a colpo d'occhio grazie all'accento:
    · vittoria/fine partita → oro (default .overlay-card, invariato);
@@ -1828,6 +1873,14 @@ button:disabled {
   margin-top: var(--sp-4);
   text-align: center;
   font-size: var(--fs-sm);
+}
+/* Rimando a termini e privacy sotto il modulo d'accesso (Audit lancio R01/R08). */
+.auth-legal {
+  font-size: var(--fs-xs);
+}
+.auth-legal a {
+  color: var(--brass-400);
+  text-decoration: underline;
 }
 
 /* Aiuto sotto un campo (es. spiegazione del codice tavolo). */
@@ -2462,6 +2515,25 @@ button:disabled {
   margin: var(--sp-2) 0 0;
   font-size: var(--fs-sm);
   color: var(--danger-300);
+}
+/* Eliminazione dell'account (R05): in fondo al profilo, tono sobrio ma distinto. */
+.profile-delete {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+.profile-delete-open {
+  color: var(--danger-300);
+}
+.profile-delete-text {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.profile-delete-confirm {
+  background: var(--danger-300); /* inchiostro su rosso chiaro: ~9:1 AAA */
+  border-color: var(--danger-300);
+  color: var(--ink-900);
 }
 .profile-avatar-error {
   margin: 0;

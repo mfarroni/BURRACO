@@ -79,6 +79,16 @@ export class MemoryAuthStore implements AuthStore {
     if (s && s.revokedAt === null) s.revokedAt = new Date();
   }
 
+  async deleteAccount(userId: string): Promise<void> {
+    const u = this.usersById.get(userId);
+    if (!u) return;
+    for (const [hash, sess] of this.sessionsByTokenHash) {
+      if (sess.userId === userId) this.sessionsByTokenHash.delete(hash);
+    }
+    if (u.email) this.usersByEmail.delete(u.email.toLowerCase());
+    this.usersById.delete(userId);
+  }
+
   async setPasswordHash(userId: string, passwordHash: string): Promise<void> {
     const u = this.usersById.get(userId);
     if (u) u.passwordHash = passwordHash;

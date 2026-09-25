@@ -124,6 +124,13 @@ export interface AuthStore {
    */
   revokeAllForUser(userId: string): Promise<number>;
 
+  /**
+   * Audit lancio R05 — CANCELLAZIONE del proprio account (registrato, non admin):
+   * rimuove l'utente, le sue sessioni e i suoi dati personali; lo storico partite
+   * resta per gli avversari, anonimizzato. Idempotente: un id inesistente è un no-op.
+   */
+  deleteAccount(userId: string): Promise<void>;
+
   /** CICLO Profilo — sostituisce l'hash password (argon2id) di un utente registrato. */
   setPasswordHash(userId: string, passwordHash: string): Promise<void>;
 
