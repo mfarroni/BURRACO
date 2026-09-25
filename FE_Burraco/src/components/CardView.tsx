@@ -4,6 +4,7 @@ import type { Card, Suit } from "@/lib/contract";
 import { cardArtUrl } from "@/lib/cardArt";
 import { jollyColor } from "@/lib/jollyColor";
 import "./CardFace.css";
+import "./CardArtLevels.css";
 
 /**
  * CARTA — componente firma del "Circolo Nettuno".
@@ -174,7 +175,8 @@ export function CardView({
         {symbol && <span className="s">{symbol}</span>}
       </span>
       {/* Carta illustrata: strato SOPRA la faccia stilizzata (che resta nel DOM).
-          Visibile solo su desktop e con carta ≥ 72 px: vedi globals.css. */}
+          Visibile solo da 1440 px con mouse e con carta ≥ 72 px: vedi globals.css
+          e, per le misure dei livelli Ampio/Esteso, CardArtLevels.css. */}
       {art && (
         <span className="card-art" aria-hidden="true">
           <span className="card-art-img" />
@@ -195,7 +197,7 @@ export function CardView({
     "data-jolly": jolly ?? undefined,
     "data-art": art ? "true" : undefined,
     // Solo una variabile: l'immagine si scarica soltanto dove il CSS la usa come
-    // sfondo (desktop, carta ≥ 72 px). L'URL viene dalle tabelle di cardArt.ts.
+    // sfondo (≥ 1440 px con mouse, carta ≥ 72 px). L'URL viene dalle tabelle di cardArt.ts.
     style: art ? ({ ["--card-art" as string]: `url("${art}")` } as React.CSSProperties) : undefined,
     "data-wildrole": wildRole ? "true" : undefined,
     title: cardLabel(card),
