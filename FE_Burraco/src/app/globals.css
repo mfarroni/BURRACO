@@ -903,14 +903,17 @@ button:disabled {
  * src/lib/jollyColor.ts; semi abilitati: ENABLED_SUITS). Qui nessun nome di file.
  *
  * PUNTO UNICO delle due condizioni (media/container query non accettano var()):
- *  - desktop = (min-width: 1024px) and (hover: hover) and (pointer: fine):
- *    esclusi tablet (anche iPad orizzontale, puntatore coarse) e smartphone;
+ *  - livello Ampio = (min-width: 1440px) and (hover: hover) and (pointer: fine):
+ *    1440 e non 1600 perché un 1920×1080 con scalatura di Windows al 125% espone
+ *    1536 px CSS (misurato: 1528). Esclusi tablet (puntatore coarse), smartphone e
+ *    finestre più strette (livelli Compatto/Standard: stilizzate). Le misure delle
+ *    carte nei livelli Ampio/Esteso stanno in src/components/CardArtLevels.css;
  *  - soglia = carta larga ≥ 72 px CSS (prova sull'asset: a 70 px "JOKER" e il
  *    volto si leggono, a 56 px è una macchia). Lo strato sta dentro il bordo di
  *    1 px, quindi misura la carta − 2 px: 72 px di carta = min-width 70px.
  * La variabile da sola non scarica nulla: l'immagine si scarica SOLO dove
  * `background-image: var(--card-art)` si applica, cioè dentro entrambe le
- * condizioni. Fuori (telefono, tablet, carta piccola) nessuna richiesta.
+ * condizioni. Fuori (telefono, tablet, < 1440 px, carta piccola) nessuna richiesta.
  * Asset 400×591 (rapporto 0,677, come il mazzo): `contain` + fondo #F4ECDA = la carta
  * dell'immagine; nessuna deformazione, cornice mai tagliata.
  * Stati: selezione/hover/focus/matta sono outline, ombre esterne e transform
@@ -919,7 +922,7 @@ button:disabled {
 .card[data-art] > .card-art {
   display: none;
 }
-@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+@media (min-width: 1440px) and (hover: hover) and (pointer: fine) {
   .card[data-art] > .card-art {
     display: block;
     position: absolute;

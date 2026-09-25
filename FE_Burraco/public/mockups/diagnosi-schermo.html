@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagnosi schermo — carte illustrate</title>
+<style>
+/* Pagina diagnostica statica: nessuna risorsa esterna, tutto inline.
+   Serve a leggere sul monitor reale i valori che decidono la resa delle carte. */
+:root { --felt-700:#174a38; --felt-900:#0e2a22; --text:#e6e2d3; --muted:#b9c6bc; --strong:#f4efe2;
+  --brass-300:#e7d097; --brass-500:#c0a052; --ok:#82d6a6; --no:#f0a79b; --r:12px;
+  --font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; }
+* { box-sizing:border-box; }
+html { background:var(--felt-900); }
+body { margin:0; padding:24px 16px 64px; color:var(--text); font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:radial-gradient(120% 90% at 50% 20%,var(--felt-700),var(--felt-900)); min-height:100vh; }
+main { max-width:1100px; margin:0 auto; }
+h1 { font-family:var(--font-serif); font-weight:600; margin:0 0 4px; }
+h2 { font-family:var(--font-serif); font-weight:600; font-size:1.2rem; margin:36px 0 8px; color:var(--strong); }
+p { color:var(--muted); max-width:80ch; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+.tile { background:rgba(0,0,0,.22); border:1px solid rgba(231,208,151,.25); border-radius:var(--r); padding:14px 16px; }
+.tile .k { font-size:13px; color:var(--brass-300); letter-spacing:.5px; }
+.tile .v { font-family:var(--font-serif); font-size:clamp(1.8rem,4vw,2.8rem); color:var(--strong); line-height:1.15; font-variant-numeric:tabular-nums; }
+.tile .h { font-size:13px; color:var(--muted); }
+.yes { color:var(--ok); } .nope { color:var(--no); }
+.levels { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+.level { border:2px solid rgba(231,208,151,.2); border-radius:var(--r); padding:12px 14px; opacity:.55; }
+.level[data-on="true"] { opacity:1; border-color:var(--brass-300); background:rgba(231,208,151,.10); }
+.level b { display:block; font-family:var(--font-serif); font-size:1.3rem; color:var(--strong); }
+.level span { font-size:13px; color:var(--muted); }
+.level[data-on="true"]::after { content:"◀ livello scelto"; display:block; margin-top:6px; color:var(--brass-300); font-weight:700; font-size:13px; }
+.verdict { font-size:1.15rem; border-left:4px solid var(--brass-500); padding:10px 14px; background:rgba(0,0,0,.2); border-radius:0 var(--r) var(--r) 0; }
+pre { white-space:pre-wrap; background:rgba(0,0,0,.35); border-radius:var(--r); padding:14px; font-size:14px; color:var(--strong); }
+button { font:inherit; font-weight:700; cursor:pointer; background:var(--brass-500); color:#1b140a; border:0; border-radius:999px; padding:10px 20px; }
+button:focus-visible { outline:3px solid var(--brass-300); outline-offset:3px; }
+
+/* ── Prova dal vivo del meccanismo ATTUALE dell'app (copiato da globals.css):
+   l'illustrazione compare solo se "desktop" (≥1024, hover, pointer fine) E carta ≥ 72 px. */
+.row { display:flex; gap:28px; align-items:flex-end; flex-wrap:wrap; }
+.probe { text-align:center; font-size:13px; color:var(--muted); }
+.card { position:relative; display:inline-grid; place-items:center; background:#fffefb; border:1px solid #d5cfbe; border-radius:9px;
+  box-shadow:0 2px 5px rgba(0,0,0,.34); color:#b3182b; font-weight:700; font-size:1.4rem; margin-bottom:6px; }
+.card > .card-art { display:none; }
+@media (min-width:1024px) and (hover:hover) and (pointer:fine) {
+  .card > .card-art { display:block; position:absolute; inset:0; container-type:inline-size; border-radius:8px; }
+  @container (min-width:70px) {
+    .card .card-art-img { position:absolute; inset:0; border-radius:inherit; background:#f4ecda url("/images/carte/asso-cuori.webp") center/contain no-repeat; }
+  }
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>Diagnosi dello schermo</h1>
+  <p>Apri questa pagina sul monitor da verificare, con il browser a <strong>schermo intero o finestra massimizzata</strong> e lo zoom al 100% (Ctrl+0). Poi premi «Copia i valori» e incollali nella chat. I valori si aggiornano da soli se ridimensioni la finestra.</p>
+
+  <h2>Valori misurati</h2>
+  <div class="grid" id="tiles"></div>
+
+  <h2>Livello di resa che verrebbe scelto (proposta, soglie da confermare)</h2>
+  <div class="levels">
+    <div class="level" id="lv-compatto"><b>Compatto</b><span>&lt; 1024 px oppure puntatore touch — stilizzate, invariate</span></div>
+    <div class="level" id="lv-standard"><b>Standard</b><span>1024 – 1599 px — stilizzate, invariate</span></div>
+    <div class="level" id="lv-ampio"><b>Ampio</b><span>≥ 1600 px e mouse — illustrate, carte più grandi</span></div>
+    <div class="level" id="lv-esteso"><b>Esteso</b><span>≥ 2200 px e mouse — illustrate, ancora più grandi</span></div>
+  </div>
+  <p class="verdict" id="verdict"></p>
+
+  <h2>Prova del meccanismo attuale dell'app</h2>
+  <p>Stesse regole CSS di oggi: l'illustrazione compare solo su desktop <em>e</em> se la carta è larga almeno 72 px. Nel gioco le carte oggi misurano al massimo 56 px, per questo si vedono sempre stilizzate.</p>
+  <div class="row">
+    <div class="probe"><span class="card" style="width:44px;height:62px">A♥<span class="card-art"><span class="card-art-img"></span></span></span><br>44 px<br>(combinazioni, scarti)</div>
+    <div class="probe"><span class="card" style="width:56px;height:80px">A♥<span class="card-art"><span class="card-art-img"></span></span></span><br>56 px<br>(mano a ventaglio)</div>
+    <div class="probe"><span class="card" style="width:72px;height:106px">A♥<span class="card-art"><span class="card-art-img"></span></span></span><br>72 px<br>(soglia attuale)</div>
+    <div class="probe"><span class="card" style="width:96px;height:142px">A♥<span class="card-art"><span class="card-art-img"></span></span></span><br>96 px<br>(ipotesi livello Ampio)</div>
+  </div>
+
+  <h2>Da incollare nella chat</h2>
+  <pre id="report"></pre>
+  <button type="button" id="copy">Copia i valori</button> <span id="copied" class="yes" role="status" aria-live="polite"></span>
+</main>
+
+<script>
+(function () {
+  function mq(q) { return window.matchMedia ? window.matchMedia(q).matches : false; }
+  function yn(b) { return b ? '<span class="yes">sì</span>' : '<span class="nope">no</span>'; }
+
+  function read() {
+    var w = window.innerWidth, h = window.innerHeight, dpr = window.devicePixelRatio || 1;
+    var d = {
+      inner: w + " × " + h,
+      screen: screen.width + " × " + screen.height,
+      avail: screen.availWidth + " × " + screen.availHeight,
+      outer: window.outerWidth + " × " + window.outerHeight,
+      dpr: Math.round(dpr * 1000) / 1000,
+      physical: Math.round(screen.width * dpr) + " × " + Math.round(screen.height * dpr),
+      fine: mq("(pointer: fine)"),
+      coarse: mq("(pointer: coarse)"),
+      hover: mq("(hover: hover)"),
+      desktopApp: mq("(min-width: 1024px) and (hover: hover) and (pointer: fine)")
+    };
+    var level = "standard";
+    if (w < 1024 || d.coarse || !d.fine) level = "compatto";
+    else if (w >= 2200) level = "esteso";
+    else if (w >= 1600) level = "ampio";
+    d.level = level;
+
+    // Interpretazione: scalatura di Windows o zoom del browser?
+    var zoom = window.outerWidth > 0 ? Math.round((window.outerWidth / w) * 100) / 100 : null;
+    var note;
+    if (dpr === 1) note = "Nessuna scalatura: 1 px CSS = 1 px fisico.";
+    else if (zoom && Math.abs(zoom - 1) > 0.05) note = "Probabile ZOOM DEL BROWSER (circa " + Math.round(dpr * 100) + "%): premi Ctrl+0 e ricarica.";
+    else note = "Probabile SCALATURA DI WINDOWS al " + Math.round(dpr * 100) + "% (Impostazioni › Schermo › Scala).";
+    d.note = note;
+    return d;
+  }
+
+  function render() {
+    var d = read();
+    var tiles = [
+      ["Finestra (innerWidth × innerHeight)", d.inner, "px CSS: è ciò che decide la resa"],
+      ["Schermo (screen)", d.screen, "px CSS dello schermo intero"],
+      ["Schermo utile (availWidth × availHeight)", d.avail, "senza la barra di Windows"],
+      ["devicePixelRatio", String(d.dpr), d.note],
+      ["Pixel fisici stimati", d.physical, "screen × devicePixelRatio"],
+      ["Finestra esterna (outer)", d.outer, "include le barre del browser"],
+      ["pointer: fine (mouse)", yn(d.fine), "pointer: coarse (touch): " + (d.coarse ? "sì" : "no")],
+      ["hover: hover", yn(d.hover), ""],
+      ["Condizione «desktop» dell'app", yn(d.desktopApp), "≥1024 px, hover, pointer fine"]
+    ];
+    document.getElementById("tiles").innerHTML = tiles.map(function (t) {
+      return '<div class="tile"><div class="k">' + t[0] + '</div><div class="v">' + t[1] + '</div><div class="h">' + t[2] + '</div></div>';
+    }).join("");
+    ["compatto", "standard", "ampio", "esteso"].forEach(function (l) {
+      document.getElementById("lv-" + l).setAttribute("data-on", String(l === d.level));
+    });
+    var w = window.innerWidth;
+    document.getElementById("verdict").textContent =
+      d.level === "ampio" || d.level === "esteso"
+        ? "Con la soglia proposta di 1600 px questo schermo avrebbe le carte illustrate."
+        : "Con la soglia proposta di 1600 px questo schermo resterebbe con le carte stilizzate" +
+          (w >= 1024 && w < 1600 ? " (larghezza " + w + " px CSS, sotto 1600)." : ".");
+    document.getElementById("report").textContent = [
+      "innerWidth × innerHeight: " + d.inner,
+      "screen: " + d.screen,
+      "availWidth × availHeight: " + d.avail,
+      "outerWidth × outerHeight: " + d.outer,
+      "devicePixelRatio: " + d.dpr,
+      "pixel fisici stimati: " + d.physical,
+      "pointer fine: " + (d.fine ? "sì" : "no") + " | pointer coarse: " + (d.coarse ? "sì" : "no") + " | hover: " + (d.hover ? "sì" : "no"),
+      "condizione desktop app: " + (d.desktopApp ? "sì" : "no"),
+      "livello proposto: " + d.level,
+      "nota: " + d.note,
+      "browser: " + navigator.userAgent
+    ].join("\n");
+  }
+
+  document.getElementById("copy").addEventListener("click", function () {
+    var text = document.getElementById("report").textContent;
+    var done = function () { document.getElementById("copied").textContent = "Copiato."; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { selectReport(); });
+    } else { selectReport(); }
+  });
+  function selectReport() {
+    var r = document.createRange(); r.selectNodeContents(document.getElementById("report"));
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    document.getElementById("copied").textContent = "Testo selezionato: premi Ctrl+C.";
+  }
+
+  render();
+  window.addEventListener("resize", render);
+})();
+</script>
+</body>
+</html>

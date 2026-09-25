@@ -1,0 +1,183 @@
+/* ===================================================================
+ * CARTE ILLUSTRATE — LIVELLI DI RESA PER SCHERMO (solo presentazione).
+ * Caricato da CardView.tsx. Decisione SOLO in CSS: niente JS, niente
+ * sfarfallio all'idratazione, aggiornamento automatico al ridimensionamento.
+ *
+ *  Compatto  < 1024 px o touch     → stilizzate, INVARIATE (nessuna regola qui)
+ *  Standard  1024 – 1439 px        → stilizzate, INVARIATE (nessuna regola qui)
+ *  Ampio     ≥ 1440 px + mouse     → illustrate: mano/scarti 80 px, giochi 72 px
+ *  Esteso    ≥ 2200 × 1000 + mouse → illustrate: mano/scarti 96 px, giochi 80 px
+ *
+ * Lo strato illustrato e la soglia di 72 px di carta restano in globals.css
+ * (blocco "CARTE ILLUSTRATE", stessa media query dell'Ampio): qui solo le MISURE
+ * che portano le carte sopra quella soglia, più gli accorgimenti perché indici,
+ * matte e stati restino leggibili SOPRA l'immagine. Variabili col prefisso
+ * --ill-*: nessuna variabile esistente viene ridefinita.
+ * Le condizioni sono ripetute nelle due media query: media query e var() non
+ * si combinano. Rapporto della carta: 400×591 = 0,677.
+ * =================================================================== */
+
+@media (min-width: 1440px) and (hover: hover) and (pointer: fine) {
+  :root {
+    --ill-frame: 1440px; /* tetto della cornice del tavolo */
+    --ill-hand-w: 80px; /* mano (ventaglio e fila) */
+    --ill-arc-overlap: 26px; /* sovrapposizione nel ventaglio (era 18 a 56 px) */
+    --ill-row-strip: 38px; /* striscia esposta nella mano in fila: ~30 carte per fila */
+    --ill-meld-w: 72px; /* giochi calati */
+    --ill-meld-strip: 30px; /* striscia esposta nei giochi: una scala da 14 ≈ 460 px */
+    --ill-pile-w: 80px; /* monte scarti e sagoma del mazzo */
+    --ill-index-r: 1.05rem; /* indice di rinforzo: rango */
+    --ill-index-s: 0.8rem; /* indice di rinforzo: seme */
+  }
+
+  /* ── Spazio libero n.1: tavolo più LARGO, non più alto. La cornice sfrutta i
+     lati e il feltro passa dal rapporto aureo (1,618:1) a 2,1:1, così l'altezza
+     minima resta quella di oggi (sullo schermo 1920 al 125%: ~650 px). */
+  .table-frame {
+    width: min(var(--ill-frame), 100vw - 32px - 2 * var(--frame-inset, 0px));
+  }
+  .table-frame > .table-grid {
+    width: 100%;
+    aspect-ratio: 2.1 / 1;
+  }
+
+  /* ── Mano a VENTAGLIO: 56 → 80 px. ── */
+  .fan[data-layout="arc"] .card {
+    width: var(--ill-hand-w);
+    height: calc(var(--ill-hand-w) / 0.677);
+  }
+  .fan[data-layout="arc"] .fan-slot {
+    margin-left: calc(-1 * var(--ill-arc-overlap));
+  }
+  .fan[data-layout="arc"] .fan-slot:first-child {
+    margin-left: 0;
+  }
+
+  /* ── Mano IN FILA (≥ 16 carte): 50 → 80 px, striscia esposta 38 px. Stessa
+     specificità delle regole "mano in linea su desktop" di globals.css (+[data-art]),
+     che qui vengono dopo e le superano. ── */
+  .fan[data-layout="rows"] {
+    padding-left: calc(var(--sp-3) + var(--ill-hand-w) - var(--ill-row-strip));
+  }
+  .fan[data-layout="rows"] .fan-slot {
+    margin-left: calc(var(--ill-row-strip) - var(--ill-hand-w));
+  }
+  .fan[data-layout="rows"] .card[data-compact="true"][data-art] {
+    width: var(--ill-hand-w);
+    height: calc(var(--ill-hand-w) / 0.677);
+  }
+
+  /* ── Monte scarti e sagoma del mazzo: 44/60 → 80 px. ── */
+  .board-center .slot {
+    width: var(--ill-pile-w);
+    height: calc(var(--ill-pile-w) / 0.677);
+  }
+  .board-center .slot > .card[data-art] {
+    width: var(--ill-pile-w);
+    height: calc(var(--ill-pile-w) / 0.677);
+  }
+
+  /* ── Giochi calati: 44 → 72 px, SOVRAPPOSTI come un mazzo steso.
+     Spazio libero n.2: i giochi corti si affiancano sulla stessa riga. ── */
+  .meld-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .meld-list > .meld {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .meld-cards {
+    gap: 0;
+  }
+  .meld-cards > .card[data-art] {
+    width: var(--ill-meld-w);
+    height: calc(var(--ill-meld-w) / 0.677);
+  }
+  .meld-cards > .card + .card {
+    margin-left: calc(var(--ill-meld-strip) - var(--ill-meld-w));
+  }
+
+  /* ── INDICE DI RINFORZO. Dove la carta è coperta dalla vicina (giochi, mano in
+     fila) l'indice dell'immagine è troppo piccolo; il jolly illustrato non ne ha
+     affatto. L'indice stilizzato, già nel DOM sotto l'immagine, sale SOPRA lo
+     strato su un cartiglio avorio. La .card è un contesto di impilamento proprio
+     (position + z-index), quindi z-index:1 resta locale alla carta. ── */
+  .meld-cards > .card[data-art] .index:not(.br),
+  .fan[data-layout="rows"] .card[data-compact="true"][data-art] .index:not(.br),
+  .card[data-art][data-wildkind="joker"] .index:not(.br) {
+    z-index: 1;
+    top: 0;
+    left: 0;
+    width: auto;
+    min-width: 1.3em;
+    padding: 4px 4px 5px 5px;
+    font-size: 1rem;
+    line-height: 0.82;
+    background: #f4ecda; /* stesso fondo dello strato illustrato */
+    border-radius: calc(var(--r-card) - 1px) 0 7px 0;
+    box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.12);
+  }
+  .meld-cards > .card[data-art] .index:not(.br) .r,
+  .fan[data-layout="rows"] .card[data-compact="true"][data-art] .index:not(.br) .r {
+    font-size: var(--ill-index-r);
+  }
+  .meld-cards > .card[data-art] .index:not(.br) .s,
+  .fan[data-layout="rows"] .card[data-compact="true"][data-art] .index:not(.br) .s {
+    font-size: var(--ill-index-s);
+  }
+
+  /* ── PINELLA: gemma e cornice d'ottone tornano SOPRA l'illustrazione (sulla
+     stilizzata sono ::before e box-shadow inset della .card, sotto lo strato). ── */
+  /* [data-color] alza la specificità sopra .card[data-small][data-wildkind]::before. */
+  .card[data-art][data-color][data-wildkind="pinella"]::before {
+    z-index: 2;
+    top: 4px;
+    right: 4px;
+    width: 11px;
+    height: 11px;
+  }
+  /* Coperta dalla vicina, la gemma scende nella striscia visibile, sotto l'indice. */
+  .meld-cards > .card[data-art][data-wildkind="pinella"]::before,
+  .fan[data-layout="rows"] .card[data-art][data-wildkind="pinella"]::before {
+    top: auto;
+    right: auto;
+    bottom: 8px;
+    left: 8px;
+  }
+  .card[data-art][data-wildkind="pinella"] > .card-art::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 3px var(--brass-400);
+  }
+
+  /* ── SELEZIONE nella mano in fila: il filo d'oro sul bordo sinistro (inset
+     box-shadow della .card in globals.css) ricompare sopra l'immagine. ── */
+  .fan[data-layout="rows"] .fan-slot[data-selected="true"] .card[data-art] > .card-art::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    box-shadow: inset 3px 0 0 0 var(--brass-400);
+  }
+}
+
+/* ── ESTESO: schermi grandi E alti (1440p, 4K al 100%). Solo misure. ── */
+@media (min-width: 2200px) and (min-height: 1000px) and (hover: hover) and (pointer: fine) {
+  :root {
+    --ill-frame: 1800px;
+    --ill-hand-w: 96px;
+    --ill-arc-overlap: 30px;
+    --ill-row-strip: 44px;
+    --ill-meld-w: 80px;
+    --ill-meld-strip: 34px;
+    --ill-pile-w: 96px;
+    --ill-index-r: 1.2rem;
+    --ill-index-s: 0.9rem;
+  }
+}
