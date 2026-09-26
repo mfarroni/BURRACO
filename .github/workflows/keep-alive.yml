@@ -16,8 +16,16 @@ name: keep-alive
 # mese — un danno peggiore del problema. 16h/giorno × 30 ≈ 480 h/mese di "sveglio".
 #
 # L'URL del servizio è una variabile di repository (Settings → Variables):
-#   KEEPALIVE_URL = https://<servizio>.onrender.com/health
+#   KEEPALIVE_URL = https://<servizio>.onrender.com/ping
+# Usare /ping (Audit lancio R03): risponde senza interrogare il database, quindi tiene
+# sveglio Render SENZA consumare ore di calcolo di Neon. /health invece esegue un
+# SELECT 1 e sveglia anche Neon a ogni ping.
 # Se non impostata, il job termina senza errore (nessun segreto hard-coded qui).
+#
+# LIMITE NOTO (Audit lancio, verificato sui log): GitHub esegue i cron "schedule" in
+# modo best-effort; in pratica questo job gira ogni 1–2 ore, non ogni 10 minuti, e
+# Render free si spegne dopo 15 minuti. Il keep-alive riduce i risvegli a freddo ma
+# non li elimina: per questo il sito mostra "Stiamo preparando il tavolo".
 
 on:
   schedule:
@@ -40,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Ping /health (sola lettura)
+      - name: Ping del backend (sola lettura)
         env:
           KEEPALIVE_URL: ${{ vars.KEEPALIVE_URL }}
         run: |

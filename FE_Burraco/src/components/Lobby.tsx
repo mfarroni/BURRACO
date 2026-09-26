@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import type { WaitingTableView } from "@/lib/contract";
+import type { PublicEvent, WaitingTableView } from "@/lib/contract";
+import { formatEventWhen } from "@/lib/circolo";
 import type { LobbyStatus } from "@/lib/lobby";
 import type { SitRejectedInfo, TableMode } from "@/lib/useGameSocket";
 import { DonationButton } from "@/components/DonationButton";
@@ -50,6 +51,12 @@ interface LobbyProps {
   inviteCode?: string | null;
   /** Chiamata dopo aver precompilato il campo: l'invito non va riproposto. */
   onInviteConsumed?: () => void;
+  /** Prossima serata pubblicata del circolo (Audit lancio R02), o null. */
+  nextEvent?: PublicEvent | null;
+  /** Ospite: gli avvisi delle serate richiedono un account. */
+  isGuest?: boolean;
+  /** Apre il Profilo (dove si attivano gli avvisi delle serate). */
+  onOpenProfile?: () => void;
 }
 
 const MODE_1V1: TableMode = { numeroGiocatori: 2, modalita: "individuale" };
@@ -79,6 +86,9 @@ export function Lobby({
   onChangeMode,
   inviteCode = null,
   onInviteConsumed,
+  nextEvent = null,
+  isGuest = true,
+  onOpenProfile,
 }: LobbyProps) {
   const is2v2 = mode.numeroGiocatori === 4;
   const [codeInput, setCodeInput] = useState("");
@@ -171,6 +181,28 @@ export function Lobby({
           <p className="table-empty-text">
             <strong>Apri tu un tavolo:</strong> comparirà nella lista di tutti gli altri entro pochi secondi.
           </p>
+          {/* Audit lancio R02 (Ciclo 3): l'appuntamento per trovare qualcuno. */}
+          {nextEvent ? (
+            <p className="table-empty-text table-empty-serata">
+              <strong>Prossima serata al circolo:</strong> {formatEventWhen(nextEvent)} — {nextEvent.titolo}.
+            </p>
+          ) : null}
+          {isGuest ? (
+            <p className="table-empty-text">
+              Crea un account gratuito per ricevere via email l&apos;avviso delle serate del circolo.
+            </p>
+          ) : (
+            <>
+              <p className="table-empty-text">
+                Vuoi sapere quando c&apos;è gente al tavolo? Ti avvisiamo via email delle serate.
+              </p>
+              <p className="table-empty-text">
+                <button type="button" className="btn-ghost" onClick={onOpenProfile}>
+                  Attiva gli avvisi delle serate
+                </button>
+              </p>
+            </>
+          )}
         </div>
       ) : (
         !isEmpty && <p className="lobby-lead">Siediti a un tavolo esistente, oppure aprine uno tuo.</p>

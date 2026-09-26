@@ -1886,6 +1886,10 @@ button:disabled {
   text-decoration: underline;
 }
 
+.table-empty-serata {
+  color: var(--brass-300);
+}
+
 /* Aiuto sotto un campo (es. spiegazione del codice tavolo). */
 .field-hint {
   margin: var(--sp-1) 0 0;
@@ -2519,6 +2523,37 @@ button:disabled {
   font-size: var(--fs-sm);
   color: var(--danger-300);
 }
+/* Avvisi delle serate (Audit lancio R02, Ciclo 3). */
+.profile-serate {
+  margin-bottom: var(--sp-5);
+}
+.profile-serate-label {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  cursor: pointer;
+  max-width: 520px;
+}
+.profile-serate-label input {
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  flex: none;
+  accent-color: var(--brass-500);
+}
+.profile-serate-hint {
+  display: block;
+  margin-top: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.profile-serate-status {
+  margin: var(--sp-2) 0 0;
+  min-height: 1.2em;
+  font-size: var(--fs-sm);
+  color: var(--success-300);
+}
+
 /* Eliminazione dell'account (R05): in fondo al profilo, tono sobrio ma distinto. */
 .profile-delete {
   margin-top: var(--sp-5);

@@ -7,7 +7,7 @@ import { rateLimit, createKeyedRateLimiter } from "./rateLimit.js";
 import { env } from "../config.js";
 import type { StatsStore } from "../stats/types.js";
 import type { RoomManager } from "../room/RoomManager.js";
-import type { TablesResponse, NewCodeResponse } from "../contract/types.js";
+import type { CircoloResponse, TablesResponse, NewCodeResponse } from "../contract/types.js";
 import { pool } from "../db/client.js";
 import { createContactStore } from "../contact/store.js";
 import type { ContactStore } from "../contact/types.js";
@@ -15,6 +15,7 @@ import { hashIp, stripHeaderInjection } from "../contact/util.js";
 import { sendEmail } from "../mail/index.js";
 import { enqueueWelcome } from "../mail/queue.js";
 import { logAppEvent } from "../events/log.js";
+import { getPreferences, setPreferences } from "../profile/preferences.js";
 import { createRequireAdmin } from "../admin/requireAdmin.js";
 import { recordAdminAudit } from "../admin/audit.js";
 import { getOccupancy } from "../admin/occupancy.js";
@@ -23,14 +24,7 @@ import { createBroadcast, enqueueSend, listBroadcasts, unsubscribeByToken } from
 import { getAppLogs, getDbStatus, getRenderLogs } from "../admin/logs.js";
 import { deleteUser, listUsers, resetUserPassword, type AdminUserOpError } from "../admin/users.js";
 import { runStatusCheck } from "../admin/status.js";
-import {
-  createEvent,
-  listEvents,
-  createShopProduct,
-  listShopProducts,
-  updateShopProduct,
-  deleteShopProduct,
-} from "../admin/catalog.js";
+import { createEvent, listEvents, createShopProduct, listShopProducts, updateShopProduct, deleteShopProduct, deleteEvent, listUpcomingPublicEvents, setEventPublished } from "../admin/catalog.js";
 import type { AdminResetPasswordResponse, LogLinksResponse } from "../admin/types.js";
 import {
   CLICK_KINDS,
@@ -87,6 +81,9 @@ const loginBody = z.object({
 });
 const guestBody = z.object({ displayName: displayNameSchema });
 // CICLO Profilo — cambio password: l'attuale ha solo il tetto anti-DoS, la nuova la policy.
+const eventPublishBody = z.object({ pubblicato: z.boolean() }).strict();
+const preferencesBody = z.object({ avvisiSerate: z.boolean() }).strict();
+
 const deleteAccountBody = z
   .object({ password: z.string().min(1).max(200) })
   .strict();
@@ -323,8 +320,32 @@ export function createHttpApp(
   //  - tProcessMs: ms dal boot del processo (risveglio del processo Render);
   //  - tQueryMs: durata del SELECT 1 (risveglio del compute Neon), null se no DB.
   //  - db: "ok"|"down" (down anche senza DATABASE_URL, senza errore).
-  // Usato anche dal keep-alive CI e dalla schermata di connessione del FE. `status`
-  // resta "ok" (retro-compatibile con i test e i probe esistenti).
+  // Usato dalla schermata di connessione del FE. `status` resta "ok" (retro-compatibile
+  // con i test e i probe esistenti).
+  //
+  // Audit lancio R03 — `/ping`: risposta LEGGERA senza toccare il DB, per keep-alive
+  // e monitor esterni. Tiene sveglio il processo Render SENZA risvegliare Neon a ogni
+  // controllo (ogni `SELECT 1` consuma ore di calcolo del piano gratuito).
+  app.get("/ping", (_req: Request, res: Response) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ status: "ok" });
+  });
+
+  // Audit lancio R02 (Ciclo 3) — GET /circolo, PUBBLICA (anche senza login): prossime
+  // serate pubblicate + presenze AGGREGATE. Nessun dato personale: solo conteggi e
+  // campi whitelisted degli eventi. Rate-limit per IP come le altre rotte pubbliche.
+  const circoloLimiter = rateLimit({ name: "circolo", windowMs: 60_000, max: 30 });
+  app.get(
+    "/circolo",
+    circoloLimiter,
+    handler(async (_req: Request, res: Response) => {
+      const presence = manager ? manager.presenceSummary() : { playersOnline: 0, waitingTables: 0 };
+      const body: CircoloResponse = { events: await listUpcomingPublicEvents(), ...presence };
+      res.setHeader("Cache-Control", "no-store");
+      res.json(body);
+    }),
+  );
+
   app.get(
     ["/health", "/"],
     handler(async (_req: Request, res: Response) => {
@@ -720,6 +741,36 @@ export function createHttpApp(
     /* CICLO Profilo — FOTO PROFILO del principale (solo registrati, come il resto di
      * /users/me/*). L'utente è derivato SOLO dal token: nessun id nel percorso, nessun
      * IDOR. POST con `{ avatar: dataUrl }` imposta, `{ avatar: null }` rimuove. */
+    /* Audit lancio R02/R19 (Ciclo 3) — PREFERENZE del principale (solo registrati):
+     * `avvisiSerate` = consenso agli avvisi email delle serate (promo_opt_in). Utente
+     * derivato SOLO dal token; corpo `.strict()` (nessun id altrui accettato). */
+    const preferencesLimiter = rateLimit({ name: "preferences", windowMs: 60_000, max: 20 });
+    app.get(
+      "/users/me/preferences",
+      preferencesLimiter,
+      handler(async (req, res) => {
+        const principal = await requireRegistered(req, res);
+        if (!principal) return;
+        res.setHeader("Cache-Control", "no-store");
+        res.json(await getPreferences(principal.userId));
+      }),
+    );
+    app.post(
+      "/users/me/preferences",
+      preferencesLimiter,
+      handler(async (req, res) => {
+        const principal = await requireRegistered(req, res);
+        if (!principal) return;
+        const parsed = preferencesBody.safeParse(req.body ?? {});
+        if (!parsed.success) {
+          res.status(400).json({ error: "INVALID_BODY", message: "Preferenze non valide." });
+          return;
+        }
+        await setPreferences(principal.userId, parsed.data);
+        res.json(parsed.data);
+      }),
+    );
+
     const avatarLimiter = rateLimit({ name: "avatar", windowMs: 60_000, max: 20 });
     app.get(
       "/users/me/avatar",
@@ -1187,6 +1238,58 @@ export function createHttpApp(
         return;
       }
       res.status(201).json(row);
+    }),
+  );
+
+  // Audit lancio R02 (Ciclo 3): pubblica/ritira e cancella un evento (serata).
+  app.post(
+    "/admin/events/:id",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const idParsed = matchIdSchema.safeParse(req.params.id);
+      const body = eventPublishBody.safeParse(req.body ?? {});
+      if (!idParsed.success || !body.success) {
+        res.status(400).json({ error: "INVALID_BODY", message: "Dati dell'evento non validi." });
+        return;
+      }
+      if (!(await setEventPublished(idParsed.data, body.data.pubblicato))) {
+        res.status(404).json({ error: "NOT_FOUND", message: "Evento non trovato." });
+        return;
+      }
+      void recordAdminAudit({
+        actorId: principal.userId,
+        action: body.data.pubblicato ? "event.publish" : "event.unpublish",
+        target: { eventId: idParsed.data },
+        outcome: "ok",
+      });
+      res.json({ id: idParsed.data, pubblicato: body.data.pubblicato });
+    }),
+  );
+
+  app.post(
+    "/admin/events/:id/delete",
+    adminLimiter,
+    handler(async (req, res) => {
+      const principal = await requireAdmin(req, res);
+      if (!principal) return;
+      const idParsed = matchIdSchema.safeParse(req.params.id);
+      if (!idParsed.success) {
+        res.status(400).json({ error: "INVALID_ID", message: "Identificativo non valido." });
+        return;
+      }
+      if (!(await deleteEvent(idParsed.data))) {
+        res.status(404).json({ error: "NOT_FOUND", message: "Evento non trovato." });
+        return;
+      }
+      void recordAdminAudit({
+        actorId: principal.userId,
+        action: "event.delete",
+        target: { eventId: idParsed.data },
+        outcome: "ok",
+      });
+      res.json({ deleted: true });
     }),
   );
 

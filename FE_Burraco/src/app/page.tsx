@@ -38,6 +38,7 @@ import {
 } from "@/components/StateBanners";
 import { ConnectionScreen } from "@/components/ConnectionScreen";
 import { WakeUpDialog } from "@/components/WakeUpNotice";
+import { useCircolo } from "@/lib/circolo";
 import { SideFlank } from "@/components/SideFlanks";
 import { VetrinaBrandHeader } from "@/components/VetrinaBrandHeader";
 
@@ -86,6 +87,9 @@ export default function Page() {
   // Il polling funge anche da heartbeat di presenza in lobby (§6.2).
   const inLobby = auth.status === "authenticated" && !g.joined;
   const lobby = useLobbyList(inLobby);
+  // Audit lancio R02 (Ciclo 3): prossima serata del circolo, mostrata in lobby a chi
+  // non trova nessuno con cui giocare.
+  const circolo = useCircolo(inLobby);
   // Beacon di chiusura pulita del tavolo in ATTESA su pagehide (§5.4-B): attivo
   // solo quando si ha un tavolo in attesa (joined ma partita non ancora iniziata).
   useLeaveOnPageHide(g.joined && !g.state);
@@ -340,6 +344,9 @@ export default function Page() {
         <Lobby
           tables={lobby.tables}
           lobbyPlayers={lobby.lobbyPlayers}
+          nextEvent={circolo?.events[0] ?? null}
+          isGuest={auth.user?.isGuest ?? true}
+          onOpenProfile={() => setShowProfile(true)}
           status={lobby.status}
           connecting={connecting}
           sitRejected={g.sitRejected}

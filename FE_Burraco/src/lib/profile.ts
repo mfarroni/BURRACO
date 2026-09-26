@@ -1,6 +1,6 @@
 "use client";
 
-import type { UserStats, MatchesPage, MatchDetail, StatsPeriod } from "./contract";
+import type { UserStats, MatchesPage, MatchDetail, StatsPeriod, UserPreferences } from "./contract";
 import { AuthClientError } from "./auth";
 import { getAuthToken } from "./sessionIdentity";
 
@@ -130,4 +130,14 @@ export async function fetchTableAvatars(code: string): Promise<Record<number, st
   const out: Record<number, string | null> = {};
   for (const a of r.avatars ?? []) out[a.seat] = a.avatar ?? null;
   return out;
+}
+
+/** Preferenze del principale (solo registrati): consenso agli avvisi delle serate. */
+export async function fetchPreferences(): Promise<UserPreferences> {
+  return authedGet<UserPreferences>("/users/me/preferences");
+}
+
+/** Salva le preferenze; il server risponde con quelle registrate. */
+export async function savePreferences(prefs: UserPreferences): Promise<UserPreferences> {
+  return authedPost<UserPreferences>("/users/me/preferences", prefs);
 }

@@ -429,6 +429,14 @@ export type ClientMessage =
       displayName: string;
       clientId?: string;
       authToken?: string;
+      /**
+       * Audit lancio R04 — true quando il client si RICOLLEGA a un tavolo a cui era
+       * già seduto (riconnessione automatica). Se quel tavolo non esiste più (es. il
+       * server è stato riavviato e lo stato in RAM è perso) il server NON ne crea
+       * uno nuovo: risponde `room_closed{reason:"lost"}`. Assente/false = ingresso
+       * con codice (un codice sconosciuto crea un tavolo privato, come prima).
+       */
+      resume?: boolean;
     }
   | { type: "draw"; source: "deck" | "discard"; clientMoveId?: string }
   | { type: "meld_new"; cards: string[]; clientMoveId?: string } // CardId[]
@@ -586,10 +594,12 @@ export type ServerMessage =
    * LIFECYCLE: chiusura TERMINALE del tavolo SENZA vincitore, distinta da
    * `game_ended`. `reason`:
    *  - "interrupted" → un giocatore ha smontato il tavolo (reset_room);
-   *  - "abandoned"   → l'avversario non è rientrato entro la finestra di grazia.
+   *  - "abandoned"   → l'avversario non è rientrato entro la finestra di grazia;
+   *  - "lost"        → riconnessione (`join_room.resume`) a un tavolo che non esiste
+   *    più sul server (riavvio/deploy: lo stato era solo in RAM). Audit lancio R04.
    * Alla ricezione il client mostra un esito chiaro e non resta bloccato.
    */
-  | { type: "room_closed"; reason: "interrupted" | "abandoned" }
+  | { type: "room_closed"; reason: "interrupted" | "abandoned" | "lost" }
   /**
    * ANNULLAMENTO UNILATERALE della partita (esito TERMINALE senza vincitore,
    * distinto da `game_ended` e da `room_closed`). Inviato a ENTRAMBI i giocatori
@@ -677,6 +687,42 @@ export interface TablesResponse {
   tables: WaitingTableView[];
   /** Sessioni realmente in lobby (poll recente, non sedute). Vedi §6.2. */
   lobbyPlayers: number;
+}
+
+/**
+ * Audit lancio R02 (Ciclo 3) — una SERATA del circolo pubblicata dall'admin, come la
+ * vede il pubblico. Whitelist: niente autore, niente bozze, niente date di modifica.
+ */
+export interface PublicEvent {
+  id: string;
+  titolo: string;
+  descrizione: string | null;
+  luogo: string | null;
+  /** Inizio, epoch ms. */
+  inizioAt: number;
+  /** Fine, epoch ms (null = non indicata). */
+  fineAt: number | null;
+}
+
+/**
+ * Risposta di GET /circolo (PUBBLICA, senza login): le prossime serate pubblicate e
+ * quante persone sono al circolo adesso, in forma AGGREGATA (solo conteggi, nessun
+ * nome né codice tavolo). Serve a chi arriva da solo per sapere quando e se trova
+ * qualcuno con cui giocare.
+ */
+export interface CircoloResponse {
+  /** Serate pubblicate non ancora finite, dalla più vicina (max 3). */
+  events: PublicEvent[];
+  /** Persone in lobby + sedute a un tavolo con connessione attiva. */
+  playersOnline: number;
+  /** Tavoli pubblici in attesa di giocatori. */
+  waitingTables: number;
+}
+
+/** Preferenze dell'utente registrato (GET/POST /users/me/preferences). */
+export interface UserPreferences {
+  /** Consenso a ricevere via email gli avvisi delle serate (promo_opt_in). */
+  avvisiSerate: boolean;
 }
 
 /** Risposta di GET /tables/new-code: codice tavolo precompilato dal server. */

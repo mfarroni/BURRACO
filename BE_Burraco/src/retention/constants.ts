@@ -12,6 +12,18 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const RETENTION = {
   /** Dettaglio (hand_scores/game_events/checkpoints): 3 mesi (il più breve, satura). */
   detailMs: 90 * DAY_MS,
+  /**
+   * Audit lancio R06 — REGISTRO DELLE MOSSE (`game_events`): una riga per ogni mossa
+   * accettata, centinaia per partita, e nessuna funzione dell'app lo rilegge (è solo
+   * audit). Orizzonte breve dedicato: 7 giorni dalla fine della partita. Resta il
+   * dettaglio per smazzata (hand_scores, 3 mesi) usato dallo storico.
+   */
+  gameEventsMs: 7 * DAY_MS,
+  /**
+   * Partite mai concluse (lo stato in RAM è andato perso con un riavvio del server):
+   * dopo questo intervallo dall'inizio il loro registro mosse è considerato orfano.
+   */
+  orphanMatchMs: 2 * DAY_MS,
   /** Partita (matches/match_players/hands): 12 mesi. */
   matchMs: 365 * DAY_MS,
   /** Messaggi contatti: 180 gg dopo `letto_at` (o `created_at` se mai letto). */

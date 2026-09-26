@@ -736,7 +736,11 @@ export class Room {
         // §7: fine LEGITTIMA (obiettivo raggiunto) → UNICO percorso 'completed',
         // l'unico conteggiato nelle statistiche. Persiste il posto canonico (audit)
         // e la SQUADRA vincitrice (in 1v1 team = seat → winner_team = winner_seat).
-        void persistence.completeMatch(this.matchId, eff.winnerSeat, eff.winnerTeam);
+        void persistence
+          .completeMatch(this.matchId, eff.winnerSeat, eff.winnerTeam)
+          // Audit lancio R06: i checkpoint sono stato TRANSITORIO (nessuno li rilegge):
+          // a partita chiusa si eliminano, come già avviene all'annullamento.
+          .then(() => persistence.deleteCheckpoints(this.matchId));
         // SEC-05: partita conclusa → GC della room (rimozione dalla mappa RAM).
         this.dispose();
       } else if (eff.kind === "pozzetto_taken") {
@@ -820,7 +824,7 @@ export class Room {
     // (status ≠ 'completed'). L'"interrupted" (teardown pre-partita / avversario già
     // offline via reset) resta un teardown senza scrittura di stato terminale.
     if (reason === "abandoned" && this.matchStarted) {
-      void persistence.abandonMatch(this.matchId);
+      void persistence.abandonMatch(this.matchId).then(() => persistence.deleteCheckpoints(this.matchId)); // R06
     }
     this.logLifecycle(reason);
     this.broadcast({ type: "room_closed", reason });
@@ -1054,7 +1058,9 @@ export class Room {
       // Decisione Gate 1: il forfeit da stallo dichiara un vincitore reale → conta
       // come 'completed' (preserva il comportamento pre-esistente). Persiste il
       // posto canonico (audit) e la SQUADRA vincitrice (autoritativa, P4).
-      void persistence.completeMatch(this.matchId, winnerSeat, winnerTeam);
+      void persistence
+        .completeMatch(this.matchId, winnerSeat, winnerTeam)
+        .then(() => persistence.deleteCheckpoints(this.matchId)); // R06
     }
     this.dispose();
   }

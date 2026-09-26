@@ -238,6 +238,14 @@ export const admin = {
     fineAt?: number;
     pubblicato?: boolean;
   }) => adminFetch<EventRow>("/admin/events", { method: "POST", body: JSON.stringify(payload) }),
+  /** Audit lancio R02 (Ciclo 3): pubblica/ritira e cancella una serata. */
+  setEventPublished: (id: string, pubblicato: boolean) =>
+    adminFetch<{ id: string; pubblicato: boolean }>(`/admin/events/${encodeURIComponent(id)}`, {
+      method: "POST",
+      body: JSON.stringify({ pubblicato }),
+    }),
+  deleteEvent: (id: string) =>
+    adminFetch<{ deleted: true }>(`/admin/events/${encodeURIComponent(id)}/delete`, { method: "POST", body: "{}" }),
   listShopProducts: () => adminFetch<{ items: ShopProductRow[] }>("/admin/shop/products"),
   createShopProduct: (payload: {
     nome: string;

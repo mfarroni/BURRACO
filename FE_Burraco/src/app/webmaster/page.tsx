@@ -1235,9 +1235,15 @@ function EventiSection() {
   const [titolo, setTitolo] = useState("");
   const [luogo, setLuogo] = useState("");
   const [inizio, setInizio] = useState(""); // datetime-local
+  const [fine, setFine] = useState(""); // datetime-local, facoltativa
+  const [descrizione, setDescrizione] = useState("");
+  const [pubblica, setPubblica] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [listBusy, setListBusy] = useState(true);
+  // Audit lancio R02 (Ciclo 3): azioni sulla riga (pubblica/ritira, cancella con conferma).
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setListBusy(true);
@@ -1261,20 +1267,68 @@ function EventiSection() {
       setError("Titolo e data/ora di inizio sono obbligatori.");
       return;
     }
+    const fineMs = fine ? new Date(fine).getTime() : undefined;
+    if (fineMs !== undefined && (!Number.isFinite(fineMs) || fineMs <= ms)) {
+      setError("L'orario di fine deve essere successivo all'inizio.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      await admin.createEvent({ titolo, luogo: luogo || undefined, inizioAt: ms });
+      await admin.createEvent({
+        titolo,
+        luogo: luogo || undefined,
+        descrizione: descrizione.trim() || undefined,
+        inizioAt: ms,
+        fineAt: fineMs,
+        pubblicato: pubblica,
+      });
       setTitolo("");
       setLuogo("");
       setInizio("");
+      setFine("");
+      setDescrizione("");
+      setPubblica(false);
       await refresh();
     } catch (err) {
       setError(err instanceof AdminError ? err.message : "Errore nella creazione evento.");
     } finally {
       setBusy(false);
     }
-  }, [titolo, luogo, inizio, refresh]);
+  }, [titolo, luogo, inizio, fine, descrizione, pubblica, refresh]);
+
+  const togglePublish = useCallback(
+    async (ev: EventRow) => {
+      setRowBusy(ev.id);
+      setError(null);
+      try {
+        await admin.setEventPublished(ev.id, !ev.pubblicato);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof AdminError ? err.message : "Errore nell'aggiornamento dell'evento.");
+      } finally {
+        setRowBusy(null);
+      }
+    },
+    [refresh],
+  );
+
+  const remove = useCallback(
+    async (id: string) => {
+      setRowBusy(id);
+      setError(null);
+      try {
+        await admin.deleteEvent(id);
+        setConfirmDeleteId(null);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof AdminError ? err.message : "Errore nella cancellazione dell'evento.");
+      } finally {
+        setRowBusy(null);
+      }
+    },
+    [refresh],
+  );
 
   return (
     <section className="wm-card" aria-label="Eventi e tornei">
@@ -1291,6 +1345,24 @@ function EventiSection() {
         <label htmlFor="wm-ev-inizio">Inizio</label>
         <input id="wm-ev-inizio" type="datetime-local" value={inizio} onChange={(e) => setInizio(e.target.value)} />
       </div>
+      <div className="wm-field">
+        <label htmlFor="wm-ev-fine">Fine (facoltativa)</label>
+        <input id="wm-ev-fine" type="datetime-local" value={fine} onChange={(e) => setFine(e.target.value)} />
+      </div>
+      <div className="wm-field">
+        <label htmlFor="wm-ev-descr">Descrizione (facoltativa, visibile al pubblico)</label>
+        <textarea
+          id="wm-ev-descr"
+          value={descrizione}
+          onChange={(e) => setDescrizione(e.target.value)}
+          rows={3}
+          maxLength={2000}
+        />
+      </div>
+      <label className="wm-check">
+        <input type="checkbox" checked={pubblica} onChange={(e) => setPubblica(e.target.checked)} />
+        Pubblica subito in vetrina e in lobby
+      </label>
       <div className="wm-actions">
         <button type="button" className="wm-btn" onClick={() => void create()} disabled={busy || !titolo || !inizio}>
           {busy ? "Salvo…" : "Aggiungi evento"}
@@ -1319,6 +1391,43 @@ function EventiSection() {
                   </span>
                 </span>
               </span>
+              {confirmDeleteId === ev.id ? (
+                <span className="wm-confirm" role="group" aria-label={`Conferma cancellazione di ${ev.titolo}`}>
+                  <span className="wm-confirm-text">Cancellare definitivamente l&apos;evento?</span>
+                  <span className="wm-confirm-actions">
+                    <button
+                      type="button"
+                      className="wm-btn wm-btn-small wm-btn-danger"
+                      onClick={() => void remove(ev.id)}
+                      disabled={rowBusy === ev.id}
+                    >
+                      {rowBusy === ev.id ? "Cancello…" : "Sì, cancella"}
+                    </button>
+                    <button type="button" className="wm-btn wm-btn-small" onClick={() => setConfirmDeleteId(null)}>
+                      Annulla
+                    </button>
+                  </span>
+                </span>
+              ) : (
+                <span className="wm-confirm-actions">
+                  <button
+                    type="button"
+                    className="wm-btn wm-btn-small"
+                    onClick={() => void togglePublish(ev)}
+                    disabled={rowBusy === ev.id}
+                  >
+                    {ev.pubblicato ? "Ritira" : "Pubblica"}
+                  </button>
+                  <button
+                    type="button"
+                    className="wm-btn wm-btn-small wm-btn-danger"
+                    onClick={() => setConfirmDeleteId(ev.id)}
+                    disabled={rowBusy === ev.id}
+                  >
+                    Cancella
+                  </button>
+                </span>
+              )}
             </li>
           ))}
         </ul>

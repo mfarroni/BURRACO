@@ -73,9 +73,10 @@ export default function PrivacyPage() {
           registrazione: art. 6.1.b GDPR.
         </li>
         <li>
-          <strong>Comunicazioni promozionali</strong> (per esempio l&apos;annuncio di una serata): solo
-          se ci hai dato il consenso, che puoi ritirare in ogni momento con il link in fondo a ogni
-          email. Art. 6.1.a GDPR.
+          <strong>Avvisi delle serate del circolo</strong> e altre comunicazioni promozionali: solo se
+          attivi tu l&apos;opzione «Avvisami via email delle serate del circolo» nel tuo Profilo. Puoi
+          ritirare il consenso in ogni momento dal Profilo o con il link in fondo a ogni email.
+          Art. 6.1.a GDPR.
         </li>
       </ul>
 
@@ -98,7 +99,8 @@ export default function PrivacyPage() {
       <ul>
         <li>Account registrato: finché non lo elimini tu o non ci chiedi di eliminarlo.</li>
         <li>Accesso da ospite: cancellato dopo 7 giorni di inattività.</li>
-        <li>Dettaglio delle mosse delle partite: fino a 3 mesi; riepilogo delle partite: fino a 12 mesi.</li>
+        <li>Registro delle singole mosse di una partita: fino a 7 giorni dalla fine della partita.</li>
+        <li>Punteggi di ogni smazzata: fino a 3 mesi; riepilogo delle partite: fino a 12 mesi.</li>
         <li>Messaggi del modulo Contatti: fino a 180 giorni dopo la lettura.</li>
         <li>Registri tecnici: fino a 90 giorni.</li>
       </ul>

@@ -229,6 +229,22 @@ export class RoomManager {
   }
 
   /**
+   * Audit lancio R02 (Ciclo 3) — presenze AGGREGATE per la vetrina pubblica: chi è
+   * in lobby più chi è seduto con un socket vivo (in attesa o in partita). Solo
+   * conteggi: nessun nome, codice o identità esce da qui.
+   */
+  presenceSummary(): { playersOnline: number; waitingTables: number } {
+    let seated = 0;
+    for (const room of this.rooms.values()) {
+      if (!room.isDisposed()) seated += room.seatsTakenLive();
+    }
+    return {
+      playersOnline: this.lobbyPlayerCount() + seated,
+      waitingTables: this.listPublicWaitingTables().length,
+    };
+  }
+
+  /**
    * LOBBY (§6.1): lista dei tavoli PUBBLICI in attesa con almeno un posto vivo.
    * WHITELIST rigorosa (Room.waitingView): nessun privato, nessun campo interno.
    */
@@ -377,9 +393,18 @@ export class RoomManager {
       // client reale apre comunque sempre un NUOVO socket per join/riconnessione.
       const prev = this.socketRoom.get(ws);
       if (prev && !prev.isDisposed()) return;
+      const existing = this.rooms.get(code);
+      // Audit lancio R04: RICONNESSIONE a un tavolo che non esiste più (riavvio o
+      // deploy del server: lo stato vive solo in RAM). Prima si creava in silenzio un
+      // tavolo NUOVO col vecchio codice (1v1 di default) e i primi due che rientravano
+      // ricominciavano da zero; ora il client riceve un esito terminale chiaro.
+      if (msg.resume === true && (!existing || existing.isDisposed())) {
+        console.log(`[room] lost room=${code} at=${new Date().toISOString()}`);
+        send(ws, { type: "room_closed", reason: "lost" });
+        return;
+      }
       // R2a: non creare oltre il tetto globale (solo se il codice porterebbe a una
       // NUOVA room; la riconnessione a una room esistente resta sempre ammessa).
-      const existing = this.rooms.get(code);
       if ((!existing || existing.isDisposed()) && this.atRoomCapacity()) {
         this.rejectAtCapacity(ws);
         return;

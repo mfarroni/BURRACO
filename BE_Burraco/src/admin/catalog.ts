@@ -1,6 +1,7 @@
-import { desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNotNull, isNull, or } from "drizzle-orm";
 import { db, schema } from "../db/client.js";
 import type { EventRow, ShopProductRow } from "./types.js";
+import type { PublicEvent } from "../contract/types.js";
 
 /**
  * CICLO Pannello Admin — PREDISPOSIZIONE Eventi (Tornei) e Shop (§2.6), dietro
@@ -65,6 +66,64 @@ export async function listEvents(): Promise<EventRow[]> {
     inizioAt: new Date(r.inizioAt).getTime(),
     luogo: r.luogo,
     pubblicato: r.pubblicato,
+  }));
+}
+
+/**
+ * Audit lancio R02 (Ciclo 3) — pubblica o ritira un evento. `false` se non esiste
+ * (o senza DB).
+ */
+export async function setEventPublished(id: string, pubblicato: boolean): Promise<boolean> {
+  if (!db) return false;
+  const rows = await db
+    .update(schema.events)
+    .set({ pubblicato, updatedAt: new Date() })
+    .where(eq(schema.events.id, id))
+    .returning({ id: schema.events.id });
+  return rows.length > 0;
+}
+
+/** Audit lancio R02 (Ciclo 3) — cancella un evento. `false` se non esiste (o senza DB). */
+export async function deleteEvent(id: string): Promise<boolean> {
+  if (!db) return false;
+  const rows = await db.delete(schema.events).where(eq(schema.events.id, id)).returning({ id: schema.events.id });
+  return rows.length > 0;
+}
+
+/** Durata presunta di una serata senza orario di fine (per decidere se è "finita"). */
+const DEFAULT_EVENT_SPAN_MS = 4 * 60 * 60 * 1000;
+const PUBLIC_EVENTS_LIMIT = 3;
+
+/**
+ * Audit lancio R02 (Ciclo 3) — prossime serate PUBBLICATE non ancora finite, dalla più
+ * vicina. Vista PUBBLICA: whitelist dei campi (niente autore, niente bozze).
+ */
+export async function listUpcomingPublicEvents(now: Date = new Date()): Promise<PublicEvent[]> {
+  if (!db) return [];
+  const notEnded = or(
+    and(isNotNull(schema.events.fineAt), gt(schema.events.fineAt, now)),
+    and(isNull(schema.events.fineAt), gt(schema.events.inizioAt, new Date(now.getTime() - DEFAULT_EVENT_SPAN_MS))),
+  );
+  const rows = await db
+    .select({
+      id: schema.events.id,
+      titolo: schema.events.titolo,
+      descrizione: schema.events.descrizione,
+      luogo: schema.events.luogo,
+      inizioAt: schema.events.inizioAt,
+      fineAt: schema.events.fineAt,
+    })
+    .from(schema.events)
+    .where(and(eq(schema.events.pubblicato, true), notEnded))
+    .orderBy(asc(schema.events.inizioAt))
+    .limit(PUBLIC_EVENTS_LIMIT);
+  return rows.map((r) => ({
+    id: r.id,
+    titolo: r.titolo,
+    descrizione: r.descrizione,
+    luogo: r.luogo,
+    inizioAt: new Date(r.inizioAt).getTime(),
+    fineAt: r.fineAt ? new Date(r.fineAt).getTime() : null,
   }));
 }
 

@@ -898,6 +898,59 @@
   backdrop-filter: blur(10px);
 }
 
+/* Serate del circolo (Audit lancio R02, Ciclo 3): appuntamenti per trovare qualcuno
+   al tavolo. Card sobria sopra la roadmap. */
+.landing-root .serate {
+  max-width: 760px;
+  margin: 0 auto 32px;
+  padding: 24px 28px;
+  border: 1px solid var(--lp-gold-primary);
+  border-radius: 10px;
+  background: rgba(20, 12, 8, 0.72);
+  text-align: center;
+}
+.landing-root .serate-title {
+  font-family: var(--lp-font-display);
+  font-size: 1.4rem;
+  color: var(--lp-gold-light);
+  margin: 0 0 14px;
+}
+.landing-root .serate-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+.landing-root .serate-item + .serate-item {
+  border-top: 1px solid rgba(201, 162, 74, 0.3);
+  padding-top: 14px;
+}
+.landing-root .serate-when {
+  margin: 0;
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--lp-gold-light);
+}
+.landing-root .serate-name {
+  margin: 4px 0 0;
+  font-family: var(--lp-font-display);
+  font-size: 1.2rem;
+  color: var(--lp-cream);
+}
+.landing-root .serate-where,
+.landing-root .serate-desc,
+.landing-root .serate-empty {
+  margin: 4px 0 0;
+  font-size: 0.95rem;
+  color: var(--lp-cream-dark);
+}
+.landing-root .hero-trust .hero-live {
+  color: var(--lp-gold-light);
+  font-weight: 600;
+}
+
 .landing-root .roadmap-card.lead {
   border-color: var(--lp-gold-primary);
 }
